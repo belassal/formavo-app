@@ -1,0 +1,58 @@
+# Resolve react_native_pods.rb with node to allow for hoisting
+require Pod::Executable.execute_command('node', ['-p',
+  'require.resolve(
+    "react-native/scripts/react_native_pods.rb",
+    {paths: [process.argv[1]]},
+  )', __dir__]).strip
+
+platform :ios, min_ios_version_supported
+prepare_react_native_project!
+
+target 'Formavo' do
+  use_frameworks! :linkage => :static
+  $RNFirebaseAsStaticFramework = true
+
+  config = use_native_modules!
+
+  use_react_native!(
+    :path => config[:reactNativePath],
+    :app_path => "#{Pod::Config.instance.installation_root}/.."
+  )
+
+  pod 'RecaptchaInterop', :modular_headers => true
+  pod 'nanopb', :modular_headers => true
+
+  post_install do |installer|
+    react_native_post_install(
+      installer,
+      config[:reactNativePath],
+      :mac_catalyst_enabled => false,
+    )
+
+    installer.pods_project.targets.each do |t|
+      t.build_configurations.each do |c|
+        c.build_settings['GCC_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
+        c.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
+        c.build_settings['CLANG_WARN_NON_MODULAR_INCLUDE_IN_FRAMEWORK_MODULES'] = 'NO'
+
+        # ✅ Fix iOS 26.2 SDK conflict: gRPC-Core zlib defines fdopen macro
+        if t.name == 'gRPC-Core'
+          cflags = c.build_settings['OTHER_CFLAGS'] || ['$(inherited)']
+          cflags = [cflags] if cflags.is_a?(String)
+          cflags << '-Ufdopen' unless cflags.include?('-Ufdopen')
+          c.build_settings['OTHER_CFLAGS'] = cflags
+
+          # Patch xcconfig too (often overrides build_settings)
+          if c.base_configuration_reference
+            xcconfig_path = c.base_configuration_reference.real_path
+            xcconfig = File.read(xcconfig_path)
+            unless xcconfig.include?('-Ufdopen')
+              xcconfig << "\nOTHER_CFLAGS = $(inherited) -Ufdopen\n"
+            end
+            File.write(xcconfig_path, xcconfig)
+          end
+        end
+      end
+    end
+  end
+end

@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "269843299584",
+    "project_id": "formavo-prod",
+    "storage_bucket": "formavo-prod.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:269843299584:android:dc58aca5f819ef2cdc07e5",
+        "android_client_info": {
+          "package_name": "com.formavo.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "269843299584-tpd1b6duq0o32qcqqm54ugo20mmivobn.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAVWJ78yXAmwgbgyBXTV0HFQ6DIHof_SO8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "269843299584-tpd1b6duq0o32qcqqm54ugo20mmivobn.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "269843299584-0khidubfpu9chad72b8gpurvlh5n93ud.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.formavo.app"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

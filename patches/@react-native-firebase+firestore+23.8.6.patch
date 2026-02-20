@@ -1,0 +1,109 @@
+diff --git a/node_modules/@react-native-firebase/firestore/ios/RNFBFirestore/RNFBFirestoreCollectionModule.m b/node_modules/@react-native-firebase/firestore/ios/RNFBFirestore/RNFBFirestoreCollectionModule.m
+index 588144f..440e5d3 100644
+--- a/node_modules/@react-native-firebase/firestore/ios/RNFBFirestore/RNFBFirestoreCollectionModule.m
++++ b/node_modules/@react-native-firebase/firestore/ios/RNFBFirestore/RNFBFirestoreCollectionModule.m
+@@ -14,6 +14,13 @@
+  * limitations under the License.
+  *
+  */
++#if __has_include(<React/RCTBridgeModule.h>)
++#import <React/RCTBridgeModule.h>
++#import <React/RCTDefines.h>
++#else
++#import "RCTBridgeModule.h"
++#import "RCTDefines.h"
++#endif
+ 
+ #import <RNFBApp/RNFBRCTEventEmitter.h>
+ #import <React/RCTUtils.h>
+diff --git a/node_modules/@react-native-firebase/firestore/ios/RNFBFirestore/RNFBFirestoreCommon.h b/node_modules/@react-native-firebase/firestore/ios/RNFBFirestore/RNFBFirestoreCommon.h
+index b2cd6d2..a5c0763 100644
+--- a/node_modules/@react-native-firebase/firestore/ios/RNFBFirestore/RNFBFirestoreCommon.h
++++ b/node_modules/@react-native-firebase/firestore/ios/RNFBFirestore/RNFBFirestoreCommon.h
+@@ -15,9 +15,17 @@
+  * limitations under the License.
+  *
+  */
++#if __has_include(<React/RCTBridgeModule.h>)
++#import <React/RCTBridgeModule.h>
++#import <React/RCTDefines.h>
++#else
++#import "RCTBridgeModule.h"
++#import "RCTDefines.h"
++#endif
+ 
+ #import <Firebase/Firebase.h>
+-#import <React/RCTBridgeModule.h>
++#import <RNFBApp/RNFBAppModule.h>
++
+ 
+ @interface RNFBFirestoreCommon : NSObject
+ 
+diff --git a/node_modules/@react-native-firebase/firestore/ios/RNFBFirestore/RNFBFirestoreDocumentModule.m b/node_modules/@react-native-firebase/firestore/ios/RNFBFirestore/RNFBFirestoreDocumentModule.m
+index 2805b6d..ca9701a 100644
+--- a/node_modules/@react-native-firebase/firestore/ios/RNFBFirestore/RNFBFirestoreDocumentModule.m
++++ b/node_modules/@react-native-firebase/firestore/ios/RNFBFirestore/RNFBFirestoreDocumentModule.m
+@@ -14,6 +14,13 @@
+  * limitations under the License.
+  *
+  */
++#if __has_include(<React/RCTBridgeModule.h>)
++#import <React/RCTBridgeModule.h>
++#import <React/RCTDefines.h>
++#else
++#import "RCTBridgeModule.h"
++#import "RCTDefines.h"
++#endif
+ 
+ #import <RNFBApp/RNFBRCTEventEmitter.h>
+ #import <React/RCTUtils.h>
+diff --git a/node_modules/@react-native-firebase/firestore/ios/RNFBFirestore/RNFBFirestoreModule.h b/node_modules/@react-native-firebase/firestore/ios/RNFBFirestore/RNFBFirestoreModule.h
+index a989534..4b53dcb 100644
+--- a/node_modules/@react-native-firebase/firestore/ios/RNFBFirestore/RNFBFirestoreModule.h
++++ b/node_modules/@react-native-firebase/firestore/ios/RNFBFirestore/RNFBFirestoreModule.h
+@@ -18,7 +18,7 @@
+ #import <Firebase/Firebase.h>
+ #import <Foundation/Foundation.h>
+ #import <RNFBApp/RNFBSharedUtils.h>
+-#import <React/RCTBridgeModule.h>
++#import <RNFBApp/RNFBAppModule.h>
+ 
+ @interface RNFBFirestoreModule : NSObject <RCTBridgeModule>
+ 
+diff --git a/node_modules/@react-native-firebase/firestore/ios/RNFBFirestore/RNFBFirestoreModule.m b/node_modules/@react-native-firebase/firestore/ios/RNFBFirestore/RNFBFirestoreModule.m
+index 5b9c7a6..718c84e 100644
+--- a/node_modules/@react-native-firebase/firestore/ios/RNFBFirestore/RNFBFirestoreModule.m
++++ b/node_modules/@react-native-firebase/firestore/ios/RNFBFirestore/RNFBFirestoreModule.m
+@@ -14,6 +14,13 @@
+  * limitations under the License.
+  *
+  */
++#if __has_include(<React/RCTBridgeModule.h>)
++#import <React/RCTBridgeModule.h>
++#import <React/RCTDefines.h>
++#else
++#import "RCTBridgeModule.h"
++#import "RCTDefines.h"
++#endif
+ 
+ #import "RNFBFirestoreModule.h"
+ #import <RNFBApp/RNFBRCTEventEmitter.h>
+diff --git a/node_modules/@react-native-firebase/firestore/ios/RNFBFirestore/RNFBFirestoreTransactionModule.m b/node_modules/@react-native-firebase/firestore/ios/RNFBFirestore/RNFBFirestoreTransactionModule.m
+index bf3dad6..2855034 100644
+--- a/node_modules/@react-native-firebase/firestore/ios/RNFBFirestore/RNFBFirestoreTransactionModule.m
++++ b/node_modules/@react-native-firebase/firestore/ios/RNFBFirestore/RNFBFirestoreTransactionModule.m
+@@ -14,6 +14,14 @@
+  * limitations under the License.
+  *
+  */
++#if __has_include(<React/RCTBridgeModule.h>)
++#import <React/RCTBridgeModule.h>
++#import <React/RCTDefines.h>
++#else
++#import "RCTBridgeModule.h"
++#import "RCTDefines.h"
++#endif
++
+ 
+ #import <RNFBApp/RNFBRCTEventEmitter.h>
+ #import <React/RCTUtils.h>
