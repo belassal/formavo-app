@@ -60,6 +60,8 @@ export async function createMatch(params: {
     dateISO: dateISO.trim(),
     location: location.trim(),
     status: 'scheduled' as MatchStatus,
+    homeScore: 0,
+    awayScore: 0,
     isDeleted: false,
 
     // v0.3: cached count (updated via add/remove roster transactions)
@@ -340,25 +342,46 @@ export async function addMatchEvent(params: {
   event: Omit<MatchEvent, 'id' | 'createdAt' | 'updatedAt'>;
 }) {
   const { teamId, matchId, event } = params;
-  const ref = db
-    .collection(COL.teams)
-    .doc(teamId)
-    .collection(COL.matches)
-    .doc(matchId)
-    .collection(COL.events)
-    .doc();
+
+  const matchRef = db.collection(COL.teams).doc(teamId).collection(COL.matches).doc(matchId);
+  const eventRef = matchRef.collection(COL.events).doc();
 
   const minute = clampMinute((event as any).minute);
 
-  await ref.set({
-    ...event,
-    minute,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
+  await db.runTransaction(async (tx) => {
+    const matchSnap = await tx.get(matchRef);
+    const match = matchSnap.exists ? (matchSnap.data() as any) : {};
+
+    // Write event
+    tx.set(eventRef, {
+      ...event,
+      minute,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    // If it's a goal, update cached scores
+    if (event.type === 'goal') {
+      const side = (event.side || 'home') as GoalSide;
+      if (side === 'home') {
+        tx.set(matchRef, { homeScore: firestore.FieldValue.increment(1) }, { merge: true });
+      } else {
+        tx.set(matchRef, { awayScore: firestore.FieldValue.increment(1) }, { merge: true });
+      }
+
+      // Optional: auto-start match when first goal is recorded
+      const st = String(match?.status || 'scheduled');
+      if (st === 'scheduled') {
+        tx.set(matchRef, { status: 'live', startedAt: serverTimestamp() }, { merge: true });
+      }
+    }
+
+    tx.set(matchRef, { updatedAt: serverTimestamp() }, { merge: true });
   });
 
-  return ref.id;
+  return eventRef.id;
 }
+
 
 export async function updateMatchEvent(params: {
   teamId: string;
@@ -382,15 +405,31 @@ export async function updateMatchEvent(params: {
 
 export async function deleteMatchEvent(params: { teamId: string; matchId: string; eventId: string }) {
   const { teamId, matchId, eventId } = params;
-  await db
-    .collection(COL.teams)
-    .doc(teamId)
-    .collection(COL.matches)
-    .doc(matchId)
-    .collection(COL.events)
-    .doc(eventId)
-    .delete();
+
+  const matchRef = db.collection(COL.teams).doc(teamId).collection(COL.matches).doc(matchId);
+  const eventRef = matchRef.collection(COL.events).doc(eventId);
+
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(eventRef);
+    if (!snap.exists) return;
+
+    const ev = snap.data() as any;
+
+    // If it's a goal, decrement cached score
+    if (ev?.type === 'goal') {
+      const side = (ev.side || 'home') as GoalSide;
+      if (side === 'home') {
+        tx.set(matchRef, { homeScore: firestore.FieldValue.increment(-1) }, { merge: true });
+      } else {
+        tx.set(matchRef, { awayScore: firestore.FieldValue.increment(-1) }, { merge: true });
+      }
+    }
+
+    tx.delete(eventRef);
+    tx.set(matchRef, { updatedAt: serverTimestamp() }, { merge: true });
+  });
 }
+
 
 // Convenience builders
 export function buildGoalEvent(p: {
@@ -427,4 +466,35 @@ export function buildCardEvent(params: {
     playerName: norm(params.playerName),
     color: params.color,
   };
+}
+
+/** Mark match as live (start game) */
+export async function markMatchLive(params: { teamId: string; matchId: string }) {
+  const { teamId, matchId } = params;
+
+  await db
+    .collection(COL.teams)
+    .doc(teamId)
+    .collection(COL.matches)
+    .doc(matchId)
+    .update({
+      status: 'live' as MatchStatus,
+      startedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+}
+
+/** Mark match as scheduled again (optional "undo start") */
+export async function markMatchScheduled(params: { teamId: string; matchId: string }) {
+  const { teamId, matchId } = params;
+
+  await db
+    .collection(COL.teams)
+    .doc(teamId)
+    .collection(COL.matches)
+    .doc(matchId)
+    .update({
+      status: 'scheduled' as MatchStatus,
+      updatedAt: serverTimestamp(),
+    });
 }

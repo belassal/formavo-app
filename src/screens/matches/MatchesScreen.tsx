@@ -134,6 +134,15 @@ export default function MatchesScreen() {
           keyExtractor={(m) => m.id}
           renderItem={({ item }) => {
             const count = Number.isFinite(item?.rosterCount) ? item.rosterCount : 0;
+
+            const st = String(item.status || 'scheduled');
+            const hg = Number.isFinite(item.homeScore) ? item.homeScore : 0;
+            const ag = Number.isFinite(item.awayScore) ? item.awayScore : 0;
+
+            let rightLabel = 'Scheduled';
+            if (st === 'live') rightLabel = `LIVE ${hg}-${ag}`;
+            if (st === 'completed') rightLabel = `FT ${hg}-${ag}`;
+
             return (
               <TouchableOpacity
                 onPress={() =>
@@ -150,19 +159,25 @@ export default function MatchesScreen() {
               >
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 10 }}>
                   <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 16, fontWeight: '800' }}>vs {item.opponent || 'Opponent'}</Text>
+                    <Text style={{ fontSize: 16, fontWeight: '800' }}>
+                      vs {item.opponent || 'Opponent'}
+                    </Text>
+
                     <Text style={{ marginTop: 4, color: '#666' }}>
                       {item.dateISO || ''}
                       {item.location ? ` · ${item.location}` : ''}
-                      {item.status ? ` · ${item.status}` : ''}
                     </Text>
                   </View>
 
-                  <View style={{ alignItems: 'flex-end', gap: 8 }}>{pill(`${count} players`)}</View>
+                  <View style={{ alignItems: 'flex-end', gap: 8 }}>
+                    {pill(rightLabel)}
+                    {pill(`${count} players`)}
+                  </View>
                 </View>
               </TouchableOpacity>
             );
           }}
+
         />
       )}
     </SafeAreaView>

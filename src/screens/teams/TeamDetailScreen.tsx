@@ -77,7 +77,8 @@ export default function TeamDetailScreen() {
     });
 
     const unsubMatches = listenMatches(teamId, (rows) => {
-      setMatches(rows);
+     const visible = (rows || []).filter((m: any) => !m.isDeleted);
+      setMatches(visible);
       setLoadingMatches(false);
     });
 

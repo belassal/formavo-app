@@ -23,6 +23,7 @@ import {
   deleteMatchEvent,
   listenMatchEvents,
   listenMatchRoster,
+  markMatchLive,   
   markMatchCompleted,
   removePlayerFromMatchRoster,
   setMatchPlayerAttendance,
@@ -185,6 +186,24 @@ export default function MatchDetailScreen() {
       Alert.alert('Remove failed', e?.message ?? 'Unknown error');
     }
   };
+
+const confirmRemoveFromRoster = (playerId: string, playerName?: string) => {
+  Alert.alert(
+    'Remove player?',
+    `Remove ${playerName || 'this player'} from the match roster?`,
+    [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: () => removeFromRoster(playerId),
+      },
+    ],
+    { cancelable: true }
+  );
+};
+
+
 
   // available team players not already on match roster
   const rosterIds = useMemo(() => new Set(roster.map((r) => r.id)), [roster]);
@@ -366,14 +385,43 @@ export default function MatchDetailScreen() {
     }
   };
 
+  const confirmDeleteEvent = (eventId: string) => {
+    Alert.alert(
+      'Delete event?',
+      'This will permanently remove the event from this match.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => removeEvent(eventId),
+        },
+      ],
+      { cancelable: true }
+    );
+  };
+
+  const status: MatchStatus = (match?.status || 'scheduled') as MatchStatus;
+  const playerCount = roster.length;
+
   const stats = useMemo(() => {
-      const homeGoals = events.filter((e: any) => e.type === 'goal' && (e.side || 'home') === 'home').length;
-      const awayGoals = events.filter((e: any) => e.type === 'goal' && e.side === 'away').length;
+    const homeGoals = events.filter((e: any) => e.type === 'goal' && (e.side || 'home') === 'home').length;
+    const awayGoals = events.filter((e: any) => e.type === 'goal' && e.side === 'away').length;
 
     const yellow = events.filter((e) => e.type === 'card' && e.color === 'yellow').length;
     const red = events.filter((e) => e.type === 'card' && e.color === 'red').length;
     return { homeGoals, awayGoals, yellow, red };
   }, [events]);
+
+  const scoreLabel = useMemo(() => {
+  const hg = stats.homeGoals ?? 0;
+  const ag = stats.awayGoals ?? 0;
+
+  if (status === 'completed') return `FT ${hg}-${ag}`;
+  if (status === 'live') return `LIVE ${hg}-${ag}`;
+  return 'Scheduled';
+}, [stats.homeGoals, stats.awayGoals, status]);
+
 
   // --- UI helpers ---
   const pill = (label: string) => (
@@ -420,9 +468,6 @@ export default function MatchDetailScreen() {
     );
   }
 
-  const status: MatchStatus = (match?.status || 'scheduled') as MatchStatus;
-  const playerCount = roster.length;
-
   return (
     <SafeAreaView style={{ flex: 1, padding: 16 }}>
       {/* ===== Match summary card ===== */}
@@ -459,7 +504,7 @@ export default function MatchDetailScreen() {
           </View>
 
           <View style={{ alignItems: 'flex-end', gap: 8, marginRight: 38 }}>
-            {pill(status)}
+            {pill(scoreLabel)}
             {pill(`${playerCount} players`)}
           </View>
         </View>
@@ -474,6 +519,24 @@ export default function MatchDetailScreen() {
             </TouchableOpacity>
           </View>
         )}
+        {status === 'scheduled' && (
+            <TouchableOpacity
+              onPress={() => markMatchLive({ teamId, matchId })}
+              style={{ paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderRadius: 12, alignSelf: 'flex-start', marginTop: 12 }}
+            >
+              <Text style={{ fontWeight: '800' }}>Start Game</Text>
+            </TouchableOpacity>
+          )}
+
+          {status === 'live' && (
+            <TouchableOpacity
+              onPress={confirmComplete}
+              style={{ paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderRadius: 12, alignSelf: 'flex-start', marginTop: 12 }}
+            >
+              <Text style={{ fontWeight: '800' }}>End Game</Text>
+            </TouchableOpacity>
+          )}
+
       </View>
 
 
@@ -511,11 +574,36 @@ export default function MatchDetailScreen() {
                   : `CARD · ${(item.color || 'yellow').toUpperCase()} · ${item.playerName || 'Player'}`;
 
               return (
-                <View style={{ borderWidth: 1, borderRadius: 12, padding: 10, marginBottom: 10 }}>
-                  <Text style={{ fontWeight: '900' }}>{minLabel}  {title}</Text>
-                  <TouchableOpacity onPress={() => removeEvent(item.id)} style={{ marginTop: 8 }}>
-                    <Text style={{ color: '#b00020', fontWeight: '800' }}>Delete</Text>
+                <View
+                    style={{
+                      borderWidth: 1,
+                      borderRadius: 12,
+                      padding: 10,
+                      marginBottom: 10,
+                      position: 'relative',
+                    }}
+                  >
+
+                  <Text style={{ fontWeight: '900', paddingRight: 32 }}>{minLabel}  {title}</Text>
+                  <TouchableOpacity
+                    onPress={() => confirmDeleteEvent(item.id)}
+                    style={{
+                      position: 'absolute',
+                      top: 8,
+                      right: 8,
+                      width: 24,
+                      height: 24,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      opacity: 0.6,
+                    }}
+                    activeOpacity={0.3}
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  >
+                    <Text style={{ fontSize: 16, fontWeight: '900', color: '#b00020' }}>×</Text>
                   </TouchableOpacity>
+
+
                 </View>
               );
             }}
@@ -566,21 +654,21 @@ export default function MatchDetailScreen() {
                   {choiceBtn(att === 'absent', 'Absent', () => setAttendance(item.id, 'absent'))}
                 </View>
                 <TouchableOpacity
-                  onPress={() => removeFromRoster(item.id)}
+                  onPress={() => confirmRemoveFromRoster(item.id, item.playerName)}
                   style={{
                     position: 'absolute',
                     top: 10,
                     right: 10,
-                    width: 22,
-                    height: 22,
-                    borderWidth: 1,
-                    borderRadius: 8,
+                    width: 24,
+                    height: 24,
                     alignItems: 'center',
                     justifyContent: 'center',
+                    opacity: 0.6,
                   }}
+                  activeOpacity={0.3}
                   hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 >
-                  <Text style={{ fontSize: 11, fontWeight: '900', color: '#b00020' }}>×</Text>
+                  <Text style={{ fontSize: 16, fontWeight: '900', color: '#b00020' }}>×</Text>
                 </TouchableOpacity>
               </View>
             );
