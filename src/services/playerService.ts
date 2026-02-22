@@ -1,5 +1,7 @@
+import firestore from '@react-native-firebase/firestore';
 import { db, serverTimestamp } from './firebase';
 import { COL } from '../models/collections';
+
 
 export type PlayerCreate = {
   name: string;
@@ -137,6 +139,33 @@ export function listenTeamMemberships(teamId: string, onData: (rows: any[]) => v
       }
     );
 }
+
+export async function updateTeamMembership(params: {
+  teamId: string;
+  membershipId: string; // this is playerId (doc id)
+  playerName: string;
+  number: string;
+  position: string;
+}) {
+  const { teamId, membershipId, playerName, number, position } = params;
+
+  const ref = db
+    .collection(COL.teams)
+    .doc(teamId)
+    .collection(COL.playerMemberships) // ✅ correct
+    .doc(membershipId);
+
+  await ref.set(
+    {
+      playerName: playerName.trim(),
+      number: number.trim(),
+      position: position.trim(),
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
+}
+
 
 export function listenMyTeamRefs(uid: string, onData: (rows: any[]) => void) {
   return db

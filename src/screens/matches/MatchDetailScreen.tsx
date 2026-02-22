@@ -93,6 +93,9 @@ export default function MatchDetailScreen() {
 
   const isCompleted: boolean = (match?.status || 'scheduled') === 'completed';
 
+  const [goalSide, setGoalSide] = useState<'home' | 'away'>('home');
+  const [oppScorerName, setOppScorerName] = useState('');
+
   // --- listeners ---
   useEffect(() => {
     const unsubMatch = db
@@ -130,6 +133,16 @@ export default function MatchDetailScreen() {
       unsubTeam();
     };
   }, [teamId, matchId]);
+
+  // --- goal side cleanup ---
+  useEffect(() => {
+    if (goalSide === 'away') {
+      setGoalScorerId('');
+      setGoalAssistId('');
+    } else {
+      setOppScorerName('');
+    }
+  }, [goalSide]);
 
   // Sort roster by number (polish)
   const rosterSorted = useMemo(() => {
@@ -283,6 +296,8 @@ export default function MatchDetailScreen() {
     setCardPlayerId('');
     setCardColor('yellow');
     setShowEvent(true);
+    setGoalSide('home');
+    setOppScorerName('');
   };
 
   const rosterForPick = rosterSorted;
@@ -296,19 +311,33 @@ export default function MatchDetailScreen() {
 
     try {
       if (eventType === 'goal') {
-        if (!goalScorerId) return Alert.alert('Missing scorer', 'Pick who scored the goal.');
-        const scorerName = findRosterName(goalScorerId);
+        if (goalSide === 'home') {
+          if (!goalScorerId) return Alert.alert('Missing scorer', 'Pick who scored the goal.');
+          const scorerName = findRosterName(goalScorerId);
+          const assistName = goalAssistId ? findRosterName(goalAssistId) : '';
 
-        const assistName = goalAssistId ? findRosterName(goalAssistId) : '';
-        const event = buildGoalEvent({
-          minute,
-          scorerId: goalScorerId,
-          scorerName,
-          assistId: goalAssistId || '',
-          assistName: assistName || '',
-        });
+          const event = buildGoalEvent({
+            minute,
+            side: 'home',
+            scorerId: goalScorerId,
+            scorerName,
+            assistId: goalAssistId || '',
+            assistName: assistName || '',
+          });
 
-        await addMatchEvent({ teamId, matchId, event });
+          await addMatchEvent({ teamId, matchId, event });
+        } else {
+          const event = buildGoalEvent({
+            minute,
+            side: 'away',
+            scorerId: '',
+            scorerName: oppScorerName.trim() || 'Opponent',
+            assistId: '',
+            assistName: '',
+          });
+
+          await addMatchEvent({ teamId, matchId, event });
+        }
       } else {
         if (!cardPlayerId) return Alert.alert('Missing player', 'Pick who got the card.');
         const playerName = findRosterName(cardPlayerId);
@@ -338,10 +367,12 @@ export default function MatchDetailScreen() {
   };
 
   const stats = useMemo(() => {
-    const goals = events.filter((e) => e.type === 'goal').length;
+      const homeGoals = events.filter((e: any) => e.type === 'goal' && (e.side || 'home') === 'home').length;
+      const awayGoals = events.filter((e: any) => e.type === 'goal' && e.side === 'away').length;
+
     const yellow = events.filter((e) => e.type === 'card' && e.color === 'yellow').length;
     const red = events.filter((e) => e.type === 'card' && e.color === 'red').length;
-    return { goals, yellow, red };
+    return { homeGoals, awayGoals, yellow, red };
   }, [events]);
 
   // --- UI helpers ---
@@ -395,9 +426,31 @@ export default function MatchDetailScreen() {
   return (
     <SafeAreaView style={{ flex: 1, padding: 16 }}>
       {/* ===== Match summary card ===== */}
-      <View style={{ borderWidth: 1, borderRadius: 14, padding: 12 }}>
+      <View style={{ borderWidth: 1, borderRadius: 14, padding: 12, position: 'relative' }}>
+
+        {/* Edit icon (top-right INSIDE the card) */}
+        <TouchableOpacity
+          onPress={openEdit}
+          style={{
+            position: 'absolute',
+            top: 10,
+            right: 12,        // keep it tight to the border
+            width: 28,
+            height: 28,
+            borderWidth: 1,
+            borderRadius: 10,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'white',
+          }}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
+          <Text style={{ fontSize: 14, fontWeight: '900' }}>✎</Text>
+        </TouchableOpacity>
+
+
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 10 }}>
-          <View style={{ flex: 1 }}>
+          <View style={{ flex: 1, paddingRight: 34 }}>
             <Text style={{ fontSize: 18, fontWeight: '800' }}>vs {match?.opponent || 'Opponent'}</Text>
             <Text style={{ marginTop: 4, color: '#666' }}>
               {match?.dateISO || ''}
@@ -405,30 +458,24 @@ export default function MatchDetailScreen() {
             </Text>
           </View>
 
-          <View style={{ alignItems: 'flex-end', gap: 8 }}>
+          <View style={{ alignItems: 'flex-end', gap: 8, marginRight: 38 }}>
             {pill(status)}
             {pill(`${playerCount} players`)}
           </View>
         </View>
 
-        <View style={{ flexDirection: 'row', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
-          <TouchableOpacity
-            onPress={openEdit}
-            style={{ paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderRadius: 12 }}
-          >
-            <Text style={{ fontWeight: '800' }}>Edit</Text>
-          </TouchableOpacity>
-
-          {!isCompleted && (
+        {!isCompleted && (
+          <View style={{ marginTop: 12 }}>
             <TouchableOpacity
               onPress={confirmComplete}
-              style={{ paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderRadius: 12 }}
+              style={{ paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderRadius: 12, alignSelf: 'flex-start' }}
             >
               <Text style={{ fontWeight: '800' }}>Mark Completed</Text>
             </TouchableOpacity>
-          )}
-        </View>
+          </View>
+        )}
       </View>
+
 
       {/* ===== Game Stats (v0.4) ===== */}
       <View style={{ marginTop: 14, borderWidth: 1, borderRadius: 14, padding: 12 }}>
@@ -443,7 +490,7 @@ export default function MatchDetailScreen() {
         </View>
 
         <View style={{ flexDirection: 'row', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
-          {pill(`Goals: ${stats.goals}`)}
+          {pill(`Goals: ${stats.homeGoals}-${stats.awayGoals}`)}
           {pill(`Yellow: ${stats.yellow}`)}
           {pill(`Red: ${stats.red}`)}
         </View>
@@ -500,8 +547,8 @@ export default function MatchDetailScreen() {
             const att: AttendanceStatus = (item.attendance || 'present') as AttendanceStatus;
 
             return (
-              <View style={{ borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 10 }}>
-                <Text style={{ fontSize: 16, fontWeight: '800' }}>
+              <View style={{ borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 10, position: 'relative' }}>
+                <Text style={{ fontSize: 16, fontWeight: '800', paddingRight: 34 }}>
                   {item.playerName}
                   {item.number ? `  #${item.number}` : ''}
                 </Text>
@@ -518,9 +565,22 @@ export default function MatchDetailScreen() {
                   {choiceBtn(att === 'injured', 'Injured', () => setAttendance(item.id, 'injured'))}
                   {choiceBtn(att === 'absent', 'Absent', () => setAttendance(item.id, 'absent'))}
                 </View>
-
-                <TouchableOpacity onPress={() => removeFromRoster(item.id)} style={{ marginTop: 10 }}>
-                  <Text style={{ color: '#b00020', fontWeight: '800' }}>Remove</Text>
+                <TouchableOpacity
+                  onPress={() => removeFromRoster(item.id)}
+                  style={{
+                    position: 'absolute',
+                    top: 10,
+                    right: 10,
+                    width: 22,
+                    height: 22,
+                    borderWidth: 1,
+                    borderRadius: 8,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: '900', color: '#b00020' }}>×</Text>
                 </TouchableOpacity>
               </View>
             );
@@ -613,61 +673,78 @@ export default function MatchDetailScreen() {
 
             {eventType === 'goal' ? (
               <>
-                <Text style={{ fontWeight: '900' }}>Scorer</Text>
-                <FlatList
-                  style={{ maxHeight: 180 }}
-                  data={rosterForPick}
-                  keyExtractor={(x) => x.id}
-                  renderItem={({ item }) => {
-                    const active = item.id === goalScorerId;
-                    return (
-                      <TouchableOpacity
-                        onPress={() => setGoalScorerId(item.id)}
-                        style={{
-                          borderWidth: 1,
-                          borderRadius: 12,
-                          padding: 10,
-                          marginTop: 8,
-                          backgroundColor: active ? '#111' : 'transparent',
-                        }}
-                      >
-                        <Text style={{ fontWeight: '900', color: active ? 'white' : '#111' }}>
-                          {item.playerName}{item.number ? `  #${item.number}` : ''}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  }}
-                  ListEmptyComponent={<Text style={{ color: '#666', marginTop: 8 }}>Add players to the roster first.</Text>}
-                />
+                <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>
+                  {tagBtn(goalSide === 'home', 'Our goal', () => setGoalSide('home'))}
+                  {tagBtn(goalSide === 'away', 'Opponent goal', () => setGoalSide('away'))}
+                </View>
 
-                <Text style={{ fontWeight: '900', marginTop: 8 }}>Assist (optional)</Text>
-                <FlatList
-                  style={{ maxHeight: 180 }}
-                  data={rosterForPick.filter((x: any) => x.id !== goalScorerId)}
-                  keyExtractor={(x) => x.id}
-                  renderItem={({ item }) => {
-                    const active = item.id === goalAssistId;
-                    return (
-                      <TouchableOpacity
-                        onPress={() => setGoalAssistId(active ? '' : item.id)}
-                        style={{
-                          borderWidth: 1,
-                          borderRadius: 12,
-                          padding: 10,
-                          marginTop: 8,
-                          backgroundColor: active ? '#111' : 'transparent',
-                        }}
-                      >
-                        <Text style={{ fontWeight: '900', color: active ? 'white' : '#111' }}>
-                          {item.playerName}{item.number ? `  #${item.number}` : ''}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  }}
-                  ListEmptyComponent={<Text style={{ color: '#666', marginTop: 8 }}>No other players.</Text>}
-                />
+                {goalSide === 'away' ? (
+                  <>
+                    <Text style={{ fontWeight: '900', marginTop: 8 }}>Opponent scorer (optional)</Text>
+                    <TextInput
+                      placeholder="Opponent"
+                      value={oppScorerName}
+                      onChangeText={setOppScorerName}
+                      style={{ borderWidth: 1, padding: 12, borderRadius: 12 }}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <Text style={{ fontWeight: '900', marginTop: 8 }}>Scorer</Text>
+                    <FlatList
+                      style={{ maxHeight: 180 }}
+                      data={rosterForPick}
+                      keyExtractor={(x) => x.id}
+                      renderItem={({ item }) => {
+                        const active = item.id === goalScorerId;
+                        return (
+                          <TouchableOpacity
+                            onPress={() => setGoalScorerId(item.id)}
+                            style={{
+                              borderWidth: 1,
+                              borderRadius: 12,
+                              padding: 10,
+                              marginTop: 8,
+                              backgroundColor: active ? '#111' : 'transparent',
+                            }}
+                          >
+                            <Text style={{ fontWeight: '900', color: active ? 'white' : '#111' }}>
+                              {item.playerName}{item.number ? `  #${item.number}` : ''}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      }}
+                    />
+
+                    <Text style={{ fontWeight: '900', marginTop: 8 }}>Assist (optional)</Text>
+                    <FlatList
+                      style={{ maxHeight: 180 }}
+                      data={rosterForPick.filter((x: any) => x.id !== goalScorerId)}
+                      keyExtractor={(x) => x.id}
+                      renderItem={({ item }) => {
+                        const active = item.id === goalAssistId;
+                        return (
+                          <TouchableOpacity
+                            onPress={() => setGoalAssistId(active ? '' : item.id)}
+                            style={{
+                              borderWidth: 1,
+                              borderRadius: 12,
+                              padding: 10,
+                              marginTop: 8,
+                              backgroundColor: active ? '#111' : 'transparent',
+                            }}
+                          >
+                            <Text style={{ fontWeight: '900', color: active ? 'white' : '#111' }}>
+                              {item.playerName}{item.number ? `  #${item.number}` : ''}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      }}
+                    />
+                  </>
+                )}
               </>
-            ) : (
+            ): (
               <>
                 <Text style={{ fontWeight: '900' }}>Player</Text>
                 <FlatList

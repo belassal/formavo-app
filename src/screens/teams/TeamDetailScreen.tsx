@@ -22,7 +22,7 @@ import {
   listenTeamMemberships,
 } from '../../services/playerService';
 import { createMatch, listenMatches } from '../../services/matchService';
-import { removePlayerFromTeam } from '../../services/playerService';
+import { updateTeamMembership } from '../../services/playerService';
 
 type TeamDetailRoute = RouteProp<TeamsStackParamList, 'TeamDetail'>;
 
@@ -51,6 +51,16 @@ export default function TeamDetailScreen() {
   const [newNumber, setNewNumber] = useState('');
   const [newPosition, setNewPosition] = useState('');
   const [savingPlayer, setSavingPlayer] = useState(false);
+
+  // Edit Player modal
+  const [showEditPlayer, setShowEditPlayer] = useState(false);
+  const [editingMember, setEditingMember] = useState<any | null>(null);
+
+  const [editName, setEditName] = useState('');
+  const [editNumber, setEditNumber] = useState('');
+  const [editPosition, setEditPosition] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+
 
   // Create Match modal
   const [showCreateMatch, setShowCreateMatch] = useState(false);
@@ -154,6 +164,70 @@ export default function TeamDetailScreen() {
     }
   };
 
+
+  const confirmRemovePlayer = (m: any) => {
+    Alert.alert(
+      'Remove player?',
+      `Remove ${m.playerName} from the team roster?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => toggleStatus(m), // this will mark inactive using your existing logic
+        },
+      ],
+      { cancelable: true }
+    );
+  };
+
+  const openEditPlayer = (m: any) => {
+    setEditingMember(m);
+    setEditName(m.playerName || '');
+    setEditNumber(String(m.number || ''));
+    setEditPosition(String(m.position || ''));
+    setShowEditPlayer(true);
+  };
+
+  const closeEditPlayer = () => {
+    setShowEditPlayer(false);
+    setEditingMember(null);
+    setEditName('');
+    setEditNumber('');
+    setEditPosition('');
+  };
+
+
+  const onSaveEditPlayer = async () => {
+    if (!editingMember) return;
+
+    const name = editName.trim();
+    if (!name) {
+      Alert.alert('Missing name', 'Player name is required.');
+      return;
+    }
+
+    try {
+      setSavingEdit(true);
+
+      // Update membership fields (team roster)
+      await updateTeamMembership({
+        teamId,
+        membershipId: editingMember.id,
+        playerName: name,
+        number: editNumber.trim(),
+        position: editPosition.trim(),
+      });
+
+      closeEditPlayer();
+    } catch (e: any) {
+      Alert.alert('Update Failed', e?.message ?? 'Unknown error');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+
   // --- MATCH ACTIONS ---
   const openCreateMatch = () => {
     setOpponent('');
@@ -227,55 +301,66 @@ export default function TeamDetailScreen() {
           No players yet. Tap “+ Player” to add your first player.
         </Text>
       ) : (
-<FlatList
-  style={{ marginTop: 12, maxHeight: 260 }}
-  data={memberships}
-  keyExtractor={(item) => item.id}
-  renderItem={({ item }) => (
-    <View style={{ borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 10 }}>
-      <Text style={{ fontSize: 16, fontWeight: '700' }}>
-        {item.playerName}
-        {item.number ? `  #${item.number}` : ''}
-      </Text>
+      <FlatList
+        style={{ marginTop: 12, maxHeight: 260 }}
+        data={memberships}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+        <View style={{ borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 10 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+            <TouchableOpacity
+              onPress={() => openEditPlayer(item)}
+              style={{ flex: 1 }}
+              activeOpacity={0.7}
+            >
+              <Text style={{ fontSize: 16, fontWeight: '700' }} numberOfLines={1}>
+                {item.playerName}
+                {item.number ? `  #${item.number}` : ''}
+              </Text>
+            </TouchableOpacity>
 
-      <Text style={{ marginTop: 4, color: '#666' }}>
-        {item.position ? `Pos: ${item.position} · ` : ''}
-        {item.type || 'regular'} · {item.status || 'active'}
-      </Text>
+            {/* Edit icon */}
+            <TouchableOpacity
+              onPress={() => openEditPlayer(item)}
+              style={{
+                width: 20,
+                height: 20,
+                borderWidth: 1,
+                borderRadius: 8,
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginRight: 8,
+              }}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Text style={{ fontSize: 14, fontWeight: '900' }}>✎</Text>
+            </TouchableOpacity>
 
-      <TouchableOpacity
-        onPress={() => {
-          Alert.alert(
-            'Remove player?',
-            `Remove ${item.playerName} from this team roster?`,
-            [
-              { text: 'Cancel', style: 'cancel' },
-              {
-                text: 'Remove',
-                style: 'destructive',
-                onPress: async () => {
-                  try {
-                    await removePlayerFromTeam({
-                      teamId,
-                      playerId: item.id, // membership doc id == playerId (based on your comment)
-                    });
-                  } catch (e: any) {
-                    Alert.alert('Remove Failed', e?.message ?? 'Unknown error');
-                  }
-                },
-              },
-            ]
-          );
-        }}
-        style={{ marginTop: 10 }}
-      >
-        <Text style={{ color: '#b00020', fontWeight: '700' }}>Remove from team</Text>
-      </TouchableOpacity>
-    </View>
-  )}
-/>
-      
-)}
+            {/* Smaller X */}
+            <TouchableOpacity
+              onPress={() => confirmRemovePlayer(item)}
+              style={{
+                width: 20,
+                height: 20,
+                borderWidth: 1,
+                borderRadius: 8,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Text style={{ fontSize: 10, fontWeight: '900', color: '#b00020' }}>×</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={{ marginTop: 6, color: '#666' }}>
+            {item.position ? `Pos: ${item.position} · ` : ''}
+            {item.type || 'regular'} · {item.status || 'active'}
+          </Text>
+        </View>
+        )}
+      />
+            
+      )}
 
       {/* ===== MATCHES HEADER ===== */}
       <View style={{ height: 14 }} />
@@ -298,26 +383,56 @@ export default function TeamDetailScreen() {
           style={{ marginTop: 12 }}
           data={matches}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              onPress={() =>
-                navigation.navigate('MatchDetail', {
-                  teamId,
-                  matchId: item.id,
-                  title: `${teamName} vs ${item.opponent || 'Opponent'}`,
-                })
-              }
-              style={{ borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 10 }}
-            >
-              <Text style={{ fontSize: 16, fontWeight: '700' }}>
-                vs {item.opponent || 'Opponent'}
-              </Text>
-              <Text style={{ marginTop: 4, color: '#666' }}>
-                {item.dateISO || ''}
-                {item.location ? ` · ${item.location}` : ''}
-              </Text>
-            </TouchableOpacity>
-          )}
+          renderItem={({ item }) => {
+            const status = String(item.status || 'scheduled');
+            const home = Number.isFinite(item.homeScore) ? item.homeScore : 0;
+            const away = Number.isFinite(item.awayScore) ? item.awayScore : 0;
+
+            // label examples:
+            // scheduled -> "Scheduled"
+            // live -> "LIVE 2-1"
+            // completed -> "FT 2-1"
+            let rightLabel = 'Scheduled';
+            if (status === 'live') rightLabel = `LIVE ${home}-${away}`;
+            if (status === 'completed') rightLabel = `FT ${home}-${away}`;
+
+            return (
+              <TouchableOpacity
+                onPress={() =>
+                  navigation.navigate('MatchDetail', {
+                    teamId,
+                    matchId: item.id,
+                    title: `${teamName} vs ${item.opponent || 'Opponent'}`,
+                  })
+                }
+                style={{ borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 10 }}
+              >
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 10 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 16, fontWeight: '700' }}>vs {item.opponent || 'Opponent'}</Text>
+                    <Text style={{ marginTop: 4, color: '#666' }}>
+                      {item.dateISO || ''}
+                      {item.location ? ` · ${item.location}` : ''}
+                    </Text>
+                  </View>
+
+                  {/* Status + score pill */}
+                  <View
+                    style={{
+                      paddingVertical: 4,
+                      paddingHorizontal: 10,
+                      borderWidth: 1,
+                      borderRadius: 999,
+                      alignSelf: 'flex-start',
+                    }}
+                  >
+                    <Text style={{ fontWeight: '800', fontSize: 12 }}>{rightLabel}</Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            );
+          }}
+
         />
       )}
 
@@ -404,6 +519,58 @@ export default function TeamDetailScreen() {
                 style={{ paddingVertical: 10, paddingHorizontal: 14, borderWidth: 1, borderRadius: 12 }}
               >
                 <Text style={{ fontWeight: '700' }}>{savingPlayer ? 'Saving…' : 'Create + Add'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ===== EDIT PLAYER MODAL ===== */}
+      <Modal visible={showEditPlayer} animationType="slide" transparent onRequestClose={closeEditPlayer}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' }}>
+          <View
+            style={{
+              backgroundColor: 'white',
+              padding: 16,
+              borderTopLeftRadius: 18,
+              borderTopRightRadius: 18,
+              gap: 12,
+            }}
+          >
+            <Text style={{ fontSize: 18, fontWeight: '700' }}>Edit Player</Text>
+
+            <TextInput
+              placeholder="Player name (required)"
+              value={editName}
+              onChangeText={setEditName}
+              style={{ borderWidth: 1, padding: 12, borderRadius: 12 }}
+            />
+
+            <TextInput
+              placeholder="Number (optional)"
+              value={editNumber}
+              onChangeText={setEditNumber}
+              style={{ borderWidth: 1, padding: 12, borderRadius: 12 }}
+            />
+
+            <TextInput
+              placeholder="Position (optional)"
+              value={editPosition}
+              onChangeText={setEditPosition}
+              style={{ borderWidth: 1, padding: 12, borderRadius: 12 }}
+            />
+
+            <View style={{ flexDirection: 'row', gap: 10, justifyContent: 'flex-end', marginTop: 6 }}>
+              <TouchableOpacity onPress={closeEditPlayer} disabled={savingEdit}>
+                <Text style={{ padding: 10, color: '#444' }}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={onSaveEditPlayer}
+                disabled={savingEdit}
+                style={{ paddingVertical: 10, paddingHorizontal: 14, borderWidth: 1, borderRadius: 12 }}
+              >
+                <Text style={{ fontWeight: '700' }}>{savingEdit ? 'Saving…' : 'Save'}</Text>
               </TouchableOpacity>
             </View>
           </View>

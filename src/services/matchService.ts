@@ -9,12 +9,13 @@ export type AttendanceStatus = 'present' | 'injured' | 'absent';
 // ===== Match events (v0.4: Game stats foundation) =====
 export type MatchEventType = 'goal' | 'card';
 export type CardColor = 'yellow' | 'red';
+export type GoalSide = 'home' | 'away';
 
 export type MatchEvent = {
   id: string;
   type: MatchEventType;
   minute: number; // 0..999
-
+  side: GoalSide;
   // goal
   scorerId?: string;
   scorerName?: string;
@@ -392,23 +393,25 @@ export async function deleteMatchEvent(params: { teamId: string; matchId: string
 }
 
 // Convenience builders
-export function buildGoalEvent(params: {
-  minute: number | string;
-  scorerId: string;
+export function buildGoalEvent(p: {
+  minute?: string;
+  side: 'home' | 'away';
+  scorerId?: string;
   scorerName: string;
   assistId?: string;
   assistName?: string;
-}): Omit<MatchEvent, 'id' | 'createdAt' | 'updatedAt'> {
-  const minute = clampMinute(params.minute);
+}): MatchEvent {
   return {
     type: 'goal',
-    minute,
-    scorerId: params.scorerId,
-    scorerName: norm(params.scorerName),
-    assistId: params.assistId || '',
-    assistName: params.assistName ? norm(params.assistName) : '',
+    minute: p.minute || '',
+    side: p.side,
+    scorerId: p.scorerId || '',
+    scorerName: p.scorerName || '',
+    assistId: p.assistId || '',
+    assistName: p.assistName || '',
   };
 }
+
 
 export function buildCardEvent(params: {
   minute: number | string;
