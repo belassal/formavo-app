@@ -573,6 +573,12 @@ export default function MatchDetailScreen() {
     </View>
   );
 
+  const pillBtn = (label: string, onPress: () => void) => (
+    <TouchableOpacity onPress={onPress} activeOpacity={0.75}>
+      {pill(label)}
+    </TouchableOpacity>
+  );
+
   const choiceBtn = (active: boolean, label: string, onPress: () => void) => (
     <TouchableOpacity
       onPress={onPress}
@@ -642,6 +648,7 @@ export default function MatchDetailScreen() {
           <View style={{ alignItems: 'flex-end', gap: 8, marginRight: 38 }}>
             {pill(scoreLabel)}
             {pill(`${playerCount} players`)}
+            {pillBtn('Game Day', () => navigation.navigate('GameDayPitch', { teamId, matchId }))}
           </View>
         </View>
 

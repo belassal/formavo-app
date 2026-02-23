@@ -430,6 +430,33 @@ export async function deleteMatchEvent(params: { teamId: string; matchId: string
   });
 }
 
+// ===== Game Day Pitch slot assignment =====
+// teams/{teamId}/matches/{matchId}/roster/{playerId} => { slotKey?: string }
+
+export async function setMatchRosterSlotKey(opts: {
+  teamId: string;
+  matchId: string;
+  playerId: string; // roster doc id (we use playerId as doc id)
+  slotKey: string | null; // null = clear assignment
+}) {
+  const { teamId, matchId, playerId, slotKey } = opts;
+
+  const ref = db
+    .collection(COL.teams)
+    .doc(teamId)
+    .collection(COL.matches)
+    .doc(matchId)
+    .collection(COL.roster)
+    .doc(playerId);
+
+  if (slotKey) {
+    await ref.set({ slotKey, updatedAt: serverTimestamp() }, { merge: true });
+  } else {
+    // IMPORTANT: use Firestore FieldValue.delete()
+    await ref.set({ slotKey: firestore.FieldValue.delete(), updatedAt: serverTimestamp() }, { merge: true });
+  }
+}
+
 
 // Convenience builders
 export function buildGoalEvent(p: {

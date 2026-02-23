@@ -85,6 +85,7 @@ export async function addPlayerToTeam(params: {
 
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(memRef);
+    const existing = snap.exists ? (snap.data() as any) : null;
     const now = serverTimestamp();
 
     if (!snap.exists) {
@@ -113,6 +114,10 @@ export async function addPlayerToTeam(params: {
         status,
         endDate: null,
         updatedAt: now,
+
+        // Safety: older docs might be missing these
+        ...(existing?.createdAt ? {} : { createdAt: now }),
+        ...(existing?.startDate ? {} : { startDate: now }),
       },
       { merge: true }
     );
