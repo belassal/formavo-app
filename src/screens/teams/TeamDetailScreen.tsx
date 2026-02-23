@@ -35,6 +35,18 @@ export default function TeamDetailScreen() {
 
   const uid = useMemo(() => auth().currentUser?.uid ?? null, []);
 
+  // --- icon buttons (match event style everywhere) ---
+  const ICON_BTN = {
+    width: 24,
+    height: 24,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    opacity: 0.6,
+  };
+  const ICON_HITSLOP = { top: 12, bottom: 12, left: 12, right: 12 };
+  const ICON_EDIT_TEXT = { fontSize: 16, fontWeight: '900' as const };
+  const ICON_X_TEXT = { fontSize: 16, fontWeight: '900' as const, color: '#b00020' };
+  
   // Roster (team memberships)
   const [loadingRoster, setLoadingRoster] = useState(true);
   const [memberships, setMemberships] = useState<any[]>([]);
@@ -314,44 +326,31 @@ export default function TeamDetailScreen() {
               style={{ flex: 1 }}
               activeOpacity={0.7}
             >
-              <Text style={{ fontSize: 16, fontWeight: '700' }} numberOfLines={1}>
+              <Text style={{ fontSize: 16, fontWeight: '700', paddingRight: 10 }} numberOfLines={1}>
                 {item.playerName}
                 {item.number ? `  #${item.number}` : ''}
               </Text>
             </TouchableOpacity>
 
-            {/* Edit icon */}
-            <TouchableOpacity
-              onPress={() => openEditPlayer(item)}
-              style={{
-                width: 20,
-                height: 20,
-                borderWidth: 1,
-                borderRadius: 8,
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginRight: 8,
-              }}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Text style={{ fontSize: 14, fontWeight: '900' }}>✎</Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity
+                onPress={() => openEditPlayer(item)}
+                style={ICON_BTN}
+                activeOpacity={0.3}
+                hitSlop={ICON_HITSLOP}
+              >
+                <Text style={ICON_EDIT_TEXT}>✎</Text>
+              </TouchableOpacity>
 
-            {/* Smaller X */}
-            <TouchableOpacity
-              onPress={() => confirmRemovePlayer(item)}
-              style={{
-                width: 20,
-                height: 20,
-                borderWidth: 1,
-                borderRadius: 8,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            >
-              <Text style={{ fontSize: 10, fontWeight: '900', color: '#b00020' }}>×</Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => confirmRemovePlayer(item)}
+                style={ICON_BTN}
+                activeOpacity={0.3}
+                hitSlop={ICON_HITSLOP}
+              >
+                <Text style={ICON_X_TEXT}>×</Text>
+              </TouchableOpacity>
+            </View>
           </View>
           <Text style={{ marginTop: 6, color: '#666' }}>
             {item.position ? `Pos: ${item.position} · ` : ''}

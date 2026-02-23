@@ -19,6 +19,20 @@ export default function MatchesScreen() {
   const navigation = useNavigation<any>();
   const uid = useMemo(() => auth().currentUser?.uid ?? null, []);
 
+  // --- icon buttons (make ALL edit/delete icons match the event style) ---
+  const ICON_BTN = {
+    width: 24,
+    height: 24,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    opacity: 0.6,
+  };
+
+  const ICON_HITSLOP = { top: 12, bottom: 12, left: 12, right: 12 };
+
+  const ICON_EDIT_TEXT = { fontSize: 16, fontWeight: '900' as const };
+  const ICON_X_TEXT = { fontSize: 16, fontWeight: '900' as const, color: '#b00020' };
+
   const [loading, setLoading] = useState(true);
 
   const [teams, setTeams] = useState<TeamRow[]>([]);

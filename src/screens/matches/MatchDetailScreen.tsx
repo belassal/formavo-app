@@ -23,13 +23,14 @@ import {
   deleteMatchEvent,
   listenMatchEvents,
   listenMatchRoster,
-  markMatchLive,   
+  markMatchLive,
   markMatchCompleted,
   removePlayerFromMatchRoster,
   setMatchPlayerAttendance,
   setMatchPlayerRole,
   softDeleteMatch,
   updateMatch,
+  updateMatchEvent, // ✅ REQUIRED for editing events
   type AttendanceStatus,
   type CardColor,
   type MatchEvent,
@@ -49,6 +50,20 @@ export default function MatchDetailScreen() {
   const route = useRoute<MatchDetailRoute>();
   const navigation = useNavigation<NativeStackNavigationProp<TeamsStackParamList>>();
   const { teamId, matchId } = route.params;
+
+  // --- icon buttons (make ALL edit/delete icons match the event style) ---
+  const ICON_BTN = {
+    width: 24,
+    height: 24,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    opacity: 0.6,
+  };
+
+  const ICON_HITSLOP = { top: 12, bottom: 12, left: 12, right: 12 };
+
+  const ICON_EDIT_TEXT = { fontSize: 16, fontWeight: '900' as const };
+  const ICON_X_TEXT = { fontSize: 16, fontWeight: '900' as const, color: '#b00020' };
 
   const [loading, setLoading] = useState(true);
 
@@ -84,18 +99,33 @@ export default function MatchDetailScreen() {
   const [eventType, setEventType] = useState<'goal' | 'card'>('goal');
   const [eventMinute, setEventMinute] = useState('');
 
-  // goal inputs
+  // goal inputs (add)
   const [goalScorerId, setGoalScorerId] = useState<string>('');
   const [goalAssistId, setGoalAssistId] = useState<string>('');
 
-  // card inputs
+  // card inputs (add)
   const [cardPlayerId, setCardPlayerId] = useState<string>('');
   const [cardColor, setCardColor] = useState<CardColor>('yellow');
 
-  const isCompleted: boolean = (match?.status || 'scheduled') === 'completed';
-
+  // goal side + opponent scorer (add)
   const [goalSide, setGoalSide] = useState<'home' | 'away'>('home');
   const [oppScorerName, setOppScorerName] = useState('');
+
+  // edit-event modal state
+  const [showEditEvent, setShowEditEvent] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<MatchEvent | null>(null);
+
+  // shared edit
+  const [editEventMinute, setEditEventMinute] = useState('');
+
+  // goal fields (edit)
+  const [editGoalScorerId, setEditGoalScorerId] = useState('');
+  const [editGoalAssistId, setEditGoalAssistId] = useState('');
+  const [editOppScorerName, setEditOppScorerName] = useState('');
+
+  // card fields (edit)
+  const [editCardPlayerId, setEditCardPlayerId] = useState('');
+  const [editCardColor, setEditCardColor] = useState<CardColor>('yellow');
 
   // --- listeners ---
   useEffect(() => {
@@ -159,6 +189,13 @@ export default function MatchDetailScreen() {
     });
   }, [roster]);
 
+  const rosterForPick = rosterSorted;
+
+  const findRosterName = (playerId: string) => {
+    const r = rosterForPick.find((x: any) => x.id === playerId);
+    return r?.playerName || 'Player';
+  };
+
   // ---- add to roster ----
   const addToRoster = async (p: any) => {
     try {
@@ -187,23 +224,17 @@ export default function MatchDetailScreen() {
     }
   };
 
-const confirmRemoveFromRoster = (playerId: string, playerName?: string) => {
-  Alert.alert(
-    'Remove player?',
-    `Remove ${playerName || 'this player'} from the match roster?`,
-    [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: () => removeFromRoster(playerId),
-      },
-    ],
-    { cancelable: true }
-  );
-};
-
-
+  const confirmRemoveFromRoster = (playerId: string, playerName?: string) => {
+    Alert.alert(
+      'Remove player?',
+      `Remove ${playerName || 'this player'} from the match roster?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Remove', style: 'destructive', onPress: () => removeFromRoster(playerId) },
+      ],
+      { cancelable: true }
+    );
+  };
 
   // available team players not already on match roster
   const rosterIds = useMemo(() => new Set(roster.map((r) => r.id)), [roster]);
@@ -233,7 +264,7 @@ const confirmRemoveFromRoster = (playerId: string, playerName?: string) => {
     }
   };
 
-  // ---- edit/delete/complete match ----
+  // ---- edit/delete match ----
   const openEdit = () => {
     setEditOpponent(String(match?.opponent || ''));
     setEditDateISO(String(match?.dateISO || ''));
@@ -266,27 +297,6 @@ const confirmRemoveFromRoster = (playerId: string, playerName?: string) => {
     }
   };
 
-  const confirmComplete = () => {
-    Alert.alert(
-      'Mark as Completed?',
-      'You can still edit roster and events later.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Mark Completed',
-          onPress: async () => {
-            try {
-              await markMatchCompleted({ teamId, matchId });
-            } catch (e: any) {
-              Alert.alert('Update failed', e?.message ?? 'Unknown error');
-            }
-          },
-        },
-      ],
-      { cancelable: true }
-    );
-  };
-
   const onDeleteFromEdit = async () => {
     const typed = norm(confirmDeleteText);
     const mustMatch = norm(match?.opponent || '');
@@ -306,7 +316,31 @@ const confirmRemoveFromRoster = (playerId: string, playerName?: string) => {
     }
   };
 
-  // ===== v0.4: events / game stats =====
+  // ---- match status ----
+  const status: MatchStatus = (match?.status || 'scheduled') as MatchStatus;
+
+  const confirmComplete = () => {
+    Alert.alert(
+      'End game?',
+      'This will mark the match as completed.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'End Game',
+          onPress: async () => {
+            try {
+              await markMatchCompleted({ teamId, matchId });
+            } catch (e: any) {
+              Alert.alert('Update failed', e?.message ?? 'Unknown error');
+            }
+          },
+        },
+      ],
+      { cancelable: true }
+    );
+  };
+
+  // ---- events ----
   const openAddEvent = () => {
     setEventType('goal');
     setEventMinute('');
@@ -314,15 +348,9 @@ const confirmRemoveFromRoster = (playerId: string, playerName?: string) => {
     setGoalAssistId('');
     setCardPlayerId('');
     setCardColor('yellow');
-    setShowEvent(true);
     setGoalSide('home');
     setOppScorerName('');
-  };
-
-  const rosterForPick = rosterSorted;
-  const findRosterName = (playerId: string) => {
-    const r = rosterForPick.find((x: any) => x.id === playerId);
-    return r?.playerName || 'Player';
+    setShowEvent(true);
   };
 
   const saveEvent = async () => {
@@ -391,19 +419,133 @@ const confirmRemoveFromRoster = (playerId: string, playerName?: string) => {
       'This will permanently remove the event from this match.',
       [
         { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => removeEvent(eventId),
-        },
+        { text: 'Delete', style: 'destructive', onPress: () => removeEvent(eventId) },
       ],
       { cancelable: true }
     );
   };
 
-  const status: MatchStatus = (match?.status || 'scheduled') as MatchStatus;
-  const playerCount = roster.length;
+  // ---- undo last event ----
+  const lastEvent = useMemo(() => {
+    if (!events || events.length === 0) return null;
+    const sorted = [...events].sort((a: any, b: any) => {
+      const as = a?.createdAt?.seconds ?? 0;
+      const bs = b?.createdAt?.seconds ?? 0;
+      return bs - as;
+    });
+    return sorted[0] || null;
+  }, [events]);
 
+  const confirmUndoLastEvent = () => {
+    if (!lastEvent) return;
+    Alert.alert(
+      'Undo last event?',
+      'This will remove the most recent event.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Undo', style: 'destructive', onPress: () => removeEvent(lastEvent.id) },
+      ],
+      { cancelable: true }
+    );
+  };
+
+  // ---- edit event ----
+  const openEditEvent = (ev: MatchEvent) => {
+    setEditingEvent(ev);
+    setEditEventMinute(String(ev.minute ?? ''));
+
+    if (ev.type === 'goal') {
+      if ((ev.side || 'home') === 'home') {
+        setEditGoalScorerId(ev.scorerId || '');
+        setEditGoalAssistId(ev.assistId || '');
+        setEditOppScorerName('');
+      } else {
+        setEditGoalScorerId('');
+        setEditGoalAssistId('');
+        setEditOppScorerName(ev.scorerName || '');
+      }
+    } else {
+      setEditCardPlayerId(ev.playerId || '');
+      setEditCardColor((ev.color || 'yellow') as CardColor);
+    }
+
+    setShowEditEvent(true);
+  };
+
+  const closeEditEvent = () => {
+    setShowEditEvent(false);
+    setEditingEvent(null);
+
+    setEditEventMinute('');
+    setEditGoalScorerId('');
+    setEditGoalAssistId('');
+    setEditOppScorerName('');
+    setEditCardPlayerId('');
+    setEditCardColor('yellow');
+  };
+
+  const saveEditedEvent = async () => {
+    if (!editingEvent) return;
+
+    try {
+      const minuteStr = norm(editEventMinute);
+
+      if (editingEvent.type === 'goal') {
+        const side = (editingEvent.side || 'home') as 'home' | 'away';
+
+        if (side === 'home') {
+          if (!editGoalScorerId) return Alert.alert('Missing scorer', 'Pick who scored.');
+
+          const scorerName = findRosterName(editGoalScorerId);
+          const assistName = editGoalAssistId ? findRosterName(editGoalAssistId) : '';
+
+          await updateMatchEvent({
+            teamId,
+            matchId,
+            eventId: editingEvent.id,
+            patch: {
+              minute: minuteStr,
+              scorerId: editGoalScorerId,
+              scorerName,
+              assistId: editGoalAssistId || '',
+              assistName: assistName || '',
+            },
+          });
+        } else {
+          await updateMatchEvent({
+            teamId,
+            matchId,
+            eventId: editingEvent.id,
+            patch: {
+              minute: minuteStr,
+              scorerName: norm(editOppScorerName) || 'Opponent',
+            },
+          });
+        }
+      } else {
+        if (!editCardPlayerId) return Alert.alert('Missing player', 'Pick a player.');
+        const playerName = findRosterName(editCardPlayerId);
+
+        await updateMatchEvent({
+          teamId,
+          matchId,
+          eventId: editingEvent.id,
+          patch: {
+            minute: minuteStr,
+            playerId: editCardPlayerId,
+            playerName,
+            color: editCardColor,
+          },
+        });
+      }
+
+      closeEditEvent();
+    } catch (e: any) {
+      Alert.alert('Edit event failed', e?.message ?? 'Unknown error');
+    }
+  };
+
+  // ---- stats / score label ----
   const stats = useMemo(() => {
     const homeGoals = events.filter((e: any) => e.type === 'goal' && (e.side || 'home') === 'home').length;
     const awayGoals = events.filter((e: any) => e.type === 'goal' && e.side === 'away').length;
@@ -414,14 +556,15 @@ const confirmRemoveFromRoster = (playerId: string, playerName?: string) => {
   }, [events]);
 
   const scoreLabel = useMemo(() => {
-  const hg = stats.homeGoals ?? 0;
-  const ag = stats.awayGoals ?? 0;
+    const hg = stats.homeGoals ?? 0;
+    const ag = stats.awayGoals ?? 0;
 
-  if (status === 'completed') return `FT ${hg}-${ag}`;
-  if (status === 'live') return `LIVE ${hg}-${ag}`;
-  return 'Scheduled';
-}, [stats.homeGoals, stats.awayGoals, status]);
+    if (status === 'completed') return `FT ${hg}-${ag}`;
+    if (status === 'live') return `LIVE ${hg}-${ag}`;
+    return 'Scheduled';
+  }, [stats.homeGoals, stats.awayGoals, status]);
 
+  const playerCount = roster.length;
 
   // --- UI helpers ---
   const pill = (label: string) => (
@@ -472,27 +615,20 @@ const confirmRemoveFromRoster = (playerId: string, playerName?: string) => {
     <SafeAreaView style={{ flex: 1, padding: 16 }}>
       {/* ===== Match summary card ===== */}
       <View style={{ borderWidth: 1, borderRadius: 14, padding: 12, position: 'relative' }}>
-
-        {/* Edit icon (top-right INSIDE the card) */}
+        {/* Edit icon */}
         <TouchableOpacity
           onPress={openEdit}
           style={{
             position: 'absolute',
-            top: 10,
-            right: 12,        // keep it tight to the border
-            width: 28,
-            height: 28,
-            borderWidth: 1,
-            borderRadius: 10,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: 'white',
+            top: 8,
+            right: 8,
+            ...ICON_BTN,
           }}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          activeOpacity={0.3}
+          hitSlop={ICON_HITSLOP}
         >
-          <Text style={{ fontSize: 14, fontWeight: '900' }}>✎</Text>
+          <Text style={ICON_EDIT_TEXT}>✎</Text>
         </TouchableOpacity>
-
 
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 10 }}>
           <View style={{ flex: 1, paddingRight: 34 }}>
@@ -509,47 +645,61 @@ const confirmRemoveFromRoster = (playerId: string, playerName?: string) => {
           </View>
         </View>
 
-        {!isCompleted && (
-          <View style={{ marginTop: 12 }}>
-            <TouchableOpacity
-              onPress={confirmComplete}
-              style={{ paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderRadius: 12, alignSelf: 'flex-start' }}
-            >
-              <Text style={{ fontWeight: '800' }}>Mark Completed</Text>
-            </TouchableOpacity>
-          </View>
-        )}
         {status === 'scheduled' && (
-            <TouchableOpacity
-              onPress={() => markMatchLive({ teamId, matchId })}
-              style={{ paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderRadius: 12, alignSelf: 'flex-start', marginTop: 12 }}
-            >
-              <Text style={{ fontWeight: '800' }}>Start Game</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            onPress={() => markMatchLive({ teamId, matchId })}
+            style={{
+              paddingVertical: 8,
+              paddingHorizontal: 12,
+              borderWidth: 1,
+              borderRadius: 12,
+              alignSelf: 'flex-start',
+              marginTop: 12,
+            }}
+          >
+            <Text style={{ fontWeight: '800' }}>Start Game</Text>
+          </TouchableOpacity>
+        )}
 
-          {status === 'live' && (
-            <TouchableOpacity
-              onPress={confirmComplete}
-              style={{ paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderRadius: 12, alignSelf: 'flex-start', marginTop: 12 }}
-            >
-              <Text style={{ fontWeight: '800' }}>End Game</Text>
-            </TouchableOpacity>
-          )}
-
+        {status === 'live' && (
+          <TouchableOpacity
+            onPress={confirmComplete}
+            style={{
+              paddingVertical: 8,
+              paddingHorizontal: 12,
+              borderWidth: 1,
+              borderRadius: 12,
+              alignSelf: 'flex-start',
+              marginTop: 12,
+            }}
+          >
+            <Text style={{ fontWeight: '800' }}>End Game</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
-
-      {/* ===== Game Stats (v0.4) ===== */}
+      {/* ===== Game Stats ===== */}
       <View style={{ marginTop: 14, borderWidth: 1, borderRadius: 14, padding: 12 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Text style={{ fontSize: 18, fontWeight: '900' }}>Game Stats</Text>
-          <TouchableOpacity
-            onPress={openAddEvent}
-            style={{ paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderRadius: 12 }}
-          >
-            <Text style={{ fontWeight: '900' }}>+ Event</Text>
-          </TouchableOpacity>
+
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            {events.length > 0 && (
+              <TouchableOpacity
+                onPress={confirmUndoLastEvent}
+                style={{ paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderRadius: 12 }}
+              >
+                <Text style={{ fontWeight: '900' }}>Undo</Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity
+              onPress={openAddEvent}
+              style={{ paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderRadius: 12 }}
+            >
+              <Text style={{ fontWeight: '900' }}>+ Event</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={{ flexDirection: 'row', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
@@ -574,37 +724,50 @@ const confirmRemoveFromRoster = (playerId: string, playerName?: string) => {
                   : `CARD · ${(item.color || 'yellow').toUpperCase()} · ${item.playerName || 'Player'}`;
 
               return (
-                <View
-                    style={{
-                      borderWidth: 1,
-                      borderRadius: 12,
-                      padding: 10,
-                      marginBottom: 10,
-                      position: 'relative',
-                    }}
-                  >
+                <TouchableOpacity
+                  onPress={() => openEditEvent(item)}
+                  activeOpacity={0.85}
+                  style={{
+                    borderWidth: 1,
+                    borderRadius: 12,
+                    padding: 10,
+                    marginBottom: 10,
+                    position: 'relative',
+                  }}
+                >
+                  <Text style={{ fontWeight: '900', paddingRight: 70 }}>
+                    {minLabel}  {title}
+                  </Text>
 
-                  <Text style={{ fontWeight: '900', paddingRight: 32 }}>{minLabel}  {title}</Text>
-                  <TouchableOpacity
-                    onPress={() => confirmDeleteEvent(item.id)}
+                  {/* Right-side actions (edit + delete) */}
+                  <View
                     style={{
                       position: 'absolute',
                       top: 8,
                       right: 8,
-                      width: 24,
-                      height: 24,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      opacity: 0.6,
+                      flexDirection: 'row',
+                      gap: 10,
                     }}
-                    activeOpacity={0.3}
-                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   >
-                    <Text style={{ fontSize: 16, fontWeight: '900', color: '#b00020' }}>×</Text>
-                  </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => openEditEvent(item)}
+                      style={ICON_BTN}
+                      activeOpacity={0.3}
+                      hitSlop={ICON_HITSLOP}
+                    >
+                      <Text style={ICON_EDIT_TEXT}>✎</Text>
+                    </TouchableOpacity>
 
-
-                </View>
+                    <TouchableOpacity
+                      onPress={() => confirmDeleteEvent(item.id)}
+                      style={ICON_BTN}
+                      activeOpacity={0.3}
+                      hitSlop={ICON_HITSLOP}
+                    >
+                      <Text style={ICON_X_TEXT}>×</Text>
+                    </TouchableOpacity>
+                  </View>
+                </TouchableOpacity>
               );
             }}
           />
@@ -653,22 +816,19 @@ const confirmRemoveFromRoster = (playerId: string, playerName?: string) => {
                   {choiceBtn(att === 'injured', 'Injured', () => setAttendance(item.id, 'injured'))}
                   {choiceBtn(att === 'absent', 'Absent', () => setAttendance(item.id, 'absent'))}
                 </View>
+
                 <TouchableOpacity
                   onPress={() => confirmRemoveFromRoster(item.id, item.playerName)}
                   style={{
                     position: 'absolute',
                     top: 10,
                     right: 10,
-                    width: 24,
-                    height: 24,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    opacity: 0.6,
+                    ...ICON_BTN,
                   }}
                   activeOpacity={0.3}
-                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  hitSlop={ICON_HITSLOP}
                 >
-                  <Text style={{ fontSize: 16, fontWeight: '900', color: '#b00020' }}>×</Text>
+                  <Text style={ICON_X_TEXT}>×</Text>
                 </TouchableOpacity>
               </View>
             );
@@ -731,7 +891,7 @@ const confirmRemoveFromRoster = (playerId: string, playerName?: string) => {
         </View>
       </Modal>
 
-      {/* ===== Add Event Modal (v0.4) ===== */}
+      {/* ===== Add Event Modal ===== */}
       <Modal visible={showEvent} animationType="slide" transparent onRequestClose={() => setShowEvent(false)}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' }}>
           <View
@@ -797,7 +957,8 @@ const confirmRemoveFromRoster = (playerId: string, playerName?: string) => {
                             }}
                           >
                             <Text style={{ fontWeight: '900', color: active ? 'white' : '#111' }}>
-                              {item.playerName}{item.number ? `  #${item.number}` : ''}
+                              {item.playerName}
+                              {item.number ? `  #${item.number}` : ''}
                             </Text>
                           </TouchableOpacity>
                         );
@@ -823,7 +984,8 @@ const confirmRemoveFromRoster = (playerId: string, playerName?: string) => {
                             }}
                           >
                             <Text style={{ fontWeight: '900', color: active ? 'white' : '#111' }}>
-                              {item.playerName}{item.number ? `  #${item.number}` : ''}
+                              {item.playerName}
+                              {item.number ? `  #${item.number}` : ''}
                             </Text>
                           </TouchableOpacity>
                         );
@@ -832,7 +994,7 @@ const confirmRemoveFromRoster = (playerId: string, playerName?: string) => {
                   </>
                 )}
               </>
-            ): (
+            ) : (
               <>
                 <Text style={{ fontWeight: '900' }}>Player</Text>
                 <FlatList
@@ -853,7 +1015,8 @@ const confirmRemoveFromRoster = (playerId: string, playerName?: string) => {
                         }}
                       >
                         <Text style={{ fontWeight: '900', color: active ? 'white' : '#111' }}>
-                          {item.playerName}{item.number ? `  #${item.number}` : ''}
+                          {item.playerName}
+                          {item.number ? `  #${item.number}` : ''}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -876,6 +1039,152 @@ const confirmRemoveFromRoster = (playerId: string, playerName?: string) => {
 
               <TouchableOpacity
                 onPress={saveEvent}
+                style={{ paddingVertical: 10, paddingHorizontal: 14, borderWidth: 1, borderRadius: 12 }}
+              >
+                <Text style={{ fontWeight: '900' }}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ===== Edit Event Modal ===== */}
+      <Modal visible={showEditEvent} animationType="slide" transparent onRequestClose={closeEditEvent}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' }}>
+          <View
+            style={{
+              backgroundColor: 'white',
+              padding: 16,
+              borderTopLeftRadius: 18,
+              borderTopRightRadius: 18,
+              gap: 12,
+              maxHeight: '85%',
+            }}
+          >
+            <Text style={{ fontSize: 18, fontWeight: '900' }}>Edit Event</Text>
+
+            <TextInput
+              placeholder="Minute (ex: 12)"
+              value={editEventMinute}
+              onChangeText={setEditEventMinute}
+              style={{ borderWidth: 1, padding: 12, borderRadius: 12 }}
+              keyboardType="number-pad"
+            />
+
+            {editingEvent?.type === 'goal' ? (
+              <>
+                {(editingEvent.side || 'home') === 'away' ? (
+                  <>
+                    <Text style={{ fontWeight: '900', marginTop: 4 }}>Opponent scorer</Text>
+                    <TextInput
+                      placeholder="Opponent"
+                      value={editOppScorerName}
+                      onChangeText={setEditOppScorerName}
+                      style={{ borderWidth: 1, padding: 12, borderRadius: 12 }}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <Text style={{ fontWeight: '900', marginTop: 4 }}>Scorer</Text>
+                    <FlatList
+                      style={{ maxHeight: 180 }}
+                      data={rosterForPick}
+                      keyExtractor={(x) => x.id}
+                      renderItem={({ item }) => {
+                        const active = item.id === editGoalScorerId;
+                        return (
+                          <TouchableOpacity
+                            onPress={() => setEditGoalScorerId(item.id)}
+                            style={{
+                              borderWidth: 1,
+                              borderRadius: 12,
+                              padding: 10,
+                              marginTop: 8,
+                              backgroundColor: active ? '#111' : 'transparent',
+                            }}
+                          >
+                            <Text style={{ fontWeight: '900', color: active ? 'white' : '#111' }}>
+                              {item.playerName}
+                              {item.number ? `  #${item.number}` : ''}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      }}
+                    />
+
+                    <Text style={{ fontWeight: '900', marginTop: 8 }}>Assist (optional)</Text>
+                    <FlatList
+                      style={{ maxHeight: 180 }}
+                      data={rosterForPick.filter((x: any) => x.id !== editGoalScorerId)}
+                      keyExtractor={(x) => x.id}
+                      renderItem={({ item }) => {
+                        const active = item.id === editGoalAssistId;
+                        return (
+                          <TouchableOpacity
+                            onPress={() => setEditGoalAssistId(active ? '' : item.id)}
+                            style={{
+                              borderWidth: 1,
+                              borderRadius: 12,
+                              padding: 10,
+                              marginTop: 8,
+                              backgroundColor: active ? '#111' : 'transparent',
+                            }}
+                          >
+                            <Text style={{ fontWeight: '900', color: active ? 'white' : '#111' }}>
+                              {item.playerName}
+                              {item.number ? `  #${item.number}` : ''}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      }}
+                    />
+                  </>
+                )}
+              </>
+            ) : (
+              <>
+                <Text style={{ fontWeight: '900' }}>Player</Text>
+                <FlatList
+                  style={{ maxHeight: 220 }}
+                  data={rosterForPick}
+                  keyExtractor={(x) => x.id}
+                  renderItem={({ item }) => {
+                    const active = item.id === editCardPlayerId;
+                    return (
+                      <TouchableOpacity
+                        onPress={() => setEditCardPlayerId(item.id)}
+                        style={{
+                          borderWidth: 1,
+                          borderRadius: 12,
+                          padding: 10,
+                          marginTop: 8,
+                          backgroundColor: active ? '#111' : 'transparent',
+                        }}
+                      >
+                        <Text style={{ fontWeight: '900', color: active ? 'white' : '#111' }}>
+                          {item.playerName}
+                          {item.number ? `  #${item.number}` : ''}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  }}
+                />
+
+                <Text style={{ fontWeight: '900', marginTop: 8 }}>Card</Text>
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
+                  {tagBtn(editCardColor === 'yellow', 'Yellow', () => setEditCardColor('yellow'))}
+                  {tagBtn(editCardColor === 'red', 'Red', () => setEditCardColor('red'))}
+                </View>
+              </>
+            )}
+
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 4 }}>
+              <TouchableOpacity onPress={closeEditEvent}>
+                <Text style={{ padding: 10, color: '#444', fontWeight: '800' }}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={saveEditedEvent}
                 style={{ paddingVertical: 10, paddingHorizontal: 14, borderWidth: 1, borderRadius: 12 }}
               >
                 <Text style={{ fontWeight: '900' }}>Save</Text>
