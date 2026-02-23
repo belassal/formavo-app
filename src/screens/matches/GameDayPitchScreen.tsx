@@ -15,16 +15,21 @@ import type { TeamsStackParamList } from '../../navigation/stacks/TeamsStack';
 import GameDayPitch from './components/GameDayPitch';
 import { db } from '../../services/firebase';
 import { COL } from '../../models/collections';
-import { setMatchRosterSlotKey } from '../../services/matchService';
-import { listenTeamMemberships } from '../../services/playerService';
+import { setMatchRosterSlotKey, setMatchSlotPos } from '../../services/matchService';
+import { buildSlots } from '../../services/formation';
 
 type RouteT = RouteProp<TeamsStackParamList, 'GameDayPitch'>;
+
+type SlotPos = { x: number; y: number };
 
 type MatchDoc = {
   opponent?: string;
   dateISO?: string;
   status?: 'scheduled' | 'live' | 'completed';
   formation?: string;
+
+  // Optional custom layout overrides (relative 0..1)
+  slotPos?: Record<string, SlotPos>;
 };
 
 type MatchRosterRow = {
@@ -45,12 +50,12 @@ export default function GameDayPitchScreen() {
   const [match, setMatch] = useState<MatchDoc | null>(null);
   const [roster, setRoster] = useState<MatchRosterRow[]>([]);
 
-  // Team roster (memberships) -> used to show the *latest* name/number on game day
-  const [teamMembers, setTeamMembers] = useState<any[]>([]);
-
   // Slot assignment modal state
   const [assignSlotKey, setAssignSlotKey] = useState<string | null>(null);
   const [savingAssign, setSavingAssign] = useState(false);
+
+  // Layout mode (drag positions)
+  const [layoutMode, setLayoutMode] = useState(false);
 
   // 1) Match doc
   useEffect(() => {
@@ -103,42 +108,19 @@ export default function GameDayPitchScreen() {
     return () => unsub();
   }, [teamId, matchId]);
 
-  // 3) Team roster (so name edits reflect in game day)
-  useEffect(() => {
-    const unsub = listenTeamMemberships(teamId, (rows) => setTeamMembers(rows));
-    return () => {
-      try {
-        unsub();
-      } catch {}
-    };
-  }, [teamId]);
-
-  const memberById = useMemo(() => {
-    const m: Record<string, any> = {};
-    (teamMembers || []).forEach((r: any) => {
-      const pid = r.playerId || r.id;
-      if (pid) m[pid] = r;
-    });
-    return m;
-  }, [teamMembers]);
+  const formation = match?.formation || '4-3-3';
 
   // Starters
   const starters = useMemo(() => {
     return roster
       .filter((r) => (r.role || 'bench') === 'starter')
       .filter((r) => (r.attendance || 'present') !== 'absent')
-      .map((r) => {
-        const pid = r.playerId || r.id;
-        const mem = memberById[pid];
-        return {
-          id: pid,
-          name: (mem?.playerName || mem?.name || r.playerName || 'Unknown') as string,
-          number: String(r.number ?? mem?.number ?? '').trim() || undefined,
-        };
-      });
-  }, [roster, memberById]);
-
-  const formation = match?.formation || '4-3-3';
+      .map((r) => ({
+        id: r.playerId || r.id,
+        name: r.playerName || 'Unknown',
+        number: r.number ? String(r.number) : undefined,
+      }));
+  }, [roster]);
 
   // playerId -> slotKey
   const playerToSlotKey = useMemo(() => {
@@ -150,7 +132,7 @@ export default function GameDayPitchScreen() {
     return m;
   }, [roster]);
 
-  // slotKey -> playerId
+  // slotKey -> playerId (who is currently here?)
   const slotToPlayerId = useMemo(() => {
     const m: Record<string, string> = {};
     Object.keys(playerToSlotKey).forEach((pid) => {
@@ -160,23 +142,72 @@ export default function GameDayPitchScreen() {
     return m;
   }, [playerToSlotKey]);
 
+  // One-time auto-assign (ONLY when nobody has any slotKey yet)
+  useEffect(() => {
+    const assignedCount = Object.keys(playerToSlotKey).length;
+    if (!starters.length) return;
+    if (assignedCount > 0) return; // <- prevents re-shuffling later
+
+    // Fill slots deterministically and WRITE to Firestore (so it becomes stable)
+    const slots = buildSlots(formation);
+    const gk = slots.find((s) => s.key === 'GK');
+    const others = slots.filter((s) => s.key !== 'GK').sort((a, b) => (b.y - a.y) || (a.x - b.x));
+
+    (async () => {
+      try {
+        let idx = 0;
+        if (gk && starters[idx]) {
+          await setMatchRosterSlotKey({ teamId, matchId, playerId: starters[idx].id, slotKey: gk.key });
+          idx++;
+        }
+        for (const s of others) {
+          const p = starters[idx++];
+          if (!p) break;
+          await setMatchRosterSlotKey({ teamId, matchId, playerId: p.id, slotKey: s.key });
+        }
+      } catch (e) {
+        console.log('[GameDayPitchScreen] auto-assign failed', e);
+      }
+    })();
+  }, [teamId, matchId, formation, starters, playerToSlotKey]);
+
   const closeAssign = () => setAssignSlotKey(null);
 
+  // Swap logic (stable): only touched slots change.
   const assignPlayerToSlot = async (playerId: string) => {
     if (!assignSlotKey) return;
 
     try {
       setSavingAssign(true);
 
-      // If another player is already in this slot, clear them
-      const existing = slotToPlayerId[assignSlotKey];
-      if (existing && existing !== playerId) {
-        await setMatchRosterSlotKey({ teamId, matchId, playerId: existing, slotKey: null });
+      const targetSlot = assignSlotKey;
+      const occupantId = slotToPlayerId[targetSlot] || null; // player currently in this slot
+      const pickedCurrentSlot = playerToSlotKey[playerId] || null; // where picked player currently is
+
+      // No-op if already there
+      if (pickedCurrentSlot === targetSlot) {
+        closeAssign();
+        return;
       }
 
-      // Assign chosen player to slot
-      await setMatchRosterSlotKey({ teamId, matchId, playerId, slotKey: assignSlotKey });
+      // If slot has someone and picked player has a slot too => SWAP
+      if (occupantId && pickedCurrentSlot) {
+        await setMatchRosterSlotKey({ teamId, matchId, playerId: occupantId, slotKey: pickedCurrentSlot });
+        await setMatchRosterSlotKey({ teamId, matchId, playerId, slotKey: targetSlot });
+        closeAssign();
+        return;
+      }
 
+      // If slot has someone but picked is unassigned => clear occupant, place picked
+      if (occupantId && !pickedCurrentSlot) {
+        await setMatchRosterSlotKey({ teamId, matchId, playerId: occupantId, slotKey: null });
+        await setMatchRosterSlotKey({ teamId, matchId, playerId, slotKey: targetSlot });
+        closeAssign();
+        return;
+      }
+
+      // If slot is empty and picked is in another slot => move picked
+      await setMatchRosterSlotKey({ teamId, matchId, playerId, slotKey: targetSlot });
       closeAssign();
     } catch (e: any) {
       Alert.alert('Assign failed', e?.message ?? 'Unknown error');
@@ -188,20 +219,28 @@ export default function GameDayPitchScreen() {
   const clearThisSlot = async () => {
     if (!assignSlotKey) return;
 
-    const existing = slotToPlayerId[assignSlotKey];
-    if (!existing) {
+    const occupantId = slotToPlayerId[assignSlotKey];
+    if (!occupantId) {
       closeAssign();
       return;
     }
 
     try {
       setSavingAssign(true);
-      await setMatchRosterSlotKey({ teamId, matchId, playerId: existing, slotKey: null });
+      await setMatchRosterSlotKey({ teamId, matchId, playerId: occupantId, slotKey: null });
       closeAssign();
     } catch (e: any) {
       Alert.alert('Clear failed', e?.message ?? 'Unknown error');
     } finally {
       setSavingAssign(false);
+    }
+  };
+
+  const onSlotPosChange = async (slotKey: string, pos: SlotPos) => {
+    try {
+      await setMatchSlotPos({ teamId, matchId, slotKey, pos });
+    } catch (e: any) {
+      Alert.alert('Save layout failed', e?.message ?? 'Unknown error');
     }
   };
 
@@ -227,8 +266,19 @@ export default function GameDayPitchScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Game Day Pitch</Text>
-        <Text style={styles.subtitle}>Formation: {formation}</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.title}>Game Day Pitch</Text>
+          <Text style={styles.subtitle}>Formation: {formation}</Text>
+        </View>
+
+        <TouchableOpacity
+          onPress={() => setLayoutMode((v) => !v)}
+          style={[styles.modeBtn, layoutMode ? styles.modeBtnOn : null]}
+        >
+          <Text style={[styles.modeBtnText, layoutMode ? { color: 'white' } : null]}>
+            {layoutMode ? 'Done' : 'Edit layout'}
+          </Text>
+        </TouchableOpacity>
       </View>
 
       <View style={{ flex: 1 }}>
@@ -236,7 +286,17 @@ export default function GameDayPitchScreen() {
           formation={formation}
           starters={starters}
           playerToSlotKey={playerToSlotKey}
-          onSlotPress={(slotKey) => setAssignSlotKey(slotKey)}
+          slotPos={match.slotPos || {}}
+          layoutMode={layoutMode}
+          onSlotPosChange={onSlotPosChange}
+          onPlayerPress={(playerId) => {
+            // You can later open player details here
+            console.log('Tapped player:', playerId);
+          }}
+          onSlotPress={(slotKey) => {
+            if (layoutMode) return; // no assigning while dragging
+            setAssignSlotKey(slotKey);
+          }}
         />
       </View>
 
@@ -249,7 +309,6 @@ export default function GameDayPitchScreen() {
               Slot: <Text style={{ fontWeight: '900' }}>{assignSlotKey}</Text>
             </Text>
 
-            {/* Clear slot */}
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
               <TouchableOpacity
                 onPress={closeAssign}
@@ -268,31 +327,32 @@ export default function GameDayPitchScreen() {
                   savingAssign || !selectedSlotCurrentPlayerId ? { opacity: 0.4 } : null,
                 ]}
               >
-                <Text style={[styles.modalBtnText, { color: '#b00020' }]}>Remove (−)</Text>
+                <Text style={[styles.modalBtnText, { color: '#b00020' }]}>Clear slot</Text>
               </TouchableOpacity>
             </View>
 
-            <Text style={[styles.modalSectionTitle, { marginTop: 14 }]}>Choose a starter (+)</Text>
+            <Text style={[styles.modalSectionTitle, { marginTop: 14 }]}>Pick a starter</Text>
 
             <FlatList
               data={starters}
               keyExtractor={(p) => p.id}
               renderItem={({ item }) => {
-                const isAssignedHere = !!assignSlotKey && playerToSlotKey[item.id] === assignSlotKey;
+                const current = playerToSlotKey[item.id] || '';
+                const isInThisSlot = !!assignSlotKey && current === assignSlotKey;
 
                 return (
                   <TouchableOpacity
                     onPress={() => assignPlayerToSlot(item.id)}
                     disabled={savingAssign}
-                    style={[styles.pickRow, isAssignedHere ? styles.pickRowActive : null]}
+                    style={[styles.pickRow, isInThisSlot ? styles.pickRowActive : null]}
                   >
-                    <Text style={[styles.pickName, isAssignedHere ? { color: 'white' } : null]}>
+                    <Text style={[styles.pickName, isInThisSlot ? { color: 'white' } : null]}>
                       {item.name}
                       {item.number ? `  #${item.number}` : ''}
                     </Text>
 
-                    <Text style={[styles.pickMeta, isAssignedHere ? { color: 'white' } : null]}>
-                      {playerToSlotKey[item.id] ? `Currently: ${playerToSlotKey[item.id]}` : 'Unassigned'}
+                    <Text style={[styles.pickMeta, isInThisSlot ? { color: 'white' } : null]}>
+                      {current ? `Currently: ${current}` : 'Unassigned'}
                     </Text>
                   </TouchableOpacity>
                 );
@@ -313,12 +373,28 @@ export default function GameDayPitchScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0b1220' },
-  header: { paddingHorizontal: 16, paddingVertical: 12 },
+  header: { paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 10 },
   title: { color: 'white', fontSize: 18, fontWeight: '700' },
   subtitle: { color: '#cbd5e1', marginTop: 4 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0b1220' },
   loading: { marginTop: 10, color: '#cbd5e1' },
   error: { color: '#fca5a5' },
+
+  modeBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.35)',
+    borderRadius: 12,
+  },
+  modeBtnOn: {
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderColor: 'rgba(255,255,255,0.6)',
+  },
+  modeBtnText: {
+    color: '#cbd5e1',
+    fontWeight: '800',
+  },
 
   modalOverlay: {
     flex: 1,

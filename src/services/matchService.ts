@@ -525,3 +525,148 @@ export async function markMatchScheduled(params: { teamId: string; matchId: stri
       updatedAt: serverTimestamp(),
     });
 }
+
+export async function assignOrSwapMatchSlot(opts: {
+  teamId: string;
+  matchId: string;
+  slotKey: string;
+  playerId: string; // the player you picked
+}) {
+  const { teamId, matchId, slotKey, playerId } = opts;
+
+  const rosterCol = db
+    .collection(COL.teams).doc(teamId)
+    .collection(COL.matches).doc(matchId)
+    .collection(COL.roster);
+
+  const pickedRef = rosterCol.doc(playerId);
+
+  await db.runTransaction(async (tx) => {
+    const pickedSnap = await tx.get(pickedRef);
+    if (!pickedSnap.exists) throw new Error('Picked player not found in match roster.');
+
+    const pickedData = pickedSnap.data() as any;
+    const pickedCurrentSlot = pickedData?.slotKey || null;
+
+    // Find who is currently sitting in target slot
+    // (no great way without query; so we scan by query inside transaction is not allowed)
+    // ✅ Solution: keep a "slotKey" uniqueness by writing it, but we still need to locate occupant.
+    // We'll do a query OUTSIDE transaction in the screen, then pass occupantId in.
+  });
+}
+
+export async function swapOrMoveMatchSlot(opts: {
+  teamId: string;
+  matchId: string;
+
+  targetSlotKey: string;
+  pickedPlayerId: string;
+
+  occupantPlayerId: string | null;          // who is currently in target slot
+  pickedPlayerOldSlotKey: string | null;    // picked player's previous slot
+}) {
+  const {
+    teamId, matchId,
+    targetSlotKey, pickedPlayerId,
+    occupantPlayerId,
+    pickedPlayerOldSlotKey,
+  } = opts;
+
+  const rosterCol = db
+    .collection(COL.teams).doc(teamId)
+    .collection(COL.matches).doc(matchId)
+    .collection(COL.roster);
+
+  const pickedRef = rosterCol.doc(pickedPlayerId);
+  const occupantRef = occupantPlayerId ? rosterCol.doc(occupantPlayerId) : null;
+
+  await db.runTransaction(async (tx) => {
+    // move picked into target
+    tx.set(pickedRef, { slotKey: targetSlotKey, updatedAt: serverTimestamp() }, { merge: true });
+
+    // if target had someone, put them into picked old slot OR clear them
+    if (occupantRef) {
+      if (pickedPlayerOldSlotKey) {
+        tx.set(occupantRef, { slotKey: pickedPlayerOldSlotKey, updatedAt: serverTimestamp() }, { merge: true });
+      } else {
+        tx.set(occupantRef, { slotKey: firestore.FieldValue.delete(), updatedAt: serverTimestamp() }, { merge: true });
+      }
+    }
+
+    // if picked was in an old slot and we didn't swap with its occupant (because target was empty),
+    // we should clear picked old slot occupant logic is already handled because picked doc moved.
+  });
+}
+
+export async function clearMatchSlot(opts: {
+  teamId: string;
+  matchId: string;
+  occupantPlayerId: string;
+}) {
+  const { teamId, matchId, occupantPlayerId } = opts;
+
+  const ref = db
+    .collection(COL.teams).doc(teamId)
+    .collection(COL.matches).doc(matchId)
+    .collection(COL.roster).doc(occupantPlayerId);
+
+  await ref.set({ slotKey: firestore.FieldValue.delete(), updatedAt: serverTimestamp() }, { merge: true });
+}
+
+export async function setMatchRosterPlayerPos(opts: {
+  teamId: string;
+  matchId: string;
+  playerId: string;
+  posX: number; // 0..1
+  posY: number; // 0..1
+}) {
+  const { teamId, matchId, playerId, posX, posY } = opts;
+
+  const ref = db
+    .collection(COL.teams).doc(teamId)
+    .collection(COL.matches).doc(matchId)
+    .collection(COL.roster).doc(playerId);
+
+  await ref.set(
+    {
+      posX: Math.max(0, Math.min(1, posX)),
+      posY: Math.max(0, Math.min(1, posY)),
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
+}
+
+
+
+/**
+ * Persist a custom pitch slot position (relative 0..1).
+ * Stored on the match doc as: slotPos.{slotKey} = {x,y}
+ */
+export async function setMatchSlotPos(opts: {
+  teamId: string;
+  matchId: string;
+  slotKey: string;
+  pos: { x: number; y: number };
+}) {
+  const { teamId, matchId, slotKey, pos } = opts;
+
+  const ref = db
+    .collection(COL.teams)
+    .doc(teamId)
+    .collection(COL.matches)
+    .doc(matchId);
+
+  const x = Math.max(0.04, Math.min(0.96, Number(pos?.x ?? 0.5)));
+  const y = Math.max(0.04, Math.min(0.96, Number(pos?.y ?? 0.5)));
+
+  await ref.set(
+    {
+      slotPos: {
+        [slotKey]: { x, y },
+      },
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
+}
