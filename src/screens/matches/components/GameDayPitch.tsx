@@ -38,7 +38,7 @@ function slotLabel(slot: Slot) {
   return slot.label || '';
 }
 
-// Drag takeover threshold (px). Bigger = taps work reliably.
+// Bigger threshold = taps work reliably and pan only takes over on real drags.
 const DRAG_THRESHOLD = 14;
 
 function SlotBubble(props: {
@@ -49,8 +49,8 @@ function SlotBubble(props: {
   layoutMode?: boolean;
   onDragCommit?: (slotKey: string, pos: SlotPos) => void;
   children: React.ReactNode;
-  onPress?: () => void; // open assign (slot press) OR player press depending on caller
-  onLongPress?: () => void;
+  onPress?: () => void; // open assign OR player press depending on caller
+  onLongPress?: () => void; // open assign (normal mode)
   style: any;
 }) {
   const {
@@ -75,15 +75,13 @@ function SlotBubble(props: {
 
   const pan = useMemo(() => {
     return PanResponder.create({
-      // ✅ Do NOT grab responder on start (lets taps happen)
+      // Let taps through on start
       onStartShouldSetPanResponder: () => false,
       onStartShouldSetPanResponderCapture: () => false,
 
-      // ✅ Only take over when user drags far enough
+      // Take over only on real drag
       onMoveShouldSetPanResponder: (_, g) =>
         !!layoutMode && (Math.abs(g.dx) + Math.abs(g.dy) > DRAG_THRESHOLD),
-
-      // ✅ Capture on move so we can steal from Pressable once it becomes a real drag
       onMoveShouldSetPanResponderCapture: (_, g) =>
         !!layoutMode && (Math.abs(g.dx) + Math.abs(g.dy) > DRAG_THRESHOLD),
 
@@ -127,29 +125,17 @@ function SlotBubble(props: {
       {...(layoutMode ? pan.panHandlers : {})}
       style={[style, { left, top }]}
     >
-      {/* CONTENT */}
       {children}
 
-      {/* ✅ TAP LAYER
-          - Normal mode: tap/long-press works for player/slot
-          - Layout mode: tap opens assign (so "+" works too)
+      {/* Tap layer:
+          - Normal mode: onPress + onLongPress work
+          - Layout mode: tap opens assign (and drag still works with threshold)
       */}
       <Pressable
         style={StyleSheet.absoluteFillObject}
         onPress={onPress}
         onLongPress={!layoutMode ? onLongPress : undefined}
       />
-
-      {/* ✅ "-" BUTTON (always taps, because PanResponder only takes over on real drag) */}
-      {layoutMode && (
-        <Pressable
-          hitSlop={22}
-          style={styles.minusBadge}
-          onPress={onPress} // open assign for this slot
-        >
-          <Text style={styles.minusText}>−</Text>
-        </Pressable>
-      )}
     </View>
   );
 }
@@ -208,11 +194,15 @@ export default function GameDayPitch({
         <View pointerEvents="none" style={styles.halfLine} />
         <View pointerEvents="none" style={styles.centerCircle} />
 
+        {layoutMode && (
+          <View pointerEvents="none" style={styles.hintWrap}>
+            <Text style={styles.hintText}>Drag to move • Tap to assign</Text>
+          </View>
+        )}
         {slots.map((slot) => {
           const player = playerBySlotKey[slot.key];
           const label = slotLabel(slot);
 
-          // In layout mode, taps should open assign for ALL slots (player or empty)
           const openAssign = () => onSlotPress?.(slot.key);
 
           if (player) {
@@ -227,7 +217,10 @@ export default function GameDayPitch({
                 onDragCommit={onSlotPosChange}
                 onPress={layoutMode ? openAssign : () => onPlayerPress?.(player.id)}
                 onLongPress={openAssign}
-                style={[styles.player, { transform: [{ translateX: -22 }, { translateY: -22 }] }]}
+                style={[
+                  styles.player,
+                  { transform: [{ translateX: -22 }, { translateY: -22 }] },
+                ]}
               >
                 <Text style={styles.number}>{player.number || ''}</Text>
                 <Text numberOfLines={1} style={styles.name}>
@@ -247,8 +240,11 @@ export default function GameDayPitch({
               posOverride={slotPos?.[slot.key]}
               layoutMode={layoutMode}
               onDragCommit={onSlotPosChange}
-              onPress={openAssign} // ✅ "+" works (tap anywhere on empty slot)
-              style={[styles.emptySlot, { transform: [{ translateX: -18 }, { translateY: -18 }] }]}
+              onPress={openAssign}
+              style={[
+                styles.emptySlot,
+                { transform: [{ translateX: -18 }, { translateY: -18 }] },
+              ]}
             >
               <Text style={styles.plus}>{layoutMode ? '↕︎' : '+'}</Text>
               <Text style={styles.slotHintEmpty}>{label}</Text>
@@ -353,27 +349,21 @@ const styles = StyleSheet.create({
     fontSize: 9,
     color: 'rgba(255,255,255,0.7)',
   },
-
-  // Keep badge INSIDE bounds so it can be tapped on iOS
-  minusBadge: {
-    position: 'absolute',
-    top: 2,
-    right: 2,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: '#111',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 999,
-    elevation: 999,
+  hintWrap: {
+  position: 'absolute',
+  top: 10,
+  left: 10,
+  right: 10,
+  alignItems: 'center',
+  zIndex: 50,
   },
-
-  minusText: {
-    color: 'white',
-    fontWeight: '900',
-    fontSize: 14,
-    lineHeight: 14,
-    marginTop: -1,
+  hintText: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    color: 'rgba(255,255,255,0.92)',
+    fontSize: 12,
+    fontWeight: '600',
   },
 });
