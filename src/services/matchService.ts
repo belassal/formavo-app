@@ -14,7 +14,7 @@ export type GoalSide = 'home' | 'away';
 export type MatchEvent = {
   id: string;
   type: MatchEventType;
-  minute: number; // 0..999
+  minute: number | string;
   side: GoalSide;
   // goal
   scorerId?: string;
@@ -469,7 +469,7 @@ export function buildGoalEvent(p: {
 }): MatchEvent {
   return {
     type: 'goal',
-    minute: p.minute || '',
+    minute: clampMinute(p.minute),
     side: p.side,
     scorerId: p.scorerId || '',
     scorerName: p.scorerName || '',
