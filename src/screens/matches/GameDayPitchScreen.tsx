@@ -1,4 +1,6 @@
+import firestore from '@react-native-firebase/firestore';
 import React, { useEffect, useMemo, useState } from 'react';
+import auth from '@react-native-firebase/auth';
 import {
   View,
   Text,
@@ -17,6 +19,17 @@ import { db } from '../../services/firebase';
 import { COL } from '../../models/collections';
 import { setMatchRosterSlotKey, setMatchSlotPos } from '../../services/matchService';
 import { buildSlots } from '../../services/formation';
+import MatchHeader from './MatchHeader'; // adjust path if needed
+import type { MatchState } from '../../models/match';
+import { computeElapsedSec, computeMinute } from '../../services/matchClock';
+import {
+  addMatchEvent,
+  deleteMatchEvent,
+  listenMatchEvents,
+  buildGoalEvent,
+  buildCardEvent,
+  type MatchEvent,
+} from '../../services/matchService';
 
 type RouteT = RouteProp<TeamsStackParamList, 'GameDayPitch'>;
 
@@ -25,11 +38,10 @@ type SlotPos = { x: number; y: number };
 type MatchDoc = {
   opponent?: string;
   dateISO?: string;
-  status?: 'scheduled' | 'live' | 'completed';
+  status?: 'scheduled' | 'live' | 'completed'; // you can keep this if you want
   formation?: string;
-
-  // Optional custom layout overrides (relative 0..1)
   slotPos?: Record<string, SlotPos>;
+  state?: MatchState;
 };
 
 type MatchRosterRow = {
@@ -42,6 +54,18 @@ type MatchRosterRow = {
   slotKey?: string;
 };
 
+
+const defaultMatchState: MatchState = {
+  status: 'draft',
+  elapsedSec: 0,
+  homeScore: 0,
+  awayScore: 0,
+};
+
+function getMatchState(m: MatchDoc | null): MatchState {
+  return { ...defaultMatchState, ...(m?.state || {}) };
+}
+
 export default function GameDayPitchScreen() {
   const route = useRoute<RouteT>();
   const { teamId, matchId } = route.params;
@@ -50,9 +74,18 @@ export default function GameDayPitchScreen() {
   const [match, setMatch] = useState<MatchDoc | null>(null);
   const [roster, setRoster] = useState<MatchRosterRow[]>([]);
 
+  const [events, setEvents] = useState<MatchEvent[]>([]);
   // Slot assignment modal state
   const [assignSlotKey, setAssignSlotKey] = useState<string | null>(null);
   const [savingAssign, setSavingAssign] = useState(false);
+
+  // Player action modal
+  const [showPlayerModal, setShowPlayerModal] = useState(false);
+  const [activePlayerId, setActivePlayerId] = useState<string | null>(null);
+  const [actionType, setActionType] = useState<'goal' | 'card'>('goal');
+  const [cardColor, setCardColor] = useState<'yellow' | 'red'>('yellow');
+  const [assistId, setAssistId] = useState<string>(''); // optional
+
 
   // Layout mode (drag positions)
   const [layoutMode, setLayoutMode] = useState(false);
@@ -108,7 +141,17 @@ export default function GameDayPitchScreen() {
     return () => unsub();
   }, [teamId, matchId]);
 
+
+  useEffect(() => {
+    return listenMatchEvents(teamId, matchId, (rows) => setEvents(rows));
+  }, [teamId, matchId]);
+
   const formation = match?.formation || '4-3-3';
+  const state = getMatchState(match);
+
+  // ...you already have `state` and can compute current matchSec:
+  const getCurrentMatchSec = () => computeElapsedSec(state, Date.now());
+  const currentMinute = () => computeMinute(state, Date.now());
 
   // Starters
   const starters = useMemo(() => {
@@ -121,6 +164,17 @@ export default function GameDayPitchScreen() {
         number: r.number ? String(r.number) : undefined,
       }));
   }, [roster]);
+
+  const rosterById = useMemo(() => {
+    const m: Record<string, MatchRosterRow> = {};
+    roster.forEach(r => {
+      const pid = r.playerId || r.id;
+      m[pid] = r;
+    });
+    return m;
+  }, [roster]);
+
+  const getPlayerName = (playerId: string) => rosterById[playerId]?.playerName || 'Player';
 
   // playerId -> slotKey
   const playerToSlotKey = useMemo(() => {
@@ -142,6 +196,43 @@ export default function GameDayPitchScreen() {
     return m;
   }, [playerToSlotKey]);
 
+
+  const matchRef = useMemo(
+    () =>
+      db
+        .collection(COL.teams)
+        .doc(teamId)
+        .collection(COL.matches)
+        .doc(matchId),
+    [teamId, matchId]
+  );
+
+  const score = useMemo(() => {
+  let home = 0;
+  let away = 0;
+
+  for (const e of events) {
+    if (e.type === 'goal') {
+      if (e.side === 'home') home++;
+      if (e.side === 'away') away++;
+    }
+  }
+  return { home, away };
+}, [events]);
+
+const derivedState = useMemo(() => {
+  return { ...state, homeScore: score.home, awayScore: score.away };
+}, [state, score]);
+
+  const updateState = async (patch: Partial<MatchState>) => {
+    // Firestore cannot store undefined; use delete() to remove fields.
+    const clean: any = {};
+    Object.entries(patch).forEach(([k, v]) => {
+      clean[k] = v === undefined ? firestore.FieldValue.delete() : v;
+    });
+
+    await matchRef.set({ state: clean }, { merge: true });
+  };
   // One-time auto-assign (ONLY when nobody has any slotKey yet)
   useEffect(() => {
     const assignedCount = Object.keys(playerToSlotKey).length;
@@ -215,6 +306,98 @@ export default function GameDayPitchScreen() {
       setSavingAssign(false);
     }
   };
+  const undoLastGoal = async (side: 'home'|'away') => {
+    // find last goal event for side
+    const last = [...events]
+      .filter(e => e.type === 'goal' && (e.side || 'home') === side)
+      .sort((a:any,b:any) =>
+        (b.minute ?? 0) - (a.minute ?? 0) ||
+        (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0)
+      )[0];
+
+    if (!last) return;
+
+    await deleteMatchEvent({ teamId, matchId, eventId: last.id });
+  };
+
+
+
+const onStart = async () => {
+  const now = Date.now();
+  // first start
+  await updateState({
+    status: 'live',
+    startedAt: state.startedAt ?? now,
+    resumedAt: now,
+  });
+};
+
+const onPause = async () => {
+  const now = Date.now();
+  if (state.status !== 'live') return;
+
+  const resumedAt = state.resumedAt ?? state.startedAt ?? now;
+  const add = Math.max(0, (now - resumedAt) / 1000);
+
+  await updateState({
+    status: 'paused',
+    elapsedSec: (state.elapsedSec || 0) + add,
+    resumedAt: undefined,
+  });
+};
+
+const onResume = async () => {
+  const now = Date.now();
+  if (state.status !== 'paused') return;
+
+  await updateState({
+    status: 'live',
+    resumedAt: now,
+  });
+};
+
+const onEnd = async () => {
+  const now = Date.now();
+
+  // if live, accumulate time first
+  if (state.status === 'live') {
+    const resumedAt = state.resumedAt ?? state.startedAt ?? now;
+    const add = Math.max(0, (now - resumedAt) / 1000);
+
+    await updateState({
+      status: 'final',
+      elapsedSec: (state.elapsedSec || 0) + add,
+      resumedAt: undefined,
+    });
+    return;
+  }
+
+  await updateState({ status: 'final' });
+};
+
+
+  const onScore = async (side: 'home' | 'away', delta: 1 | -1) => {
+    try {
+      if (delta === 1) {
+        await addMatchEvent({
+          teamId,
+          matchId,
+          event: buildGoalEvent({
+            minute: String(currentMinute()),
+            side,
+            scorerId: '',
+            scorerName: side === 'home' ? 'Team' : 'Opponent',
+            assistId: '',
+            assistName: '',
+          }),
+        });
+      } else {
+        await undoLastGoal(side);
+      }
+    } catch (e: any) {
+      Alert.alert('Update failed', e?.message ?? 'Unknown error');
+    }
+  };
 
   const clearThisSlot = async () => {
     if (!assignSlotKey) return;
@@ -233,6 +416,46 @@ export default function GameDayPitchScreen() {
       Alert.alert('Clear failed', e?.message ?? 'Unknown error');
     } finally {
       setSavingAssign(false);
+    }
+  };
+
+
+    const savePlayerEvent = async () => {
+    if (!activePlayerId) return;
+
+    try {
+      const minute = String(currentMinute());
+
+      if (actionType === 'goal') {
+        await addMatchEvent({
+          teamId,
+          matchId,
+          event: buildGoalEvent({
+            minute,
+            side: 'home',
+            scorerId: activePlayerId,
+            scorerName: getPlayerName(activePlayerId),
+            assistId: assistId || '',
+            assistName: assistId ? getPlayerName(assistId) : '',
+          }),
+        });
+      } else {
+        await addMatchEvent({
+          teamId,
+          matchId,
+          event: buildCardEvent({
+            minute: currentMinute(),
+            playerId: activePlayerId,
+            playerName: getPlayerName(activePlayerId),
+            color: cardColor,
+          }),
+        });
+      }
+
+      setShowPlayerModal(false);
+      setActivePlayerId(null);
+    } catch (e: any) {
+      Alert.alert('Save failed', e?.message ?? 'Unknown error');
     }
   };
 
@@ -281,7 +504,19 @@ export default function GameDayPitchScreen() {
         </TouchableOpacity>
       </View>
 
-      <View style={{ flex: 1 }}>
+     <View style={styles.matchHeaderWrap}>
+        <MatchHeader
+          state={derivedState}
+          canEdit={true}
+          onStart={onStart}
+          onPause={onPause}
+          onResume={onResume}
+          onEnd={onEnd}
+          onScore={onScore}
+        />
+      </View>
+
+      <View style={styles.pitchWrap}>
         <GameDayPitch
           formation={formation}
           starters={starters}
@@ -290,11 +525,18 @@ export default function GameDayPitchScreen() {
           layoutMode={layoutMode}
           onSlotPosChange={onSlotPosChange}
           onPlayerPress={(playerId) => {
-            // You can later open player details here
-            console.log('Tapped player:', playerId);
+            // optional: only allow logging when live
+            if (derivedState.status !== 'live') return;
+
+            setActivePlayerId(playerId);
+            setActionType('goal');
+            setCardColor('yellow');
+            setAssistId('');
+            setShowPlayerModal(true);
           }}
           onSlotPress={(slotKey) => {
-            if (layoutMode) return; // no assigning while dragging
+            if (layoutMode) return;
+            if (derivedState.status === 'live') return; // ✅ block assign while live
             setAssignSlotKey(slotKey);
           }}
         />
@@ -367,13 +609,111 @@ export default function GameDayPitchScreen() {
           </View>
         </View>
       </Modal>
+
+      <Modal visible={showPlayerModal} animationType="slide" transparent onRequestClose={() => setShowPlayerModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <Text style={styles.modalTitle}>{activePlayerId ? getPlayerName(activePlayerId) : 'Player'}</Text>
+            <Text style={styles.modalSub}>Log an event</Text>
+
+            {/* Pick type */}
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
+              <TouchableOpacity
+                onPress={() => setActionType('goal')}
+                style={[styles.modalBtn, actionType === 'goal' ? { backgroundColor: '#111' } : null]}
+              >
+                <Text style={[styles.modalBtnText, actionType === 'goal' ? { color: 'white' } : null]}>Goal</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => setActionType('card')}
+                style={[styles.modalBtn, actionType === 'card' ? { backgroundColor: '#111' } : null]}
+              >
+                <Text style={[styles.modalBtnText, actionType === 'card' ? { color: 'white' } : null]}>Card</Text>
+              </TouchableOpacity>
+            </View>
+
+            {actionType === 'goal' ? (
+              <>
+                <Text style={[styles.modalSectionTitle, { marginTop: 14 }]}>Assist (optional)</Text>
+                <FlatList
+                  data={starters.filter(p => p.id !== activePlayerId)}
+                  keyExtractor={(p) => p.id}
+                  renderItem={({ item }) => {
+                    const active = assistId === item.id;
+                    return (
+                      <TouchableOpacity
+                        onPress={() => setAssistId(active ? '' : item.id)}
+                        style={[styles.pickRow, active ? styles.pickRowActive : null]}
+                      >
+                        <Text style={[styles.pickName, active ? { color: 'white' } : null]}>
+                          {item.name}{item.number ? `  #${item.number}` : ''}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  }}
+                  ListEmptyComponent={<Text style={{ marginTop: 10, color: '#666' }}>No other starters.</Text>}
+                  style={{ marginTop: 10, maxHeight: 260 }}
+                />
+              </>
+            ) : (
+              <>
+                <Text style={[styles.modalSectionTitle, { marginTop: 14 }]}>Card color</Text>
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
+                  <TouchableOpacity
+                    onPress={() => setCardColor('yellow')}
+                    style={[styles.modalBtn, cardColor === 'yellow' ? { backgroundColor: '#111' } : null]}
+                  >
+                    <Text style={[styles.modalBtnText, cardColor === 'yellow' ? { color: 'white' } : null]}>Yellow</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => setCardColor('red')}
+                    style={[styles.modalBtn, cardColor === 'red' ? { backgroundColor: '#111' } : null]}
+                  >
+                    <Text style={[styles.modalBtnText, cardColor === 'red' ? { color: 'white' } : null]}>Red</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
+              <TouchableOpacity onPress={() => setShowPlayerModal(false)} style={[styles.modalBtn, { backgroundColor: 'transparent' }]}>
+                <Text style={[styles.modalBtnText, { color: '#111' }]}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={savePlayerEvent} style={[styles.modalBtn, { backgroundColor: '#111' }]}>
+                <Text style={[styles.modalBtnText, { color: 'white' }]}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0b1220' },
-  header: { paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  header: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    zIndex: 30,
+    elevation: 30,
+  },
+  matchHeaderWrap: {
+    zIndex: 20,
+    elevation: 20,          // iOS/Android stacking help
+  },
+  pitchWrap: {
+    flex: 1,
+    zIndex: 0,
+    elevation: 0,
+    marginTop: 6,           // small gap so it doesn’t “touch” the header
+  },
   title: { color: 'white', fontSize: 18, fontWeight: '700' },
   subtitle: { color: '#cbd5e1', marginTop: 4 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0b1220' },

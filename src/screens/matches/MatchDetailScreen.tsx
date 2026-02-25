@@ -30,7 +30,7 @@ import {
   setMatchPlayerRole,
   softDeleteMatch,
   updateMatch,
-  updateMatchEvent, // ✅ REQUIRED for editing events
+  updateMatchEvent,
   type AttendanceStatus,
   type CardColor,
   type MatchEvent,
@@ -40,10 +40,26 @@ import {
 import { db } from '../../services/firebase';
 import { COL } from '../../models/collections';
 
+
+
 type MatchDetailRoute = RouteProp<TeamsStackParamList, 'MatchDetail'>;
 
 function norm(s: string) {
   return (s || '').trim();
+}
+
+export function deriveScoreFromEvents(events: MatchEvent[]) {
+  let home = 0;
+  let away = 0;
+
+  for (const e of events || []) {
+    if (e.type !== 'goal') continue;
+    const side = (e as any).side || 'home';
+    if (side === 'home') home++;
+    if (side === 'away') away++;
+  }
+
+  return { home, away };
 }
 
 export default function MatchDetailScreen() {
@@ -546,23 +562,19 @@ export default function MatchDetailScreen() {
   };
 
   // ---- stats / score label ----
-  const stats = useMemo(() => {
-    const homeGoals = events.filter((e: any) => e.type === 'goal' && (e.side || 'home') === 'home').length;
-    const awayGoals = events.filter((e: any) => e.type === 'goal' && e.side === 'away').length;
+  const score = useMemo(() => deriveScoreFromEvents(events), [events]);
 
+  const cards = useMemo(() => {
     const yellow = events.filter((e) => e.type === 'card' && e.color === 'yellow').length;
     const red = events.filter((e) => e.type === 'card' && e.color === 'red').length;
-    return { homeGoals, awayGoals, yellow, red };
+    return { yellow, red };
   }, [events]);
 
   const scoreLabel = useMemo(() => {
-    const hg = stats.homeGoals ?? 0;
-    const ag = stats.awayGoals ?? 0;
-
-    if (status === 'completed') return `FT ${hg}-${ag}`;
-    if (status === 'live') return `LIVE ${hg}-${ag}`;
+    if (status === 'completed') return `FT ${score.home}-${score.away}`;
+    if (status === 'live') return `LIVE ${score.home}-${score.away}`;
     return 'Scheduled';
-  }, [stats.homeGoals, stats.awayGoals, status]);
+  }, [score, status]);
 
   const playerCount = roster.length;
 
@@ -709,11 +721,13 @@ export default function MatchDetailScreen() {
           </View>
         </View>
 
-        <View style={{ flexDirection: 'row', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
-          {pill(`Goals: ${stats.homeGoals}-${stats.awayGoals}`)}
-          {pill(`Yellow: ${stats.yellow}`)}
-          {pill(`Red: ${stats.red}`)}
-        </View>
+        {events.length > 0 && (
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
+            {pill(`Goals: ${score.home}-${score.away}`)}
+            {pill(`Yellow: ${cards.yellow}`)}
+            {pill(`Red: ${cards.red}`)}
+          </View>
+        )}
 
         {events.length === 0 ? (
           <Text style={{ marginTop: 10, color: '#666' }}>No events yet. Add a goal or a card.</Text>
