@@ -5,31 +5,7 @@ import firestore from '@react-native-firebase/firestore';
 export type MatchStatus = 'scheduled' | 'live' | 'completed';
 export type MatchRole = 'starter' | 'bench';
 export type AttendanceStatus = 'present' | 'injured' | 'absent';
-
-// ===== Match events (v0.4: Game stats foundation) =====
-export type MatchEventType = 'goal' | 'card';
-export type CardColor = 'yellow' | 'red';
-export type GoalSide = 'home' | 'away';
-
-export type MatchEvent = {
-  id: string;
-  type: MatchEventType;
-  minute: number | string;
-  side: GoalSide;
-  // goal
-  scorerId?: string;
-  scorerName?: string;
-  assistId?: string;
-  assistName?: string;
-
-  // card
-  playerId?: string;
-  playerName?: string;
-  color?: CardColor;
-
-  createdAt?: any;
-  updatedAt?: any;
-};
+import type { MatchEvent, MatchEventType, CardColor, GoalSide } from '../models/matchEvent';
 
 function norm(s: string) {
   return (s || '').trim();
@@ -39,6 +15,15 @@ function clampMinute(v: any): number {
   const n = parseInt(String(v ?? '').trim(), 10);
   if (!Number.isFinite(n)) return 0;
   return Math.max(0, Math.min(999, n));
+}
+
+function stripUndefined<T extends Record<string, any>>(obj: T): T {
+  const out: any = {};
+  Object.keys(obj || {}).forEach((k) => {
+    const v = (obj as any)[k];
+    if (v !== undefined) out[k] = v;
+  });
+  return out;
 }
 
 export async function createMatch(params: {
@@ -348,21 +333,25 @@ export async function addMatchEvent(params: {
 
   const minute = clampMinute((event as any).minute);
 
+  // remove undefined fields (Firestore doesn't allow them)
+  const cleanEvent = stripUndefined(event as any);
+
   await db.runTransaction(async (tx) => {
     const matchSnap = await tx.get(matchRef);
     const match = matchSnap.exists ? (matchSnap.data() as any) : {};
 
-    // Write event
+    // ✅ Write event (ONLY cleanEvent)
     tx.set(eventRef, {
-      ...event,
-      minute,
+      ...cleanEvent,
+      minute, // force numeric minute
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
 
     // If it's a goal, update cached scores
-    if (event.type === 'goal') {
-      const side = (event.side || 'home') as GoalSide;
+    if (cleanEvent.type === 'goal') {
+      const side = ((cleanEvent as any).side || 'home') as GoalSide;
+
       if (side === 'home') {
         tx.set(matchRef, { homeScore: firestore.FieldValue.increment(1) }, { merge: true });
       } else {
@@ -390,6 +379,7 @@ export async function updateMatchEvent(params: {
   patch: Partial<Omit<MatchEvent, 'id' | 'createdAt' | 'updatedAt'>>;
 }) {
   const { teamId, matchId, eventId, patch } = params;
+
   const ref = db
     .collection(COL.teams)
     .doc(teamId)
@@ -398,9 +388,10 @@ export async function updateMatchEvent(params: {
     .collection(COL.events)
     .doc(eventId);
 
-  const next: any = { ...patch, updatedAt: serverTimestamp() };
-  if (patch.minute != null) next.minute = clampMinute(patch.minute);
-  await ref.set(next, { merge: true });
+  const cleanPatch: any = stripUndefined({ ...patch, updatedAt: serverTimestamp() });
+  if (patch.minute != null) cleanPatch.minute = clampMinute(patch.minute);
+
+  await ref.set(cleanPatch, { merge: true });
 }
 
 export async function deleteMatchEvent(params: { teamId: string; matchId: string; eventId: string }) {
@@ -460,17 +451,19 @@ export async function setMatchRosterSlotKey(opts: {
 
 // Convenience builders
 export function buildGoalEvent(p: {
-  minute?: string;
-  side: 'home' | 'away';
+  minute: number | string;
+  side: GoalSide;
   scorerId?: string;
   scorerName: string;
   assistId?: string;
   assistName?: string;
-}): MatchEvent {
+  pos?: { x: number; y: number };
+}): Omit<MatchEvent, 'id' | 'createdAt' | 'updatedAt'> {
   return {
     type: 'goal',
     minute: clampMinute(p.minute),
     side: p.side,
+    pos: p.pos,
     scorerId: p.scorerId || '',
     scorerName: p.scorerName || '',
     assistId: p.assistId || '',
@@ -478,20 +471,20 @@ export function buildGoalEvent(p: {
   };
 }
 
-
-export function buildCardEvent(params: {
+export function buildCardEvent(p: {
   minute: number | string;
   playerId: string;
   playerName: string;
-  color: CardColor;
+  cardColor: CardColor;
+  pos?: { x: number; y: number };
 }): Omit<MatchEvent, 'id' | 'createdAt' | 'updatedAt'> {
-  const minute = clampMinute(params.minute);
   return {
     type: 'card',
-    minute,
-    playerId: params.playerId,
-    playerName: norm(params.playerName),
-    color: params.color,
+    minute: clampMinute(p.minute),
+    playerId: p.playerId,
+    playerName: norm(p.playerName),
+    cardColor: p.cardColor,
+    pos: p.pos,
   };
 }
 

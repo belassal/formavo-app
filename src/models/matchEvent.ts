@@ -1,19 +1,43 @@
+// models/matchEvent.ts
+
 export type MatchEventType = 'goal' | 'card' | 'sub' | 'note';
+export type GoalSide = 'home' | 'away';
+export type CardColor = 'yellow' | 'red';
+
+// relative 0..1 on pitch
+export type PitchPos = { x: number; y: number };
 
 export type MatchEvent = {
+  id: string;
+
   type: MatchEventType;
-  side?: 'home' | 'away';
 
-  matchSec?: number;      // important for ordering + display minute
-  playerId?: string;
+  // Use minute for ordering + display (0..999)
+  minute: number;
+
+  // goal side (and useful for "team vs opponent" too)
+  side?: GoalSide;
+
+  // optional: where the event happened on the pitch
+  pos?: PitchPos;
+
+  // goal
+  scorerId?: string;
+  scorerName?: string;
   assistId?: string;
+  assistName?: string;
 
-  cardColor?: 'yellow' | 'red';
+  // card
+  playerId?: string;
+  playerName?: string;
+  cardColor?: CardColor;
 
   // substitution
   inPlayerId?: string;
   outPlayerId?: string;
 
-  createdAt?: any;        // firestore timestamp
+  // bookkeeping
+  createdAt?: any;
+  updatedAt?: any;
   createdBy?: string;
 };

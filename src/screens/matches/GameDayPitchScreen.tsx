@@ -28,9 +28,8 @@ import {
   listenMatchEvents,
   buildGoalEvent,
   buildCardEvent,
-  type MatchEvent,
 } from '../../services/matchService';
-
+import type { MatchEvent } from '../../models/matchEvent';
 type RouteT = RouteProp<TeamsStackParamList, 'GameDayPitch'>;
 
 type SlotPos = { x: number; y: number };
@@ -447,7 +446,7 @@ const onEnd = async () => {
             minute: currentMinute(),
             playerId: activePlayerId,
             playerName: getPlayerName(activePlayerId),
-            color: cardColor,
+            cardColor: cardColor,
           }),
         });
       }
