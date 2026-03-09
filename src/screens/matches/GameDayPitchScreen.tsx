@@ -22,6 +22,8 @@ import { buildSlots } from '../../services/formation';
 import MatchHeader from './MatchHeader'; // adjust path if needed
 import type { MatchState } from '../../models/match';
 import { computeElapsedSec, computeMinute } from '../../services/matchClock';
+import EventWizard from '../gameDay/components/EventWizard';
+
 import {
   addMatchEvent,
   deleteMatchEvent,
@@ -85,6 +87,9 @@ export default function GameDayPitchScreen() {
   const [cardColor, setCardColor] = useState<'yellow' | 'red'>('yellow');
   const [assistId, setAssistId] = useState<string>(''); // optional
 
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [wizardPreset, setWizardPreset] =
+  useState<null | { type:'goal'; side:'home'|'away' } | { type:'card' }>(null);
 
   // Layout mode (drag positions)
   const [layoutMode, setLayoutMode] = useState(false);
@@ -375,29 +380,6 @@ const onEnd = async () => {
 };
 
 
-  const onScore = async (side: 'home' | 'away', delta: 1 | -1) => {
-    try {
-      if (delta === 1) {
-        await addMatchEvent({
-          teamId,
-          matchId,
-          event: buildGoalEvent({
-            minute: String(currentMinute()),
-            side,
-            scorerId: '',
-            scorerName: side === 'home' ? 'Team' : 'Opponent',
-            assistId: '',
-            assistName: '',
-          }),
-        });
-      } else {
-        await undoLastGoal(side);
-      }
-    } catch (e: any) {
-      Alert.alert('Update failed', e?.message ?? 'Unknown error');
-    }
-  };
-
   const clearThisSlot = async () => {
     if (!assignSlotKey) return;
 
@@ -431,11 +413,13 @@ const onEnd = async () => {
           matchId,
           event: buildGoalEvent({
             minute,
-            side: 'home',
-            scorerId: activePlayerId,
-            scorerName: getPlayerName(activePlayerId),
-            assistId: assistId || '',
-            assistName: assistId ? getPlayerName(assistId) : '',
+            side: p.side || 'home',
+            scorerId: p.scorerId || '',
+            scorerName,
+            assistId: p.assistId || '',
+            assistName,
+            pos: p.pos,
+            assistPos: p.assistPos,
           }),
         });
       } else {
@@ -511,7 +495,11 @@ const onEnd = async () => {
           onPause={onPause}
           onResume={onResume}
           onEnd={onEnd}
-          onScore={onScore}
+          onQuickEvent={(preset) => {
+            if (derivedState.status !== 'live') return; // optional: only log while live
+            setWizardPreset(preset as any);
+            setWizardOpen(true);
+          }}
         />
       </View>
 
@@ -523,6 +511,7 @@ const onEnd = async () => {
           slotPos={match.slotPos || {}}
           layoutMode={layoutMode}
           onSlotPosChange={onSlotPosChange}
+          events={events}
           onPlayerPress={(playerId) => {
             // optional: only allow logging when live
             if (derivedState.status !== 'live') return;
@@ -688,6 +677,58 @@ const onEnd = async () => {
           </View>
         </View>
       </Modal>
+
+      <EventWizard
+        visible={wizardOpen}
+        preset={wizardPreset as any}
+        starters={starters}
+        onCancel={() => {
+          setWizardOpen(false);
+          setWizardPreset(null);
+        }}
+        onSave={async (p) => {
+          try {
+            const minute = currentMinute();
+
+            if (p.type === 'goal') {
+              const scorerName = p.scorerId ? getPlayerName(p.scorerId) : 'Team';
+              const assistName = p.assistId ? getPlayerName(p.assistId) : '';
+
+              await addMatchEvent({
+                teamId,
+                matchId,
+                event: buildGoalEvent({
+                  minute,
+                  side: p.side || 'home',
+                  scorerId: p.scorerId || '',
+                  scorerName,
+                  assistId: p.assistId || '',
+                  assistName,
+                  pos: p.pos,
+                }),
+              });
+            } else {
+              await addMatchEvent({
+                teamId,
+                matchId,
+                event: buildCardEvent({
+                  minute,
+                  playerId: p.playerId!,
+                  playerName: getPlayerName(p.playerId!),
+                  cardColor: p.cardColor || 'yellow',
+                  pos: p.pos,
+                }),
+              });
+            }
+
+            setWizardOpen(false);
+            setWizardPreset(null);
+          } catch (e: any) {
+            Alert.alert('Save failed', e?.message ?? 'Unknown error');
+          }
+        }}
+      />
+
     </View>
   );
 }

@@ -20,7 +20,7 @@ type Props = {
   onPause: () => void;
   onResume: () => void;
   onEnd: () => void;
-  onScore: (side: 'home' | 'away', delta: 1 | -1) => void;
+  onQuickEvent: (preset: { type: 'goal'|'card'; side?: 'home'|'away' }) => void;
 };
 
 function fmt(sec: number) {
@@ -37,7 +37,7 @@ export default function MatchHeader({
   onPause,
   onResume,
   onEnd,
-  onScore,
+  onQuickEvent,
 }: Props) {
   const [now, setNow] = useState(() => Date.now());
 
@@ -73,51 +73,13 @@ export default function MatchHeader({
 
   return (
     <View style={styles.wrap}>
-      <View style={styles.row}>
+      <View style={styles.topRow}>
         <Text style={styles.clock}>{clockText}</Text>
 
         <View style={styles.scoreBox}>
-          <View style={styles.scoreCol}>
-            {canEdit && (
-              <Pressable style={styles.scoreBtn} onPress={() => onScore('home', +1)}>
-                <Text style={styles.scoreBtnText}>＋</Text>
-              </Pressable>
-            )}
-
-            <Text style={styles.score}>{state.homeScore}</Text>
-
-            {canEdit && (
-              <Pressable
-                style={[styles.scoreBtn, homeMinusDisabled ? styles.scoreBtnDisabled : null]}
-                onPress={() => onScore('home', -1)}
-                disabled={homeMinusDisabled}
-              >
-                <Text style={styles.scoreBtnText}>−</Text>
-              </Pressable>
-            )}
-          </View>
-
-          <Text style={styles.dash}>–</Text>
-
-          <View style={styles.scoreCol}>
-            {canEdit && (
-              <Pressable style={styles.scoreBtn} onPress={() => onScore('away', +1)}>
-                <Text style={styles.scoreBtnText}>＋</Text>
-              </Pressable>
-            )}
-
-            <Text style={styles.score}>{state.awayScore}</Text>
-
-            {canEdit && (
-              <Pressable
-                style={[styles.scoreBtn, awayMinusDisabled ? styles.scoreBtnDisabled : null]}
-                onPress={() => onScore('away', -1)}
-                disabled={awayMinusDisabled}
-              >
-                <Text style={styles.scoreBtnText}>−</Text>
-              </Pressable>
-            )}
-          </View>
+          <Text style={styles.score}>{state.homeScore}</Text>
+          <Text style={styles.dash}>-</Text>
+          <Text style={styles.score}>{state.awayScore}</Text>
         </View>
 
         <View style={styles.actions}>
@@ -140,6 +102,20 @@ export default function MatchHeader({
         {state.status === 'paused' && 'Paused'}
         {state.status === 'final' && 'Final'}
       </Text>
+
+      <View style={styles.quickRow}>
+        <Pressable style={styles.quickBtn} onPress={() => onQuickEvent({ type: 'goal', side: 'home' })}>
+          <Text style={styles.quickText}>⚽ Home Goal</Text>
+        </Pressable>
+
+        <Pressable style={styles.quickBtn} onPress={() => onQuickEvent({ type: 'goal', side: 'away' })}>
+          <Text style={styles.quickText}>⚽ Away Goal</Text>
+        </Pressable>
+
+        <Pressable style={styles.quickBtn} onPress={() => onQuickEvent({ type: 'card' })}>
+          <Text style={styles.quickText}>🟨 Card</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -151,38 +127,62 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
     backgroundColor: '#0b1220',
   },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   clock: {
     fontSize: 20,
     fontWeight: '800',
     color: 'white',
     width: 82,
   },
-  scoreBox: {
-    flex: 1,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-  },
-  scoreCol: { alignItems: 'center', width: 50 },
-  score: { color: 'white', fontSize: 20, fontWeight: '900' },
-  dash: { color: 'rgba(255,255,255,0.75)', fontSize: 18, fontWeight: '800' },
-  scoreBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.10)',
-    marginVertical: 2,
-  },
-  scoreBtnDisabled: {
-    opacity: 0.35,
-  },
-  scoreBtnText: { color: 'white', fontSize: 14, fontWeight: '900' },
+  topRow: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: 10,
+},
+
+scoreBox: {
+  minWidth: 90,
+  paddingVertical: 8,
+  paddingHorizontal: 12,
+  borderRadius: 14,
+  backgroundColor: 'rgba(255,255,255,0.08)',
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 10,
+},
+
+score: {
+  color: 'white',
+  fontSize: 24,
+  fontWeight: '900',
+},
+
+dash: {
+  color: 'rgba(255,255,255,0.75)',
+  fontSize: 20,
+  fontWeight: '800',
+},
+
+quickRow: {
+  flexDirection: 'row',
+  gap: 8,
+  marginTop: 10,
+},
+
+quickBtn: {
+  flex: 1,
+  paddingVertical: 10,
+  borderRadius: 12,
+  backgroundColor: 'rgba(255,255,255,0.10)',
+  alignItems: 'center',
+},
+
+quickText: {
+  color: 'white',
+  fontWeight: '900',
+  fontSize: 12,
+},
   actions: { flexDirection: 'row', gap: 8 },
   actionBtn: {
     paddingHorizontal: 12,
@@ -198,4 +198,4 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-});
+  });

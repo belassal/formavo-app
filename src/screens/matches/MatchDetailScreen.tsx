@@ -98,6 +98,7 @@ export default function MatchDetailScreen() {
   // add-player modal
   const [showAdd, setShowAdd] = useState(false);
   const [q, setQ] = useState('');
+  const [selectedToAdd, setSelectedToAdd] = useState<string[]>([]);
 
   // edit match modal
   const [showEdit, setShowEdit] = useState(false);
@@ -212,25 +213,48 @@ export default function MatchDetailScreen() {
     return r?.playerName || 'Player';
   };
 
-  // ---- add to roster ----
-  const addToRoster = async (p: any) => {
-    try {
-      await addPlayerToMatchRoster({
-        teamId,
-        matchId,
-        playerId: p.id,
-        playerName: p.playerName,
-        number: p.number || '',
-        position: p.position || '',
-        role: 'bench',
-        attendance: 'present',
-      });
-      setShowAdd(false);
-      setQ('');
-    } catch (e: any) {
-      Alert.alert('Add to roster failed', e?.message ?? 'Unknown error');
-    }
-  };
+const closeAddModal = () => {
+  setShowAdd(false);
+  setQ('');
+  setSelectedToAdd([]);
+};
+
+const toggleSelectToAdd = (playerId: string) => {
+  setSelectedToAdd((prev) =>
+    prev.includes(playerId)
+      ? prev.filter((id) => id !== playerId)
+      : [...prev, playerId]
+  );
+};
+
+const addSelectedToRoster = async () => {
+  if (!selectedToAdd.length) return;
+
+  try {
+    const players = teamPlayers.filter(
+      (p: any) => selectedToAdd.includes(p.id) && !rosterIds.has(p.id)
+    );
+
+    await Promise.all(
+      players.map((p: any) =>
+        addPlayerToMatchRoster({
+          teamId,
+          matchId,
+          playerId: p.id,
+          playerName: p.playerName,
+          number: p.number || '',
+          position: p.position || '',
+          role: 'bench',
+          attendance: 'present',
+        })
+      )
+    );
+
+    closeAddModal();
+  } catch (e: any) {
+    Alert.alert('Add to roster failed', e?.message ?? 'Unknown error');
+  }
+};
 
   const removeFromRoster = async (playerId: string) => {
     try {
@@ -409,7 +433,7 @@ export default function MatchDetailScreen() {
           minute,
           playerId: cardPlayerId,
           playerName,
-          color: cardColor,
+          cardColor,
         });
 
         await addMatchEvent({ teamId, matchId, event });
@@ -482,7 +506,7 @@ export default function MatchDetailScreen() {
       }
     } else {
       setEditCardPlayerId(ev.playerId || '');
-      setEditCardColor((ev.color || 'yellow') as CardColor);
+      setEditCardColor((ev.cardColor || 'yellow') as CardColor);
     }
 
     setShowEditEvent(true);
@@ -550,7 +574,7 @@ export default function MatchDetailScreen() {
             minute: minuteStr,
             playerId: editCardPlayerId,
             playerName,
-            color: editCardColor,
+            cardColor: editCardColor,
           },
         });
       }
@@ -565,8 +589,8 @@ export default function MatchDetailScreen() {
   const score = useMemo(() => deriveScoreFromEvents(events), [events]);
 
   const cards = useMemo(() => {
-    const yellow = events.filter((e) => e.type === 'card' && e.color === 'yellow').length;
-    const red = events.filter((e) => e.type === 'card' && e.color === 'red').length;
+    const yellow = events.filter((e) => e.type === 'card' && e.cardColor === 'yellow').length;
+    const red = events.filter((e) => e.type === 'card' && e.cardColor === 'red').length;
     return { yellow, red };
   }, [events]);
 
@@ -742,7 +766,7 @@ export default function MatchDetailScreen() {
               const title =
                 item.type === 'goal'
                   ? `GOAL · ${item.scorerName || 'Scorer'}${item.assistName ? ` (A: ${item.assistName})` : ''}`
-                  : `CARD · ${(item.color || 'yellow').toUpperCase()} · ${item.playerName || 'Player'}`;
+                  : `CARD · ${(item.cardColor || 'yellow').toUpperCase()} · ${item.playerName || 'Player'}`;
 
               return (
                 <TouchableOpacity
@@ -798,9 +822,12 @@ export default function MatchDetailScreen() {
       {/* ===== Roster header ===== */}
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 }}>
         <Text style={{ fontSize: 22, fontWeight: '700' }}>Match Roster</Text>
-
         <TouchableOpacity
-          onPress={() => setShowAdd(true)}
+          onPress={() => {
+            setQ('');
+            setSelectedToAdd([]);
+            setShowAdd(true);
+          }}
           style={{ paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderRadius: 10 }}
         >
           <Text style={{ fontWeight: '600' }}>+ Add</Text>
@@ -858,7 +885,7 @@ export default function MatchDetailScreen() {
       )}
 
       {/* ===== Add Player Modal ===== */}
-      <Modal visible={showAdd} animationType="slide" transparent onRequestClose={() => setShowAdd(false)}>
+      <Modal visible={showAdd} animationType="slide" transparent onRequestClose={closeAddModal}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' }}>
           <View
             style={{
@@ -879,23 +906,54 @@ export default function MatchDetailScreen() {
               style={{ borderWidth: 1, padding: 12, borderRadius: 12 }}
             />
 
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity
+                onPress={() => setSelectedToAdd(filtered.map((p: any) => p.id))}
+                style={{ paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderRadius: 10 }}
+              >
+                <Text style={{ fontWeight: '700' }}>Select All</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => setSelectedToAdd([])}
+                style={{ paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderRadius: 10 }}
+              >
+                <Text style={{ fontWeight: '700' }}>Clear</Text>
+              </TouchableOpacity>
+            </View>
+
             <FlatList
               data={filtered}
               keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  onPress={() => addToRoster(item)}
-                  style={{ borderWidth: 1, borderRadius: 12, padding: 10, marginTop: 8 }}
-                >
-                  <Text style={{ fontWeight: '800' }}>
-                    {item.playerName}
-                    {item.number ? `  #${item.number}` : ''}
-                  </Text>
-                  <Text style={{ color: '#666', marginTop: 2 }}>
-                    {item.position ? `Pos: ${item.position}` : ' '}
-                  </Text>
-                </TouchableOpacity>
-              )}
+              renderItem={({ item }) => {
+                const active = selectedToAdd.includes(item.id);
+
+                return (
+                  <TouchableOpacity
+                    onPress={() => toggleSelectToAdd(item.id)}
+                    style={{
+                      borderWidth: 1,
+                      borderRadius: 12,
+                      padding: 10,
+                      marginTop: 8,
+                      backgroundColor: active ? '#111' : 'transparent',
+                    }}
+                  >
+                    <Text style={{ fontWeight: '800', color: active ? 'white' : '#111' }}>
+                      {item.playerName}
+                      {item.number ? `  #${item.number}` : ''}
+                    </Text>
+                    <Text
+                      style={{
+                        color: active ? 'rgba(255,255,255,0.75)' : '#666',
+                        marginTop: 2,
+                      }}
+                    >
+                      {item.position ? `Pos: ${item.position}` : ' '}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              }}
               ListEmptyComponent={
                 <Text style={{ marginTop: 10, color: '#666' }}>
                   No available players (or all already added).
@@ -903,10 +961,39 @@ export default function MatchDetailScreen() {
               }
             />
 
-            <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
-              <TouchableOpacity onPress={() => setShowAdd(false)}>
-                <Text style={{ padding: 10, color: '#444', fontWeight: '700' }}>Close</Text>
-              </TouchableOpacity>
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginTop: 10,
+              }}
+            >
+              <Text style={{ color: '#666', fontWeight: '700' }}>
+                {selectedToAdd.length} selected
+              </Text>
+
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <TouchableOpacity onPress={closeAddModal}>
+                  <Text style={{ padding: 10, color: '#444', fontWeight: '700' }}>Cancel</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={addSelectedToRoster}
+                  disabled={!selectedToAdd.length}
+                  style={{
+                    paddingVertical: 10,
+                    paddingHorizontal: 14,
+                    borderWidth: 1,
+                    borderRadius: 12,
+                    opacity: selectedToAdd.length ? 1 : 0.4,
+                  }}
+                >
+                  <Text style={{ fontWeight: '800' }}>
+                    Add Selected ({selectedToAdd.length})
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         </View>

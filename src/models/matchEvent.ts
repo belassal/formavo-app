@@ -19,7 +19,8 @@ export type MatchEvent = {
   side?: GoalSide;
 
   // optional: where the event happened on the pitch
-  pos?: PitchPos;
+  pos?: PitchPos;         // goal/shot location
+  assistPos?: PitchPos;   // where the assist/pass came from
 
   // goal
   scorerId?: string;

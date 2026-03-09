@@ -458,12 +458,14 @@ export function buildGoalEvent(p: {
   assistId?: string;
   assistName?: string;
   pos?: { x: number; y: number };
+  assistPos?: { x: number; y: number };
 }): Omit<MatchEvent, 'id' | 'createdAt' | 'updatedAt'> {
   return {
     type: 'goal',
     minute: clampMinute(p.minute),
     side: p.side,
     pos: p.pos,
+    assistPos: p.assistPos,
     scorerId: p.scorerId || '',
     scorerName: p.scorerName || '',
     assistId: p.assistId || '',
