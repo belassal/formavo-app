@@ -521,34 +521,9 @@ export async function markMatchScheduled(params: { teamId: string; matchId: stri
     });
 }
 
-export async function assignOrSwapMatchSlot(opts: {
-  teamId: string;
-  matchId: string;
-  slotKey: string;
-  playerId: string; // the player you picked
-}) {
-  const { teamId, matchId, slotKey, playerId } = opts;
-
-  const rosterCol = db
-    .collection(COL.teams).doc(teamId)
-    .collection(COL.matches).doc(matchId)
-    .collection(COL.roster);
-
-  const pickedRef = rosterCol.doc(playerId);
-
-  await db.runTransaction(async (tx) => {
-    const pickedSnap = await tx.get(pickedRef);
-    if (!pickedSnap.exists) throw new Error('Picked player not found in match roster.');
-
-    const pickedData = pickedSnap.data() as any;
-    const pickedCurrentSlot = pickedData?.slotKey || null;
-
-    // Find who is currently sitting in target slot
-    // (no great way without query; so we scan by query inside transaction is not allowed)
-    // ✅ Solution: keep a "slotKey" uniqueness by writing it, but we still need to locate occupant.
-    // We'll do a query OUTSIDE transaction in the screen, then pass occupantId in.
-  });
-}
+// NOTE: assignOrSwapMatchSlot was an incomplete stub and has been removed.
+// Use swapOrMoveMatchSlot() below instead, which is the full implementation.
+// The screen is responsible for resolving the occupantPlayerId before calling it.
 
 export async function swapOrMoveMatchSlot(opts: {
   teamId: string;

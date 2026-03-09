@@ -401,25 +401,26 @@ const onEnd = async () => {
   };
 
 
-    const savePlayerEvent = async () => {
+  const savePlayerEvent = async () => {
     if (!activePlayerId) return;
 
     try {
       const minute = String(currentMinute());
 
       if (actionType === 'goal') {
+        const scorerName = getPlayerName(activePlayerId);
+        const assistName = assistId ? getPlayerName(assistId) : '';
+
         await addMatchEvent({
           teamId,
           matchId,
           event: buildGoalEvent({
             minute,
-            side: p.side || 'home',
-            scorerId: p.scorerId || '',
+            side: 'home',
+            scorerId: activePlayerId,
             scorerName,
-            assistId: p.assistId || '',
+            assistId: assistId || '',
             assistName,
-            pos: p.pos,
-            assistPos: p.assistPos,
           }),
         });
       } else {
@@ -437,6 +438,7 @@ const onEnd = async () => {
 
       setShowPlayerModal(false);
       setActivePlayerId(null);
+      setAssistId('');
     } catch (e: any) {
       Alert.alert('Save failed', e?.message ?? 'Unknown error');
     }
