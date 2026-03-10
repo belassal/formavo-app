@@ -31,8 +31,10 @@ export async function createMatch(params: {
   opponent: string;
   dateISO: string; // "2026-02-20 19:00"
   location?: string;
+  format?: string;       // e.g. "7v7" | "9v9" | "11v11"
+  formation?: string;    // e.g. "4-3-3"
 }) {
-  const { teamId, opponent, dateISO, location = '' } = params;
+  const { teamId, opponent, dateISO, location = '', format = '', formation = '' } = params;
 
   if (!opponent.trim()) throw new Error('Opponent is required');
   if (!dateISO.trim()) throw new Error('Date is required');
@@ -44,6 +46,8 @@ export async function createMatch(params: {
     opponentLower: opponent.trim().toLowerCase(),
     dateISO: dateISO.trim(),
     location: location.trim(),
+    format: format.trim(),
+    formation: formation.trim(),
     status: 'scheduled' as MatchStatus,
     homeScore: 0,
     awayScore: 0,

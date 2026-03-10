@@ -23,6 +23,8 @@ type Props = {
   layoutMode?: boolean; // when true: drag bubbles instead of assigning
   onSlotPosChange?: (slotKey: string, pos: SlotPos) => void;
 
+  /** Available container size — when provided, pitch fills it exactly */
+  containerSize?: { width: number; height: number };
   /** Tap a filled bubble (player). */
   onPlayerPress?: (playerId: string) => void;
   /** Tap a slot (empty or filled) to open the assign modal. */
@@ -67,8 +69,8 @@ function SlotBubble(props: {
   } = props;
 
   const base = posOverride ? posOverride : { x: slot.x, y: slot.y };
-  const baseLeft = clamp(base.x, 0.04, 0.96) * pitchWidth;
-  const baseTop = clamp(base.y, 0.04, 0.96) * pitchHeight;
+  const baseLeft = clamp(base.x, 0.02, 0.98) * pitchWidth;
+  const baseTop = clamp(base.y, 0.02, 0.98) * pitchHeight;
 
   const [drag, setDrag] = useState<{ dx: number; dy: number } | null>(null);
   const startRef = useRef<{ left: number; top: number }>({ left: baseLeft, top: baseTop });
@@ -105,8 +107,8 @@ function SlotBubble(props: {
         const leftPx = startRef.current.left + g.dx;
         const topPx = startRef.current.top + g.dy;
 
-        const x = clamp(leftPx / pitchWidth, 0.04, 0.96);
-        const y = clamp(topPx / pitchHeight, 0.04, 0.96);
+        const x = clamp(leftPx / pitchWidth, 0.02, 0.98);
+        const y = clamp(topPx / pitchHeight, 0.02, 0.98);
 
         onDragCommit?.(slot.key, { x, y });
         setDrag(null);
@@ -140,6 +142,171 @@ function SlotBubble(props: {
   );
 }
 
+// ── Mowed grass stripes ───────────────────────────────────────────────────
+function PitchStripes({ width, height }: { width: number; height: number }) {
+  const STRIPE_COUNT = 10;
+  const stripeH = height / STRIPE_COUNT;
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      {Array.from({ length: STRIPE_COUNT }).map((_, i) => (
+        <View
+          key={i}
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            top: i * stripeH,
+            height: stripeH,
+            backgroundColor: i % 2 === 0 ? '#1a7a3c' : '#197338',
+          }}
+        />
+      ))}
+    </View>
+  );
+}
+
+// ── Field markings ────────────────────────────────────────────────────────
+function PitchMarkings({ width: W, height: H }: { width: number; height: number }) {
+  const lw = 1.5;
+  const lc = 'rgba(255,255,255,0.6)';
+
+  const pad = W * 0.025; // inset from edge for boundary line
+
+  // Penalty box: 62% wide, 18% tall
+  const pbW = W * 0.62;
+  const pbH = H * 0.18;
+  const pbX = (W - pbW) / 2;
+
+  // Goal box: 36% wide, 8% tall
+  const gbW = W * 0.36;
+  const gbH = H * 0.08;
+  const gbX = (W - gbW) / 2;
+
+  // Goal (just inside the pitch boundary)
+  const goalW = W * 0.24;
+  const goalH = H * 0.025;
+  const goalX = (W - goalW) / 2;
+
+  // Penalty spot distance from goal line
+  const spotY = H * 0.12;
+  const spotR = 2.5;
+
+  // Centre circle
+  const ccR = Math.min(W, H) * 0.13;
+
+  // Corner arc — small quarter circle, rendered as full circle clipped by overflow:hidden
+  const caR = Math.min(W, H) * 0.05;
+
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+
+      {/* Outer boundary */}
+      <View style={{
+        position: 'absolute', top: pad, left: pad, right: pad, bottom: pad,
+        borderWidth: lw, borderColor: lc, borderRadius: 2,
+      }} />
+
+      {/* Half-way line */}
+      <View style={{
+        position: 'absolute', top: H * 0.5 - lw / 2,
+        left: pad, right: pad, height: lw, backgroundColor: lc,
+      }} />
+
+      {/* Centre circle */}
+      <View style={{
+        position: 'absolute',
+        width: ccR * 2, height: ccR * 2, borderRadius: ccR,
+        borderWidth: lw, borderColor: lc,
+        left: W / 2 - ccR, top: H / 2 - ccR,
+      }} />
+
+      {/* Centre spot */}
+      <View style={{
+        position: 'absolute', width: spotR * 2, height: spotR * 2,
+        borderRadius: spotR, backgroundColor: lc,
+        left: W / 2 - spotR, top: H / 2 - spotR,
+      }} />
+
+      {/* ── Top half ── */}
+      {/* Penalty area */}
+      <View style={{
+        position: 'absolute', top: pad, left: pbX,
+        width: pbW, height: pbH,
+        borderWidth: lw, borderColor: lc, borderTopWidth: 0,
+      }} />
+      {/* Goal box */}
+      <View style={{
+        position: 'absolute', top: pad, left: gbX,
+        width: gbW, height: gbH,
+        borderWidth: lw, borderColor: lc, borderTopWidth: 0,
+      }} />
+      {/* Goal line (inside pitch) */}
+      <View style={{
+        position: 'absolute', top: pad, left: goalX,
+        width: goalW, height: goalH,
+        borderWidth: lw, borderColor: 'rgba(255,255,255,0.4)', borderTopWidth: 0,
+        borderBottomLeftRadius: 2, borderBottomRightRadius: 2,
+      }} />
+      {/* Penalty spot */}
+      <View style={{
+        position: 'absolute', width: spotR * 2, height: spotR * 2,
+        borderRadius: spotR, backgroundColor: lc,
+        left: W / 2 - spotR, top: spotY,
+      }} />
+
+      {/* ── Bottom half ── */}
+      {/* Penalty area */}
+      <View style={{
+        position: 'absolute', bottom: pad, left: pbX,
+        width: pbW, height: pbH,
+        borderWidth: lw, borderColor: lc, borderBottomWidth: 0,
+      }} />
+      {/* Goal box */}
+      <View style={{
+        position: 'absolute', bottom: pad, left: gbX,
+        width: gbW, height: gbH,
+        borderWidth: lw, borderColor: lc, borderBottomWidth: 0,
+      }} />
+      {/* Goal line (inside pitch) */}
+      <View style={{
+        position: 'absolute', bottom: pad, left: goalX,
+        width: goalW, height: goalH,
+        borderWidth: lw, borderColor: 'rgba(255,255,255,0.4)', borderBottomWidth: 0,
+        borderTopLeftRadius: 2, borderTopRightRadius: 2,
+      }} />
+      {/* Penalty spot */}
+      <View style={{
+        position: 'absolute', width: spotR * 2, height: spotR * 2,
+        borderRadius: spotR, backgroundColor: lc,
+        left: W / 2 - spotR, bottom: spotY,
+      }} />
+
+      {/* ── Corner arcs — centred on each corner, clipped by pitch overflow:hidden ── */}
+      <View style={{
+        position: 'absolute', top: pad - caR, left: pad - caR,
+        width: caR * 2, height: caR * 2, borderRadius: caR,
+        borderWidth: lw, borderColor: lc,
+      }} />
+      <View style={{
+        position: 'absolute', top: pad - caR, right: pad - caR,
+        width: caR * 2, height: caR * 2, borderRadius: caR,
+        borderWidth: lw, borderColor: lc,
+      }} />
+      <View style={{
+        position: 'absolute', bottom: pad - caR, left: pad - caR,
+        width: caR * 2, height: caR * 2, borderRadius: caR,
+        borderWidth: lw, borderColor: lc,
+      }} />
+      <View style={{
+        position: 'absolute', bottom: pad - caR, right: pad - caR,
+        width: caR * 2, height: caR * 2, borderRadius: caR,
+        borderWidth: lw, borderColor: lc,
+      }} />
+
+    </View>
+  );
+}
+
 export default function GameDayPitch({
   formation,
   starters,
@@ -149,28 +316,21 @@ export default function GameDayPitch({
   onSlotPosChange,
   onPlayerPress,
   onSlotPress,
+  containerSize,
 }: Props) {
-  const { width, height } = useWindowDimensions();
-  const isPortrait = height >= width;
+  const dims = useWindowDimensions();
 
-  // Portrait priority
-  const pitchAspectRatio = isPortrait ? 0.66 : 1.6; // width / height
+  // Use measured container size when available, otherwise fall back to window dims
+  const availW = containerSize?.width  ?? dims.width;
+  const availH = containerSize?.height ?? dims.height;
 
   const pitchSize = useMemo(() => {
-    const padding = 20;
-    const maxWidth = width - padding * 2;
-    const maxHeight = height - padding * 2;
-
-    let pitchWidth = maxWidth;
-    let pitchHeight = pitchWidth / pitchAspectRatio;
-
-    if (pitchHeight > maxHeight) {
-      pitchHeight = maxHeight;
-      pitchWidth = pitchHeight * pitchAspectRatio;
-    }
-
+    // Fill full container width. Pitch is taller than wide (ratio ~1.55).
+    const pad = 6;
+    const pitchWidth  = availW - pad * 2;
+    const pitchHeight = Math.min(pitchWidth * 1.55, availH - pad * 2);
     return { pitchWidth, pitchHeight };
-  }, [width, height, pitchAspectRatio]);
+  }, [availW, availH]);
 
   const slots = useMemo(() => buildSlots(formation), [formation]);
 
@@ -191,8 +351,11 @@ export default function GameDayPitch({
           { width: pitchSize.pitchWidth, height: pitchSize.pitchHeight },
         ]}
       >
-        <View pointerEvents="none" style={styles.halfLine} />
-        <View pointerEvents="none" style={styles.centerCircle} />
+        {/* ── Mowed grass stripes ── */}
+        <PitchStripes width={pitchSize.pitchWidth} height={pitchSize.pitchHeight} />
+
+        {/* ── Field markings ── */}
+        <PitchMarkings width={pitchSize.pitchWidth} height={pitchSize.pitchHeight} />
 
         {layoutMode && (
           <View pointerEvents="none" style={styles.hintWrap}>
@@ -265,32 +428,17 @@ const styles = StyleSheet.create({
   },
 
   pitch: {
-    backgroundColor: '#0f7a3a',
-    borderRadius: 20,
+    backgroundColor: '#1a7a3c',
+    borderRadius: 12,
     borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: 'rgba(255,255,255,0.15)',
     overflow: 'hidden',
-  },
-
-  halfLine: {
-    position: 'absolute',
-    top: '50%',
-    left: 0,
-    right: 0,
-    height: 2,
-    backgroundColor: 'rgba(255,255,255,0.35)',
-  },
-
-  centerCircle: {
-    position: 'absolute',
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.35)',
-    left: '50%',
-    top: '50%',
-    transform: [{ translateX: -60 }, { translateY: -60 }],
+    // Subtle shadow to lift the pitch off the dark background
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+    elevation: 10,
   },
 
   player: {

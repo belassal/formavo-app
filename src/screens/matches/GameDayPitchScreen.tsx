@@ -94,6 +94,9 @@ export default function GameDayPitchScreen() {
   // Layout mode (drag positions)
   const [layoutMode, setLayoutMode] = useState(false);
 
+  // Measured available size for the pitch container
+  const [pitchContainerSize, setPitchContainerSize] = useState<{width:number;height:number}|null>(null);
+
   // 1) Match doc
   useEffect(() => {
     setLoading(true);
@@ -505,11 +508,18 @@ const onEnd = async () => {
         />
       </View>
 
-      <View style={styles.pitchWrap}>
+      <View
+        style={styles.pitchWrap}
+        onLayout={(e) => {
+          const { width, height } = e.nativeEvent.layout;
+          setPitchContainerSize({ width, height });
+        }}
+      >
         <GameDayPitch
           formation={formation}
           starters={starters}
           playerToSlotKey={playerToSlotKey}
+          containerSize={pitchContainerSize ?? undefined}
           slotPos={match.slotPos || {}}
           layoutMode={layoutMode}
           onSlotPosChange={onSlotPosChange}

@@ -12,6 +12,7 @@ import { useNavigation } from '@react-navigation/native';
 
 import { listenMyTeams } from '../../services/teamService';
 import { listenMatches } from '../../services/matchService';
+import { formatDateISO } from '../../components/DateTimePickerModal';
 
 type TeamRow = { id: string; teamName?: string };
 
@@ -171,22 +172,24 @@ export default function MatchesScreen() {
                 }
                 style={{ borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 10 }}
               >
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 10 }}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 16, fontWeight: '800' }}>
-                      vs {item.opponent || 'Opponent'}
-                    </Text>
+                {/* Top row: opponent + status */}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <Text style={{ fontSize: 16, fontWeight: '800', flex: 1, marginRight: 8 }}>
+                    vs {item.opponent || 'Opponent'}
+                  </Text>
+                  {pill(rightLabel)}
+                </View>
 
-                    <Text style={{ marginTop: 4, color: '#666' }}>
-                      {item.dateISO || ''}
-                      {item.location ? ` · ${item.location}` : ''}
-                    </Text>
-                  </View>
+                {/* Date + location */}
+                <Text style={{ marginTop: 3, color: '#666', fontSize: 13 }}>
+                  {item.dateISO ? formatDateISO(item.dateISO) : ''}
+                  {item.location ? ` · ${item.location}` : ''}
+                </Text>
 
-                  <View style={{ alignItems: 'flex-end', gap: 8 }}>
-                    {pill(rightLabel)}
-                    {pill(`${count} players`)}
-                  </View>
+                {/* Bottom pill row */}
+                <View style={{ flexDirection: 'row', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                  {item.format ? pill(item.format) : null}
+                  {pill(`${count} players`)}
                 </View>
               </TouchableOpacity>
             );

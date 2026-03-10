@@ -39,6 +39,7 @@ import {
 } from '../../services/matchService';
 import { db } from '../../services/firebase';
 import { COL } from '../../models/collections';
+import DateTimePickerModal, { formatDateISO } from '../../components/DateTimePickerModal';
 
 
 
@@ -106,6 +107,7 @@ export default function MatchDetailScreen() {
   const [editOpponent, setEditOpponent] = useState('');
   const [editDateISO, setEditDateISO] = useState('');
   const [editLocation, setEditLocation] = useState('');
+  const [showEditDatePicker, setShowEditDatePicker] = useState(false);
 
   // delete confirm inside edit modal
   const [confirmDeleteText, setConfirmDeleteText] = useState('');
@@ -610,8 +612,28 @@ const addSelectedToRoster = async () => {
   );
 
   const pillBtn = (label: string, onPress: () => void) => (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.75}>
-      {pill(label)}
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.75}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        backgroundColor: '#111',
+        paddingVertical: 6,
+        paddingHorizontal: 14,
+        borderRadius: 999,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.18,
+        shadowRadius: 4,
+        elevation: 3,
+      }}
+    >
+      <Text style={{ fontSize: 13, color: '#fff', fontWeight: '900', letterSpacing: 0.3 }}>
+        ⚽ {label}
+      </Text>
+      <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)' }}>→</Text>
     </TouchableOpacity>
   );
 
@@ -672,20 +694,21 @@ const addSelectedToRoster = async () => {
           <Text style={ICON_EDIT_TEXT}>✎</Text>
         </TouchableOpacity>
 
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 10 }}>
-          <View style={{ flex: 1, paddingRight: 34 }}>
-            <Text style={{ fontSize: 18, fontWeight: '800' }}>vs {match?.opponent || 'Opponent'}</Text>
-            <Text style={{ marginTop: 4, color: '#666' }}>
-              {match?.dateISO || ''}
-              {match?.location ? ` · ${match.location}` : ''}
-            </Text>
-          </View>
+        {/* Top row: title + edit icon (edit icon is absolute so paddingRight keeps text clear) */}
+        <View style={{ paddingRight: 32 }}>
+          <Text style={{ fontSize: 18, fontWeight: '800' }}>vs {match?.opponent || 'Opponent'}</Text>
+          <Text style={{ marginTop: 3, color: '#666', fontSize: 13 }}>
+            {match?.dateISO ? formatDateISO(match.dateISO) : ''}
+            {match?.location ? ` · ${match.location}` : ''}
+          </Text>
+        </View>
 
-          <View style={{ alignItems: 'flex-end', gap: 8, marginRight: 38 }}>
-            {pill(scoreLabel)}
-            {pill(`${playerCount} players`)}
-            {pillBtn('Game Day', () => navigation.navigate('GameDayPitch', { teamId, matchId }))}
-          </View>
+        {/* Pill row */}
+        <View style={{ flexDirection: 'row', gap: 6, marginTop: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+          {pill(scoreLabel)}
+          {match?.format ? pill(match.format) : null}
+          {pill(`${playerCount} players`)}
+          {pillBtn('Game Day', () => navigation.navigate('GameDayPitch', { teamId, matchId }))}
         </View>
 
         {status === 'scheduled' && (
@@ -1323,12 +1346,15 @@ const addSelectedToRoster = async () => {
               onChangeText={setEditOpponent}
               style={{ borderWidth: 1, padding: 12, borderRadius: 12 }}
             />
-            <TextInput
-              placeholder='Date/time (ex: "2026-02-22 19:00")'
-              value={editDateISO}
-              onChangeText={setEditDateISO}
-              style={{ borderWidth: 1, padding: 12, borderRadius: 12 }}
-            />
+            <TouchableOpacity
+              onPress={() => setShowEditDatePicker(true)}
+              style={{ borderWidth: 1, padding: 12, borderRadius: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
+            >
+              <Text style={{ color: editDateISO ? '#111' : '#9ca3af', fontSize: 15 }}>
+                {editDateISO ? formatDateISO(editDateISO) : 'Date & time (required)'}
+              </Text>
+              <Text style={{ fontSize: 16 }}>📅</Text>
+            </TouchableOpacity>
             <TextInput
               placeholder="Location (optional)"
               value={editLocation}
@@ -1389,6 +1415,15 @@ const addSelectedToRoster = async () => {
             </View>
           </View>
         </View>
+        {/* ===== Edit Date Picker — must live INSIDE this Modal's tree ===== */}
+        {showEditDatePicker && (
+          <DateTimePickerModal
+            visible={showEditDatePicker}
+            value={editDateISO}
+            onConfirm={(iso) => { setEditDateISO(iso); setShowEditDatePicker(false); }}
+            onClose={() => setShowEditDatePicker(false)}
+          />
+        )}
       </Modal>
     </SafeAreaView>
   );

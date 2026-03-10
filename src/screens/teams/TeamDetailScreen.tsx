@@ -23,6 +23,8 @@ import {
 } from '../../services/playerService';
 import { createMatch, listenMatches } from '../../services/matchService';
 import { updateTeamMembership } from '../../services/playerService';
+import FormationPickerModal, { FormationPickerResult } from '../matches/components/FormationPickerModal';
+import DateTimePickerModal, { formatDateISO } from '../../components/DateTimePickerModal';
 
 type TeamDetailRoute = RouteProp<TeamsStackParamList, 'TeamDetail'>;
 
@@ -80,6 +82,12 @@ export default function TeamDetailScreen() {
   const [opponent, setOpponent] = useState('');
   const [dateISO, setDateISO] = useState('');
   const [location, setLocation] = useState('');
+  // Formation picker — shown before the create-match form
+  const [showFormationPicker, setShowFormationPicker] = useState(false);
+  const [pickedFormat, setPickedFormat] = useState('');
+  const [pickedFormation, setPickedFormation] = useState('');
+  // Date picker
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   // --- LISTENERS ---
   useEffect(() => {
@@ -246,6 +254,16 @@ export default function TeamDetailScreen() {
     setOpponent('');
     setDateISO('');
     setLocation('');
+    setPickedFormat('');
+    setPickedFormation('');
+    // Show formation picker first, then the match details form
+    setShowFormationPicker(true);
+  };
+
+  const onFormationPicked = (result: FormationPickerResult) => {
+    setPickedFormat(result.format);
+    setPickedFormation(result.formation.name);
+    setShowFormationPicker(false);
     setShowCreateMatch(true);
   };
 
@@ -269,6 +287,8 @@ export default function TeamDetailScreen() {
         opponent: opp,
         dateISO: dt,
         location: location.trim(),
+        format: pickedFormat,
+        formation: pickedFormation,
       });
 
       setShowCreateMatch(false);
@@ -407,28 +427,30 @@ export default function TeamDetailScreen() {
                 }
                 style={{ borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 10 }}
               >
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 10 }}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 16, fontWeight: '700' }}>vs {item.opponent || 'Opponent'}</Text>
-                    <Text style={{ marginTop: 4, color: '#666' }}>
-                      {item.dateISO || ''}
-                      {item.location ? ` · ${item.location}` : ''}
-                    </Text>
-                  </View>
-
-                  {/* Status + score pill */}
-                  <View
-                    style={{
-                      paddingVertical: 4,
-                      paddingHorizontal: 10,
-                      borderWidth: 1,
-                      borderRadius: 999,
-                      alignSelf: 'flex-start',
-                    }}
-                  >
+                {/* Top row: opponent + status */}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <Text style={{ fontSize: 16, fontWeight: '700', flex: 1, marginRight: 8 }}>
+                    vs {item.opponent || 'Opponent'}
+                  </Text>
+                  <View style={{ paddingVertical: 4, paddingHorizontal: 10, borderWidth: 1, borderRadius: 999, alignSelf: 'flex-start' }}>
                     <Text style={{ fontWeight: '800', fontSize: 12 }}>{rightLabel}</Text>
                   </View>
                 </View>
+
+                {/* Date + location */}
+                <Text style={{ marginTop: 3, color: '#666', fontSize: 13 }}>
+                  {item.dateISO ? formatDateISO(item.dateISO) : ''}
+                  {item.location ? ` · ${item.location}` : ''}
+                </Text>
+
+                {/* Format pill row */}
+                {item.format ? (
+                  <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }}>
+                    <View style={{ paddingVertical: 3, paddingHorizontal: 10, borderWidth: 1, borderRadius: 999 }}>
+                      <Text style={{ fontWeight: '700', fontSize: 11 }}>{item.format}</Text>
+                    </View>
+                  </View>
+                ) : null}
               </TouchableOpacity>
             );
           }}
@@ -577,6 +599,13 @@ export default function TeamDetailScreen() {
         </View>
       </Modal>
 
+      {/* ===== FORMATION PICKER MODAL ===== */}
+      <FormationPickerModal
+        visible={showFormationPicker}
+        onClose={() => setShowFormationPicker(false)}
+        onConfirm={onFormationPicked}
+      />
+
       {/* ===== CREATE MATCH MODAL ===== */}
       <Modal
         visible={showCreateMatch}
@@ -596,6 +625,25 @@ export default function TeamDetailScreen() {
           >
             <Text style={{ fontSize: 18, fontWeight: '700' }}>Create Match</Text>
 
+            {/* Format + Formation summary pill */}
+            {(pickedFormat || pickedFormation) && (
+              <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                {pickedFormat ? (
+                  <View style={{ paddingVertical: 4, paddingHorizontal: 10, borderWidth: 1, borderRadius: 999, borderColor: '#16a34a', backgroundColor: '#f0fdf4' }}>
+                    <Text style={{ fontWeight: '800', fontSize: 12, color: '#16a34a' }}>{pickedFormat}</Text>
+                  </View>
+                ) : null}
+                {pickedFormation ? (
+                  <View style={{ paddingVertical: 4, paddingHorizontal: 10, borderWidth: 1, borderRadius: 999, borderColor: '#16a34a', backgroundColor: '#f0fdf4' }}>
+                    <Text style={{ fontWeight: '800', fontSize: 12, color: '#16a34a' }}>{pickedFormation}</Text>
+                  </View>
+                ) : null}
+                <TouchableOpacity onPress={() => { setShowCreateMatch(false); setShowFormationPicker(true); }}>
+                  <Text style={{ fontSize: 12, color: '#888', fontWeight: '600' }}>Change</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
             <TextInput
               placeholder="Opponent (required)"
               value={opponent}
@@ -603,12 +651,15 @@ export default function TeamDetailScreen() {
               style={{ borderWidth: 1, padding: 12, borderRadius: 12 }}
             />
 
-            <TextInput
-              placeholder="Date/time (required) — e.g., 2026-02-22 19:00"
-              value={dateISO}
-              onChangeText={setDateISO}
-              style={{ borderWidth: 1, padding: 12, borderRadius: 12 }}
-            />
+            <TouchableOpacity
+              onPress={() => setShowDatePicker(true)}
+              style={{ borderWidth: 1, padding: 12, borderRadius: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
+            >
+              <Text style={{ color: dateISO ? '#111' : '#9ca3af', fontSize: 15 }}>
+                {dateISO ? formatDateISO(dateISO) : 'Date & time (required)'}
+              </Text>
+              <Text style={{ fontSize: 16 }}>📅</Text>
+            </TouchableOpacity>
 
             <TextInput
               placeholder="Location (optional)"
@@ -632,8 +683,16 @@ export default function TeamDetailScreen() {
             </View>
           </View>
         </View>
+        {/* Date picker must live INSIDE this Modal so it renders above it on iOS */}
+        {showDatePicker && (
+          <DateTimePickerModal
+            visible={showDatePicker}
+            value={dateISO}
+            onConfirm={(iso) => { setDateISO(iso); setShowDatePicker(false); }}
+            onClose={() => setShowDatePicker(false)}
+          />
+        )}
       </Modal>
     </SafeAreaView>
   );
 }
-
