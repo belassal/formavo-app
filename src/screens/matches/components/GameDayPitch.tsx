@@ -75,6 +75,11 @@ function SlotBubble(props: {
   const [drag, setDrag] = useState<{ dx: number; dy: number } | null>(null);
   const startRef = useRef<{ left: number; top: number }>({ left: baseLeft, top: baseTop });
 
+  // Sync startRef whenever base position changes (pitch resize, posOverride update) — only when not dragging
+  if (!drag) {
+    startRef.current = { left: baseLeft, top: baseTop };
+  }
+
   const pan = useMemo(() => {
     return PanResponder.create({
       // Let taps through on start
@@ -118,8 +123,8 @@ function SlotBubble(props: {
     });
   }, [layoutMode, baseLeft, baseTop, pitchWidth, pitchHeight, onDragCommit, slot.key]);
 
-  const left = startRef.current.left + (drag?.dx ?? 0);
-  const top = startRef.current.top + (drag?.dy ?? 0);
+  const left = drag ? startRef.current.left + drag.dx : baseLeft;
+  const top  = drag ? startRef.current.top  + drag.dy : baseTop;
 
   return (
     <View

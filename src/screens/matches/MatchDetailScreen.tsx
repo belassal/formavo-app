@@ -675,348 +675,276 @@ const addSelectedToRoster = async () => {
     );
   }
 
+  // ── Shared styles (same design language as Teams screens) ──────────────
+  const SC = {
+    container: { backgroundColor: '#fff', borderRadius: 14, overflow: 'hidden' as const, borderWidth: 1, borderColor: '#e5e7eb' },
+    header: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, paddingHorizontal: 16, paddingVertical: 14 },
+    titleRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 },
+    title: { fontSize: 17, fontWeight: '700' as const, color: '#111' },
+    count: { fontSize: 13, fontWeight: '600' as const, color: '#9ca3af' },
+    addBtn: { paddingVertical: 6, paddingHorizontal: 14, backgroundColor: '#f3f4f6', borderRadius: 20 },
+    addBtnText: { fontSize: 14, fontWeight: '600' as const, color: '#111' },
+    divider: { height: 1, backgroundColor: '#e5e7eb' },
+    row: { flexDirection: 'row' as const, alignItems: 'center' as const, paddingHorizontal: 16, paddingVertical: 13 },
+    emptyRow: { paddingHorizontal: 16, paddingVertical: 20 },
+    emptyText: { color: '#9ca3af', fontSize: 14 },
+  };
+
   return (
-    <SafeAreaView style={{ flex: 1, padding: 16 }}>
-      {/* ===== Match summary card ===== */}
-      <View style={{ borderWidth: 1, borderRadius: 14, padding: 12, position: 'relative' }}>
-        {/* Edit icon */}
-        <TouchableOpacity
-          onPress={openEdit}
-          style={{
-            position: 'absolute',
-            top: 8,
-            right: 8,
-            ...ICON_BTN,
-          }}
-          activeOpacity={0.3}
-          hitSlop={ICON_HITSLOP}
-        >
-          <Text style={ICON_EDIT_TEXT}>✎</Text>
-        </TouchableOpacity>
-
-        {/* Top row: title + edit icon (edit icon is absolute so paddingRight keeps text clear) */}
-        <View style={{ paddingRight: 32 }}>
-          <Text style={{ fontSize: 18, fontWeight: '800' }}>vs {match?.opponent || 'Opponent'}</Text>
-          <Text style={{ marginTop: 3, color: '#666', fontSize: 13 }}>
-            {match?.dateISO ? formatDateISO(match.dateISO) : ''}
-            {match?.location ? ` · ${match.location}` : ''}
-          </Text>
-        </View>
-
-        {/* Pill row */}
-        <View style={{ flexDirection: 'row', gap: 6, marginTop: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-          {pill(scoreLabel)}
-          {match?.format ? pill(match.format) : null}
-          {pill(`${playerCount} players`)}
-          {pillBtn('Game Day', () => navigation.navigate('GameDayPitch', { teamId, matchId }))}
-        </View>
-
-        {status === 'scheduled' && (
-          <TouchableOpacity
-            onPress={() => markMatchLive({ teamId, matchId })}
-            style={{
-              paddingVertical: 8,
-              paddingHorizontal: 12,
-              borderWidth: 1,
-              borderRadius: 12,
-              alignSelf: 'flex-start',
-              marginTop: 12,
-            }}
-          >
-            <Text style={{ fontWeight: '800' }}>Start Game</Text>
-          </TouchableOpacity>
-        )}
-
-        {status === 'live' && (
-          <TouchableOpacity
-            onPress={confirmComplete}
-            style={{
-              paddingVertical: 8,
-              paddingHorizontal: 12,
-              borderWidth: 1,
-              borderRadius: 12,
-              alignSelf: 'flex-start',
-              marginTop: 12,
-            }}
-          >
-            <Text style={{ fontWeight: '800' }}>End Game</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {/* ===== Game Stats ===== */}
-      <View style={{ marginTop: 14, borderWidth: 1, borderRadius: 14, padding: 12 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Text style={{ fontSize: 18, fontWeight: '900' }}>Game Stats</Text>
-
-          <View style={{ flexDirection: 'row', gap: 10 }}>
-            {events.length > 0 && (
-              <TouchableOpacity
-                onPress={confirmUndoLastEvent}
-                style={{ paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderRadius: 12 }}
-              >
-                <Text style={{ fontWeight: '900' }}>Undo</Text>
-              </TouchableOpacity>
-            )}
-
-            <TouchableOpacity
-              onPress={openAddEvent}
-              style={{ paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderRadius: 12 }}
-            >
-              <Text style={{ fontWeight: '900' }}>+ Event</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {events.length > 0 && (
-          <View style={{ flexDirection: 'row', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
-            {pill(`Goals: ${score.home}-${score.away}`)}
-            {pill(`Yellow: ${cards.yellow}`)}
-            {pill(`Red: ${cards.red}`)}
-          </View>
-        )}
-
-        {events.length === 0 ? (
-          <Text style={{ marginTop: 10, color: '#666' }}>No events yet. Add a goal or a card.</Text>
-        ) : (
-          <FlatList
-            style={{ marginTop: 10, maxHeight: 220 }}
-            data={events}
-            keyExtractor={(e) => e.id}
-            renderItem={({ item }) => {
-              const minLabel = `${item.minute ?? 0}'`;
-
-              const title =
-                item.type === 'goal'
-                  ? `GOAL · ${item.scorerName || 'Scorer'}${item.assistName ? ` (A: ${item.assistName})` : ''}`
-                  : `CARD · ${(item.cardColor || 'yellow').toUpperCase()} · ${item.playerName || 'Player'}`;
-
-              return (
-                <TouchableOpacity
-                  onPress={() => openEditEvent(item)}
-                  activeOpacity={0.85}
-                  style={{
-                    borderWidth: 1,
-                    borderRadius: 12,
-                    padding: 10,
-                    marginBottom: 10,
-                    position: 'relative',
-                  }}
-                >
-                  <Text style={{ fontWeight: '900', paddingRight: 70 }}>
-                    {minLabel}  {title}
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#f2f2f7' }}>
+      <FlatList
+        data={[]}
+        renderItem={null}
+        contentContainerStyle={{ padding: 16, gap: 16 }}
+        ListHeaderComponent={
+          <>
+            {/* ===== Match summary card ===== */}
+            <View style={SC.container}>
+              <View style={[SC.header, { paddingBottom: 12 }]}>
+                <View style={{ flex: 1, paddingRight: 36 }}>
+                  <Text style={{ fontSize: 18, fontWeight: '800', color: '#111' }}>vs {match?.opponent || 'Opponent'}</Text>
+                  <Text style={{ marginTop: 3, color: '#9ca3af', fontSize: 13 }}>
+                    {match?.dateISO ? formatDateISO(match.dateISO) : ''}
+                    {match?.location ? ` · ${match.location}` : ''}
                   </Text>
-
-                  {/* Right-side actions (edit + delete) */}
-                  <View
-                    style={{
-                      position: 'absolute',
-                      top: 8,
-                      right: 8,
-                      flexDirection: 'row',
-                      gap: 10,
-                    }}
-                  >
-                    <TouchableOpacity
-                      onPress={() => openEditEvent(item)}
-                      style={ICON_BTN}
-                      activeOpacity={0.3}
-                      hitSlop={ICON_HITSLOP}
-                    >
-                      <Text style={ICON_EDIT_TEXT}>✎</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      onPress={() => confirmDeleteEvent(item.id)}
-                      style={ICON_BTN}
-                      activeOpacity={0.3}
-                      hitSlop={ICON_HITSLOP}
-                    >
-                      <Text style={ICON_X_TEXT}>×</Text>
-                    </TouchableOpacity>
+                  <View style={{ flexDirection: 'row', gap: 6, marginTop: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                    {pill(scoreLabel)}
+                    {match?.format ? pill(match.format) : null}
+                    {pill(`${playerCount} players`)}
+                    {pillBtn('Game Day', () => navigation.navigate('GameDayPitch', { teamId, matchId }))}
                   </View>
-                </TouchableOpacity>
-              );
-            }}
-          />
-        )}
-      </View>
-
-      {/* ===== Roster header ===== */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 }}>
-        <Text style={{ fontSize: 22, fontWeight: '700' }}>Match Roster</Text>
-        <TouchableOpacity
-          onPress={() => {
-            setQ('');
-            setSelectedToAdd([]);
-            setShowAdd(true);
-          }}
-          style={{ paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderRadius: 10 }}
-        >
-          <Text style={{ fontWeight: '600' }}>+ Add</Text>
-        </TouchableOpacity>
-      </View>
-
-      {rosterSorted.length === 0 ? (
-        <Text style={{ marginTop: 16, color: '#666' }}>No one on the roster yet.</Text>
-      ) : (
-        <FlatList
-          style={{ marginTop: 12 }}
-          data={rosterSorted}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => {
-            const role: MatchRole = (item.role || 'bench') as MatchRole;
-            const att: AttendanceStatus = (item.attendance || 'present') as AttendanceStatus;
-
-            return (
-              <View style={{ borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 10, position: 'relative' }}>
-                <Text style={{ fontSize: 16, fontWeight: '800', paddingRight: 34 }}>
-                  {item.playerName}
-                  {item.number ? `  #${item.number}` : ''}
-                </Text>
-
-                <Text style={{ marginTop: 4, color: '#666' }}>
-                  {item.position ? `Pos: ${item.position} · ` : ''}
-                  Role: {role} · Attendance: {att}
-                </Text>
-
-                <View style={{ flexDirection: 'row', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-                  {choiceBtn(role === 'starter', 'Starter', () => setRole(item.id, 'starter'))}
-                  {choiceBtn(role === 'bench', 'Bench', () => setRole(item.id, 'bench'))}
-                  {choiceBtn(att === 'present', 'Present', () => setAttendance(item.id, 'present'))}
-                  {choiceBtn(att === 'injured', 'Injured', () => setAttendance(item.id, 'injured'))}
-                  {choiceBtn(att === 'absent', 'Absent', () => setAttendance(item.id, 'absent'))}
+                  {status === 'scheduled' && (
+                    <TouchableOpacity
+                      onPress={() => markMatchLive({ teamId, matchId })}
+                      style={{ marginTop: 12, alignSelf: 'flex-start', paddingVertical: 8, paddingHorizontal: 16, backgroundColor: '#111', borderRadius: 12 }}
+                    >
+                      <Text style={{ fontWeight: '700', color: '#fff' }}>Start Game</Text>
+                    </TouchableOpacity>
+                  )}
+                  {status === 'live' && (
+                    <TouchableOpacity
+                      onPress={confirmComplete}
+                      style={{ marginTop: 12, alignSelf: 'flex-start', paddingVertical: 8, paddingHorizontal: 16, backgroundColor: '#ef4444', borderRadius: 12 }}
+                    >
+                      <Text style={{ fontWeight: '700', color: '#fff' }}>End Game</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
-
-                <TouchableOpacity
-                  onPress={() => confirmRemoveFromRoster(item.id, item.playerName)}
-                  style={{
-                    position: 'absolute',
-                    top: 10,
-                    right: 10,
-                    ...ICON_BTN,
-                  }}
-                  activeOpacity={0.3}
-                  hitSlop={ICON_HITSLOP}
-                >
-                  <Text style={ICON_X_TEXT}>×</Text>
+                <TouchableOpacity onPress={openEdit} style={{ position: 'absolute', top: 12, right: 12 }} hitSlop={ICON_HITSLOP}>
+                  <Text style={{ fontSize: 16, color: '#9ca3af' }}>✎</Text>
                 </TouchableOpacity>
               </View>
-            );
-          }}
-        />
-      )}
+            </View>
+
+            {/* ===== Game Stats ===== */}
+            <View style={SC.container}>
+              <View style={SC.header}>
+                <View style={SC.titleRow}>
+                  <Text style={SC.title}>Game Stats</Text>
+                  {events.length > 0 && <Text style={SC.count}>{events.length} events</Text>}
+                </View>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {events.length > 0 && (
+                    <TouchableOpacity onPress={confirmUndoLastEvent} style={SC.addBtn}>
+                      <Text style={SC.addBtnText}>Undo</Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity onPress={openAddEvent} style={SC.addBtn}>
+                    <Text style={SC.addBtnText}>+ Event</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {events.length > 0 && (
+                <>
+                  <View style={SC.divider} />
+                  <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingVertical: 10, flexWrap: 'wrap' }}>
+                    {pill(`Goals: ${score.home}–${score.away}`)}
+                    {pill(`Yellow: ${cards.yellow}`)}
+                    {pill(`Red: ${cards.red}`)}
+                  </View>
+                </>
+              )}
+
+              {events.length === 0 ? (
+                <>
+                  <View style={SC.divider} />
+                  <View style={SC.emptyRow}>
+                    <Text style={SC.emptyText}>No events yet. Add a goal or a card.</Text>
+                  </View>
+                </>
+              ) : (
+                events.map((item) => {
+                  const minLabel = item.minute ? `${item.minute}'` : '';
+                  const isGoal = item.type === 'goal';
+                  const isHome = (item.side || 'home') === 'home';
+                  const cardDot = item.cardColor === 'red' ? '🟥' : '🟨';
+
+                  return (
+                    <View key={item.id}>
+                      <View style={SC.divider} />
+                      <View style={[SC.row, { gap: 12 }]}>
+                        {minLabel ? (
+                          <Text style={{ fontSize: 12, fontWeight: '700', color: '#9ca3af', width: 28 }}>{minLabel}</Text>
+                        ) : null}
+                        <View style={{ flex: 1 }}>
+                          {isGoal ? (
+                            <Text style={{ fontSize: 14, fontWeight: '600', color: '#111' }}>
+                              ⚽ {isHome ? item.scorerName || 'Unknown' : `${item.scorerName || 'Opp'} (away)`}
+                            </Text>
+                          ) : (
+                            <Text style={{ fontSize: 14, fontWeight: '600', color: '#111' }}>
+                              {cardDot} {item.playerName || 'Unknown'}
+                            </Text>
+                          )}
+                          {isGoal && item.assistName ? (
+                            <Text style={{ fontSize: 12, color: '#9ca3af', marginTop: 1 }}>Assist: {item.assistName}</Text>
+                          ) : null}
+                        </View>
+                        <View style={{ flexDirection: 'row', gap: 2 }}>
+                          <TouchableOpacity onPress={() => openEditEvent(item)} style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }} hitSlop={ICON_HITSLOP}>
+                            <Text style={{ fontSize: 15, color: '#9ca3af' }}>✎</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={() => confirmDeleteEvent(item.id)} style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }} hitSlop={ICON_HITSLOP}>
+                            <Text style={{ fontSize: 18, fontWeight: '700', color: '#ef4444', lineHeight: 22 }}>×</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })
+              )}
+            </View>
+
+            {/* ===== Match Roster ===== */}
+            <View style={SC.container}>
+              <View style={SC.header}>
+                <View style={SC.titleRow}>
+                  <Text style={SC.title}>Match Roster</Text>
+                  {rosterSorted.length > 0 && <Text style={SC.count}>{rosterSorted.length} players</Text>}
+                </View>
+                <TouchableOpacity onPress={() => { setQ(''); setSelectedToAdd([]); setShowAdd(true); }} style={SC.addBtn}>
+                  <Text style={SC.addBtnText}>+ Add</Text>
+                </TouchableOpacity>
+              </View>
+
+              {rosterSorted.length === 0 ? (
+                <>
+                  <View style={SC.divider} />
+                  <View style={SC.emptyRow}>
+                    <Text style={SC.emptyText}>No one on the roster yet.</Text>
+                  </View>
+                </>
+              ) : (
+                rosterSorted.map((item) => {
+                  const role: MatchRole = (item.role || 'bench') as MatchRole;
+                  const att: AttendanceStatus = (item.attendance || 'present') as AttendanceStatus;
+
+                  return (
+                    <View key={item.id}>
+                      <View style={SC.divider} />
+                      <View style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
+                        {/* Name row */}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <Text style={{ fontSize: 15, fontWeight: '600', color: '#111', flex: 1 }}>
+                            {item.playerName}{item.number ? `  #${item.number}` : ''}
+                          </Text>
+                          <TouchableOpacity onPress={() => confirmRemoveFromRoster(item.id, item.playerName)} hitSlop={ICON_HITSLOP}>
+                            <Text style={{ fontSize: 18, fontWeight: '700', color: '#ef4444', lineHeight: 22 }}>×</Text>
+                          </TouchableOpacity>
+                        </View>
+                        {/* Role + Attendance chips */}
+                        <View style={{ flexDirection: 'row', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                          {choiceBtn(role === 'starter', 'Starter', () => setRole(item.id, 'starter'))}
+                          {choiceBtn(role === 'bench', 'Bench', () => setRole(item.id, 'bench'))}
+                          <View style={{ width: 1, backgroundColor: '#e5e7eb', marginHorizontal: 2 }} />
+                          {choiceBtn(att === 'present', 'Present', () => setAttendance(item.id, 'present'))}
+                          {choiceBtn(att === 'injured', 'Injured', () => setAttendance(item.id, 'injured'))}
+                          {choiceBtn(att === 'absent', 'Absent', () => setAttendance(item.id, 'absent'))}
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })
+              )}
+            </View>
+          </>
+        }
+      />
 
       {/* ===== Add Player Modal ===== */}
       <Modal visible={showAdd} animationType="slide" transparent onRequestClose={closeAddModal}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' }}>
-          <View
-            style={{
-              backgroundColor: 'white',
-              padding: 16,
-              borderTopLeftRadius: 18,
-              borderTopRightRadius: 18,
-              gap: 10,
-              maxHeight: '75%',
-            }}
-          >
-            <Text style={{ fontSize: 18, fontWeight: '800' }}>Add to Match Roster</Text>
-
-            <TextInput
-              placeholder="Search team players..."
-              value={q}
-              onChangeText={setQ}
-              style={{ borderWidth: 1, padding: 12, borderRadius: 12 }}
-            />
-
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              <TouchableOpacity
-                onPress={() => setSelectedToAdd(filtered.map((p: any) => p.id))}
-                style={{ paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderRadius: 10 }}
-              >
-                <Text style={{ fontWeight: '700' }}>Select All</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={() => setSelectedToAdd([])}
-                style={{ paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderRadius: 10 }}
-              >
-                <Text style={{ fontWeight: '700' }}>Clear</Text>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '80%', overflow: 'hidden' }}>
+            {/* Header */}
+            <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: '#e5e7eb', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={{ fontSize: 17, fontWeight: '700', color: '#111' }}>Add to Match Roster</Text>
+              <TouchableOpacity onPress={closeAddModal}>
+                <Text style={{ fontSize: 20, color: '#9ca3af', fontWeight: '600' }}>✕</Text>
               </TouchableOpacity>
             </View>
 
+            {/* Search */}
+            <View style={{ paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' }}>
+              <TextInput
+                placeholder="Search players…"
+                value={q}
+                onChangeText={setQ}
+                style={{ backgroundColor: '#f3f4f6', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, fontSize: 15, color: '#111' }}
+                placeholderTextColor="#9ca3af"
+              />
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+                <TouchableOpacity onPress={() => setSelectedToAdd(filtered.map((p: any) => p.id))} style={{ paddingVertical: 6, paddingHorizontal: 14, backgroundColor: '#f3f4f6', borderRadius: 20 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: '#111' }}>Select All</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setSelectedToAdd([])} style={{ paddingVertical: 6, paddingHorizontal: 14, backgroundColor: '#f3f4f6', borderRadius: 20 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: '#111' }}>Clear</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Player list */}
             <FlatList
               data={filtered}
               keyExtractor={(item) => item.id}
               renderItem={({ item }) => {
                 const active = selectedToAdd.includes(item.id);
-
                 return (
-                  <TouchableOpacity
-                    onPress={() => toggleSelectToAdd(item.id)}
-                    style={{
-                      borderWidth: 1,
-                      borderRadius: 12,
-                      padding: 10,
-                      marginTop: 8,
-                      backgroundColor: active ? '#111' : 'transparent',
-                    }}
-                  >
-                    <Text style={{ fontWeight: '800', color: active ? 'white' : '#111' }}>
-                      {item.playerName}
-                      {item.number ? `  #${item.number}` : ''}
-                    </Text>
-                    <Text
-                      style={{
-                        color: active ? 'rgba(255,255,255,0.75)' : '#666',
-                        marginTop: 2,
-                      }}
-                    >
-                      {item.position ? `Pos: ${item.position}` : ' '}
-                    </Text>
+                  <TouchableOpacity onPress={() => toggleSelectToAdd(item.id)} activeOpacity={0.6}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 13, backgroundColor: active ? '#f0fdf4' : '#fff' }}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 15, fontWeight: '600', color: '#111' }}>
+                          {item.playerName}{item.number ? `  #${item.number}` : ''}
+                        </Text>
+                        {item.position ? <Text style={{ fontSize: 13, color: '#9ca3af', marginTop: 1 }}>{item.position}</Text> : null}
+                      </View>
+                      <View style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: active ? '#16a34a' : '#d1d5db', backgroundColor: active ? '#16a34a' : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
+                        {active ? <Text style={{ color: '#fff', fontSize: 13, fontWeight: '800' }}>✓</Text> : null}
+                      </View>
+                    </View>
+                    <View style={{ height: 1, backgroundColor: '#f3f4f6', marginLeft: 16 }} />
                   </TouchableOpacity>
                 );
               }}
               ListEmptyComponent={
-                <Text style={{ marginTop: 10, color: '#666' }}>
-                  No available players (or all already added).
-                </Text>
+                <View style={{ paddingHorizontal: 16, paddingVertical: 20 }}>
+                  <Text style={{ color: '#9ca3af', fontSize: 14 }}>No available players to add.</Text>
+                </View>
               }
             />
 
-            <View
-              style={{
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginTop: 10,
-              }}
-            >
-              <Text style={{ color: '#666', fontWeight: '700' }}>
-                {selectedToAdd.length} selected
-              </Text>
-
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                <TouchableOpacity onPress={closeAddModal}>
-                  <Text style={{ padding: 10, color: '#444', fontWeight: '700' }}>Cancel</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  onPress={addSelectedToRoster}
-                  disabled={!selectedToAdd.length}
-                  style={{
-                    paddingVertical: 10,
-                    paddingHorizontal: 14,
-                    borderWidth: 1,
-                    borderRadius: 12,
-                    opacity: selectedToAdd.length ? 1 : 0.4,
-                  }}
-                >
-                  <Text style={{ fontWeight: '800' }}>
-                    Add Selected ({selectedToAdd.length})
-                  </Text>
-                </TouchableOpacity>
-              </View>
+            {/* Footer */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14, borderTopWidth: 1, borderTopColor: '#e5e7eb' }}>
+              <Text style={{ fontSize: 13, color: '#6b7280', fontWeight: '600' }}>{selectedToAdd.length} selected</Text>
+              <TouchableOpacity
+                onPress={addSelectedToRoster}
+                disabled={!selectedToAdd.length}
+                style={{ paddingVertical: 10, paddingHorizontal: 20, backgroundColor: selectedToAdd.length ? '#111' : '#e5e7eb', borderRadius: 12 }}
+              >
+                <Text style={{ fontWeight: '700', color: selectedToAdd.length ? '#fff' : '#9ca3af', fontSize: 14 }}>
+                  Add {selectedToAdd.length > 0 ? `(${selectedToAdd.length})` : ''}
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -1024,155 +952,118 @@ const addSelectedToRoster = async () => {
 
       {/* ===== Add Event Modal ===== */}
       <Modal visible={showEvent} animationType="slide" transparent onRequestClose={() => setShowEvent(false)}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' }}>
-          <View
-            style={{
-              backgroundColor: 'white',
-              padding: 16,
-              borderTopLeftRadius: 18,
-              borderTopRightRadius: 18,
-              gap: 12,
-              maxHeight: '85%',
-            }}
-          >
-            <Text style={{ fontSize: 18, fontWeight: '900' }}>Add Event</Text>
-
-            <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>
-              {tagBtn(eventType === 'goal', 'Goal', () => setEventType('goal'))}
-              {tagBtn(eventType === 'card', 'Card', () => setEventType('card'))}
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '88%', overflow: 'hidden' }}>
+            <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: '#e5e7eb', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={{ fontSize: 17, fontWeight: '700', color: '#111' }}>Add Event</Text>
+              <TouchableOpacity onPress={() => setShowEvent(false)}>
+                <Text style={{ fontSize: 20, color: '#9ca3af', fontWeight: '600' }}>✕</Text>
+              </TouchableOpacity>
             </View>
 
-            <TextInput
-              placeholder="Minute (ex: 12)"
-              value={eventMinute}
-              onChangeText={setEventMinute}
-              style={{ borderWidth: 1, padding: 12, borderRadius: 12 }}
-              keyboardType="number-pad"
+            <FlatList
+              data={[]}
+              renderItem={null}
+              ListHeaderComponent={
+                <View style={{ padding: 16, gap: 14 }}>
+                  {/* Event type */}
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    {(['goal', 'card'] as const).map((t) => (
+                      <TouchableOpacity key={t} onPress={() => setEventType(t)}
+                        style={{ flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center', backgroundColor: eventType === t ? '#111' : '#f3f4f6' }}>
+                        <Text style={{ fontWeight: '700', fontSize: 14, color: eventType === t ? '#fff' : '#374151' }}>{t === 'goal' ? '⚽ Goal' : '🟨 Card'}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  {/* Minute */}
+                  <TextInput placeholder="Minute (e.g. 34)" value={eventMinute} onChangeText={setEventMinute} keyboardType="number-pad"
+                    style={{ backgroundColor: '#f3f4f6', paddingHorizontal: 12, paddingVertical: 11, borderRadius: 10, fontSize: 15, color: '#111' }}
+                    placeholderTextColor="#9ca3af" />
+
+                  {eventType === 'goal' ? (
+                    <>
+                      {/* Goal side */}
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        {(['home', 'away'] as const).map((s) => (
+                          <TouchableOpacity key={s} onPress={() => setGoalSide(s)}
+                            style={{ flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center', backgroundColor: goalSide === s ? '#111' : '#f3f4f6' }}>
+                            <Text style={{ fontWeight: '700', fontSize: 13, color: goalSide === s ? '#fff' : '#374151' }}>{s === 'home' ? 'Our Goal' : 'Opponent Goal'}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+
+                      {goalSide === 'away' ? (
+                        <TextInput placeholder="Opponent scorer (optional)" value={oppScorerName} onChangeText={setOppScorerName}
+                          style={{ backgroundColor: '#f3f4f6', paddingHorizontal: 12, paddingVertical: 11, borderRadius: 10, fontSize: 15, color: '#111' }}
+                          placeholderTextColor="#9ca3af" />
+                      ) : (
+                        <>
+                          <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151' }}>Scorer</Text>
+                          {rosterForPick.map((item: any) => {
+                            const active = item.id === goalScorerId;
+                            return (
+                              <TouchableOpacity key={item.id} onPress={() => setGoalScorerId(item.id)} activeOpacity={0.6}
+                                style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 11, paddingHorizontal: 12, backgroundColor: active ? '#111' : '#f9fafb', borderRadius: 10, marginBottom: 4 }}>
+                                <Text style={{ flex: 1, fontWeight: '600', fontSize: 14, color: active ? '#fff' : '#111' }}>
+                                  {item.playerName}{item.number ? `  #${item.number}` : ''}
+                                </Text>
+                                {active && <Text style={{ color: '#fff', fontWeight: '800' }}>✓</Text>}
+                              </TouchableOpacity>
+                            );
+                          })}
+                          <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginTop: 4 }}>Assist (optional)</Text>
+                          {rosterForPick.filter((x: any) => x.id !== goalScorerId).map((item: any) => {
+                            const active = item.id === goalAssistId;
+                            return (
+                              <TouchableOpacity key={item.id} onPress={() => setGoalAssistId(active ? '' : item.id)} activeOpacity={0.6}
+                                style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 11, paddingHorizontal: 12, backgroundColor: active ? '#111' : '#f9fafb', borderRadius: 10, marginBottom: 4 }}>
+                                <Text style={{ flex: 1, fontWeight: '600', fontSize: 14, color: active ? '#fff' : '#111' }}>
+                                  {item.playerName}{item.number ? `  #${item.number}` : ''}
+                                </Text>
+                                {active && <Text style={{ color: '#fff', fontWeight: '800' }}>✓</Text>}
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151' }}>Player</Text>
+                      {rosterForPick.map((item: any) => {
+                        const active = item.id === cardPlayerId;
+                        return (
+                          <TouchableOpacity key={item.id} onPress={() => setCardPlayerId(item.id)} activeOpacity={0.6}
+                            style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 11, paddingHorizontal: 12, backgroundColor: active ? '#111' : '#f9fafb', borderRadius: 10, marginBottom: 4 }}>
+                            <Text style={{ flex: 1, fontWeight: '600', fontSize: 14, color: active ? '#fff' : '#111' }}>
+                              {item.playerName}{item.number ? `  #${item.number}` : ''}
+                            </Text>
+                            {active && <Text style={{ color: '#fff', fontWeight: '800' }}>✓</Text>}
+                          </TouchableOpacity>
+                        );
+                      })}
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginTop: 4 }}>Card color</Text>
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        {(['yellow', 'red'] as const).map((c) => (
+                          <TouchableOpacity key={c} onPress={() => setCardColor(c)}
+                            style={{ flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center', backgroundColor: cardColor === c ? '#111' : '#f3f4f6' }}>
+                            <Text style={{ fontWeight: '700', fontSize: 14, color: cardColor === c ? '#fff' : '#374151' }}>{c === 'yellow' ? '🟨 Yellow' : '🟥 Red'}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </>
+                  )}
+                </View>
+              }
             />
 
-            {eventType === 'goal' ? (
-              <>
-                <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>
-                  {tagBtn(goalSide === 'home', 'Our goal', () => setGoalSide('home'))}
-                  {tagBtn(goalSide === 'away', 'Opponent goal', () => setGoalSide('away'))}
-                </View>
-
-                {goalSide === 'away' ? (
-                  <>
-                    <Text style={{ fontWeight: '900', marginTop: 8 }}>Opponent scorer (optional)</Text>
-                    <TextInput
-                      placeholder="Opponent"
-                      value={oppScorerName}
-                      onChangeText={setOppScorerName}
-                      style={{ borderWidth: 1, padding: 12, borderRadius: 12 }}
-                    />
-                  </>
-                ) : (
-                  <>
-                    <Text style={{ fontWeight: '900', marginTop: 8 }}>Scorer</Text>
-                    <FlatList
-                      style={{ maxHeight: 180 }}
-                      data={rosterForPick}
-                      keyExtractor={(x) => x.id}
-                      renderItem={({ item }) => {
-                        const active = item.id === goalScorerId;
-                        return (
-                          <TouchableOpacity
-                            onPress={() => setGoalScorerId(item.id)}
-                            style={{
-                              borderWidth: 1,
-                              borderRadius: 12,
-                              padding: 10,
-                              marginTop: 8,
-                              backgroundColor: active ? '#111' : 'transparent',
-                            }}
-                          >
-                            <Text style={{ fontWeight: '900', color: active ? 'white' : '#111' }}>
-                              {item.playerName}
-                              {item.number ? `  #${item.number}` : ''}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      }}
-                    />
-
-                    <Text style={{ fontWeight: '900', marginTop: 8 }}>Assist (optional)</Text>
-                    <FlatList
-                      style={{ maxHeight: 180 }}
-                      data={rosterForPick.filter((x: any) => x.id !== goalScorerId)}
-                      keyExtractor={(x) => x.id}
-                      renderItem={({ item }) => {
-                        const active = item.id === goalAssistId;
-                        return (
-                          <TouchableOpacity
-                            onPress={() => setGoalAssistId(active ? '' : item.id)}
-                            style={{
-                              borderWidth: 1,
-                              borderRadius: 12,
-                              padding: 10,
-                              marginTop: 8,
-                              backgroundColor: active ? '#111' : 'transparent',
-                            }}
-                          >
-                            <Text style={{ fontWeight: '900', color: active ? 'white' : '#111' }}>
-                              {item.playerName}
-                              {item.number ? `  #${item.number}` : ''}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      }}
-                    />
-                  </>
-                )}
-              </>
-            ) : (
-              <>
-                <Text style={{ fontWeight: '900' }}>Player</Text>
-                <FlatList
-                  style={{ maxHeight: 220 }}
-                  data={rosterForPick}
-                  keyExtractor={(x) => x.id}
-                  renderItem={({ item }) => {
-                    const active = item.id === cardPlayerId;
-                    return (
-                      <TouchableOpacity
-                        onPress={() => setCardPlayerId(item.id)}
-                        style={{
-                          borderWidth: 1,
-                          borderRadius: 12,
-                          padding: 10,
-                          marginTop: 8,
-                          backgroundColor: active ? '#111' : 'transparent',
-                        }}
-                      >
-                        <Text style={{ fontWeight: '900', color: active ? 'white' : '#111' }}>
-                          {item.playerName}
-                          {item.number ? `  #${item.number}` : ''}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  }}
-                  ListEmptyComponent={<Text style={{ color: '#666', marginTop: 8 }}>Add players to the roster first.</Text>}
-                />
-
-                <Text style={{ fontWeight: '900', marginTop: 8 }}>Card</Text>
-                <View style={{ flexDirection: 'row', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
-                  {tagBtn(cardColor === 'yellow', 'Yellow', () => setCardColor('yellow'))}
-                  {tagBtn(cardColor === 'red', 'Red', () => setCardColor('red'))}
-                </View>
-              </>
-            )}
-
-            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 4 }}>
-              <TouchableOpacity onPress={() => setShowEvent(false)}>
-                <Text style={{ padding: 10, color: '#444', fontWeight: '800' }}>Cancel</Text>
+            <View style={{ flexDirection: 'row', gap: 10, justifyContent: 'flex-end', paddingHorizontal: 16, paddingVertical: 14, borderTopWidth: 1, borderTopColor: '#e5e7eb' }}>
+              <TouchableOpacity onPress={() => setShowEvent(false)} style={{ paddingVertical: 10, paddingHorizontal: 16 }}>
+                <Text style={{ color: '#6b7280', fontWeight: '600', fontSize: 15 }}>Cancel</Text>
               </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={saveEvent}
-                style={{ paddingVertical: 10, paddingHorizontal: 14, borderWidth: 1, borderRadius: 12 }}
-              >
-                <Text style={{ fontWeight: '900' }}>Save</Text>
+              <TouchableOpacity onPress={saveEvent} style={{ paddingVertical: 10, paddingHorizontal: 24, backgroundColor: '#111', borderRadius: 12 }}>
+                <Text style={{ fontWeight: '700', color: '#fff', fontSize: 15 }}>Save</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1181,241 +1072,171 @@ const addSelectedToRoster = async () => {
 
       {/* ===== Edit Event Modal ===== */}
       <Modal visible={showEditEvent} animationType="slide" transparent onRequestClose={closeEditEvent}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' }}>
-          <View
-            style={{
-              backgroundColor: 'white',
-              padding: 16,
-              borderTopLeftRadius: 18,
-              borderTopRightRadius: 18,
-              gap: 12,
-              maxHeight: '85%',
-            }}
-          >
-            <Text style={{ fontSize: 18, fontWeight: '900' }}>Edit Event</Text>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '88%', overflow: 'hidden' }}>
+            <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: '#e5e7eb', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={{ fontSize: 17, fontWeight: '700', color: '#111' }}>Edit Event</Text>
+              <TouchableOpacity onPress={closeEditEvent}>
+                <Text style={{ fontSize: 20, color: '#9ca3af', fontWeight: '600' }}>✕</Text>
+              </TouchableOpacity>
+            </View>
 
-            <TextInput
-              placeholder="Minute (ex: 12)"
-              value={editEventMinute}
-              onChangeText={setEditEventMinute}
-              style={{ borderWidth: 1, padding: 12, borderRadius: 12 }}
-              keyboardType="number-pad"
+            <FlatList
+              data={[]}
+              renderItem={null}
+              ListHeaderComponent={
+                <View style={{ padding: 16, gap: 14 }}>
+                  <TextInput placeholder="Minute (e.g. 34)" value={editEventMinute} onChangeText={setEditEventMinute} keyboardType="number-pad"
+                    style={{ backgroundColor: '#f3f4f6', paddingHorizontal: 12, paddingVertical: 11, borderRadius: 10, fontSize: 15, color: '#111' }}
+                    placeholderTextColor="#9ca3af" />
+
+                  {editingEvent?.type === 'goal' ? (
+                    (editingEvent.side || 'home') === 'away' ? (
+                      <TextInput placeholder="Opponent scorer" value={editOppScorerName} onChangeText={setEditOppScorerName}
+                        style={{ backgroundColor: '#f3f4f6', paddingHorizontal: 12, paddingVertical: 11, borderRadius: 10, fontSize: 15, color: '#111' }}
+                        placeholderTextColor="#9ca3af" />
+                    ) : (
+                      <>
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151' }}>Scorer</Text>
+                        {rosterForPick.map((item: any) => {
+                          const active = item.id === editGoalScorerId;
+                          return (
+                            <TouchableOpacity key={item.id} onPress={() => setEditGoalScorerId(item.id)} activeOpacity={0.6}
+                              style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 11, paddingHorizontal: 12, backgroundColor: active ? '#111' : '#f9fafb', borderRadius: 10, marginBottom: 4 }}>
+                              <Text style={{ flex: 1, fontWeight: '600', fontSize: 14, color: active ? '#fff' : '#111' }}>
+                                {item.playerName}{item.number ? `  #${item.number}` : ''}
+                              </Text>
+                              {active && <Text style={{ color: '#fff', fontWeight: '800' }}>✓</Text>}
+                            </TouchableOpacity>
+                          );
+                        })}
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginTop: 4 }}>Assist (optional)</Text>
+                        {rosterForPick.filter((x: any) => x.id !== editGoalScorerId).map((item: any) => {
+                          const active = item.id === editGoalAssistId;
+                          return (
+                            <TouchableOpacity key={item.id} onPress={() => setEditGoalAssistId(active ? '' : item.id)} activeOpacity={0.6}
+                              style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 11, paddingHorizontal: 12, backgroundColor: active ? '#111' : '#f9fafb', borderRadius: 10, marginBottom: 4 }}>
+                              <Text style={{ flex: 1, fontWeight: '600', fontSize: 14, color: active ? '#fff' : '#111' }}>
+                                {item.playerName}{item.number ? `  #${item.number}` : ''}
+                              </Text>
+                              {active && <Text style={{ color: '#fff', fontWeight: '800' }}>✓</Text>}
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </>
+                    )
+                  ) : (
+                    <>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151' }}>Player</Text>
+                      {rosterForPick.map((item: any) => {
+                        const active = item.id === editCardPlayerId;
+                        return (
+                          <TouchableOpacity key={item.id} onPress={() => setEditCardPlayerId(item.id)} activeOpacity={0.6}
+                            style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 11, paddingHorizontal: 12, backgroundColor: active ? '#111' : '#f9fafb', borderRadius: 10, marginBottom: 4 }}>
+                            <Text style={{ flex: 1, fontWeight: '600', fontSize: 14, color: active ? '#fff' : '#111' }}>
+                              {item.playerName}{item.number ? `  #${item.number}` : ''}
+                            </Text>
+                            {active && <Text style={{ color: '#fff', fontWeight: '800' }}>✓</Text>}
+                          </TouchableOpacity>
+                        );
+                      })}
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginTop: 4 }}>Card color</Text>
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        {(['yellow', 'red'] as const).map((c) => (
+                          <TouchableOpacity key={c} onPress={() => setEditCardColor(c)}
+                            style={{ flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center', backgroundColor: editCardColor === c ? '#111' : '#f3f4f6' }}>
+                            <Text style={{ fontWeight: '700', fontSize: 14, color: editCardColor === c ? '#fff' : '#374151' }}>{c === 'yellow' ? '🟨 Yellow' : '🟥 Red'}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </>
+                  )}
+                </View>
+              }
             />
 
-            {editingEvent?.type === 'goal' ? (
-              <>
-                {(editingEvent.side || 'home') === 'away' ? (
-                  <>
-                    <Text style={{ fontWeight: '900', marginTop: 4 }}>Opponent scorer</Text>
-                    <TextInput
-                      placeholder="Opponent"
-                      value={editOppScorerName}
-                      onChangeText={setEditOppScorerName}
-                      style={{ borderWidth: 1, padding: 12, borderRadius: 12 }}
-                    />
-                  </>
-                ) : (
-                  <>
-                    <Text style={{ fontWeight: '900', marginTop: 4 }}>Scorer</Text>
-                    <FlatList
-                      style={{ maxHeight: 180 }}
-                      data={rosterForPick}
-                      keyExtractor={(x) => x.id}
-                      renderItem={({ item }) => {
-                        const active = item.id === editGoalScorerId;
-                        return (
-                          <TouchableOpacity
-                            onPress={() => setEditGoalScorerId(item.id)}
-                            style={{
-                              borderWidth: 1,
-                              borderRadius: 12,
-                              padding: 10,
-                              marginTop: 8,
-                              backgroundColor: active ? '#111' : 'transparent',
-                            }}
-                          >
-                            <Text style={{ fontWeight: '900', color: active ? 'white' : '#111' }}>
-                              {item.playerName}
-                              {item.number ? `  #${item.number}` : ''}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      }}
-                    />
-
-                    <Text style={{ fontWeight: '900', marginTop: 8 }}>Assist (optional)</Text>
-                    <FlatList
-                      style={{ maxHeight: 180 }}
-                      data={rosterForPick.filter((x: any) => x.id !== editGoalScorerId)}
-                      keyExtractor={(x) => x.id}
-                      renderItem={({ item }) => {
-                        const active = item.id === editGoalAssistId;
-                        return (
-                          <TouchableOpacity
-                            onPress={() => setEditGoalAssistId(active ? '' : item.id)}
-                            style={{
-                              borderWidth: 1,
-                              borderRadius: 12,
-                              padding: 10,
-                              marginTop: 8,
-                              backgroundColor: active ? '#111' : 'transparent',
-                            }}
-                          >
-                            <Text style={{ fontWeight: '900', color: active ? 'white' : '#111' }}>
-                              {item.playerName}
-                              {item.number ? `  #${item.number}` : ''}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      }}
-                    />
-                  </>
-                )}
-              </>
-            ) : (
-              <>
-                <Text style={{ fontWeight: '900' }}>Player</Text>
-                <FlatList
-                  style={{ maxHeight: 220 }}
-                  data={rosterForPick}
-                  keyExtractor={(x) => x.id}
-                  renderItem={({ item }) => {
-                    const active = item.id === editCardPlayerId;
-                    return (
-                      <TouchableOpacity
-                        onPress={() => setEditCardPlayerId(item.id)}
-                        style={{
-                          borderWidth: 1,
-                          borderRadius: 12,
-                          padding: 10,
-                          marginTop: 8,
-                          backgroundColor: active ? '#111' : 'transparent',
-                        }}
-                      >
-                        <Text style={{ fontWeight: '900', color: active ? 'white' : '#111' }}>
-                          {item.playerName}
-                          {item.number ? `  #${item.number}` : ''}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  }}
-                />
-
-                <Text style={{ fontWeight: '900', marginTop: 8 }}>Card</Text>
-                <View style={{ flexDirection: 'row', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
-                  {tagBtn(editCardColor === 'yellow', 'Yellow', () => setEditCardColor('yellow'))}
-                  {tagBtn(editCardColor === 'red', 'Red', () => setEditCardColor('red'))}
-                </View>
-              </>
-            )}
-
-            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 4 }}>
-              <TouchableOpacity onPress={closeEditEvent}>
-                <Text style={{ padding: 10, color: '#444', fontWeight: '800' }}>Cancel</Text>
+            <View style={{ flexDirection: 'row', gap: 10, justifyContent: 'flex-end', paddingHorizontal: 16, paddingVertical: 14, borderTopWidth: 1, borderTopColor: '#e5e7eb' }}>
+              <TouchableOpacity onPress={closeEditEvent} style={{ paddingVertical: 10, paddingHorizontal: 16 }}>
+                <Text style={{ color: '#6b7280', fontWeight: '600', fontSize: 15 }}>Cancel</Text>
               </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={saveEditedEvent}
-                style={{ paddingVertical: 10, paddingHorizontal: 14, borderWidth: 1, borderRadius: 12 }}
-              >
-                <Text style={{ fontWeight: '900' }}>Save</Text>
+              <TouchableOpacity onPress={saveEditedEvent} style={{ paddingVertical: 10, paddingHorizontal: 24, backgroundColor: '#111', borderRadius: 12 }}>
+                <Text style={{ fontWeight: '700', color: '#fff', fontSize: 15 }}>Save</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
 
-      {/* ===== Edit Match Modal (includes delete confirm) ===== */}
+      {/* ===== Edit Match Modal ===== */}
       <Modal visible={showEdit} animationType="slide" transparent onRequestClose={() => setShowEdit(false)}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' }}>
-          <View
-            style={{
-              backgroundColor: 'white',
-              padding: 16,
-              borderTopLeftRadius: 18,
-              borderTopRightRadius: 18,
-              gap: 10,
-              maxHeight: '85%',
-            }}
-          >
-            <Text style={{ fontSize: 18, fontWeight: '800' }}>Edit Match</Text>
-
-            <TextInput
-              placeholder="Opponent"
-              value={editOpponent}
-              onChangeText={setEditOpponent}
-              style={{ borderWidth: 1, padding: 12, borderRadius: 12 }}
-            />
-            <TouchableOpacity
-              onPress={() => setShowEditDatePicker(true)}
-              style={{ borderWidth: 1, padding: 12, borderRadius: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
-            >
-              <Text style={{ color: editDateISO ? '#111' : '#9ca3af', fontSize: 15 }}>
-                {editDateISO ? formatDateISO(editDateISO) : 'Date & time (required)'}
-              </Text>
-              <Text style={{ fontSize: 16 }}>📅</Text>
-            </TouchableOpacity>
-            <TextInput
-              placeholder="Location (optional)"
-              value={editLocation}
-              onChangeText={setEditLocation}
-              style={{ borderWidth: 1, padding: 12, borderRadius: 12 }}
-            />
-
-            <View style={{ flexDirection: 'row', gap: 10, justifyContent: 'flex-end', marginTop: 6 }}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '88%', overflow: 'hidden' }}>
+            {/* Header */}
+            <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: '#e5e7eb', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={{ fontSize: 17, fontWeight: '700', color: '#111' }}>Edit Match</Text>
               <TouchableOpacity onPress={() => setShowEdit(false)} disabled={savingEdit || deleting}>
-                <Text style={{ padding: 10, color: '#444', fontWeight: '700' }}>Cancel</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={saveEdit}
-                disabled={savingEdit || deleting}
-                style={{ paddingVertical: 10, paddingHorizontal: 14, borderWidth: 1, borderRadius: 12 }}
-              >
-                <Text style={{ fontWeight: '800' }}>{savingEdit ? 'Saving…' : 'Save'}</Text>
+                <Text style={{ fontSize: 20, color: '#9ca3af', fontWeight: '600' }}>✕</Text>
               </TouchableOpacity>
             </View>
 
-            {/* Danger zone */}
-            <View style={{ borderWidth: 1, borderRadius: 14, padding: 12, marginTop: 6 }}>
-              <Text style={{ fontWeight: '900', color: '#b00020' }}>Danger zone</Text>
-              <Text style={{ marginTop: 6, color: '#666' }}>
-                Type <Text style={{ fontWeight: '900' }}>{match?.opponent || 'Opponent'}</Text> to delete this match.
-              </Text>
+            <FlatList
+              data={[]}
+              renderItem={null}
+              ListHeaderComponent={
+                <View style={{ padding: 16, gap: 12 }}>
+                  <TextInput
+                    placeholder="Opponent" value={editOpponent} onChangeText={setEditOpponent}
+                    style={{ backgroundColor: '#f3f4f6', paddingHorizontal: 12, paddingVertical: 11, borderRadius: 10, fontSize: 15, color: '#111' }}
+                    placeholderTextColor="#9ca3af"
+                  />
+                  <TouchableOpacity onPress={() => setShowEditDatePicker(true)}
+                    style={{ backgroundColor: '#f3f4f6', paddingHorizontal: 12, paddingVertical: 11, borderRadius: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={{ color: editDateISO ? '#111' : '#9ca3af', fontSize: 15 }}>
+                      {editDateISO ? formatDateISO(editDateISO) : 'Date & time (required)'}
+                    </Text>
+                    <Text style={{ fontSize: 16 }}>📅</Text>
+                  </TouchableOpacity>
+                  <TextInput
+                    placeholder="Location (optional)" value={editLocation} onChangeText={setEditLocation}
+                    style={{ backgroundColor: '#f3f4f6', paddingHorizontal: 12, paddingVertical: 11, borderRadius: 10, fontSize: 15, color: '#111' }}
+                    placeholderTextColor="#9ca3af"
+                  />
 
-              <TextInput
-                placeholder="Type opponent to confirm"
-                value={confirmDeleteText}
-                onChangeText={setConfirmDeleteText}
-                style={{ borderWidth: 1, padding: 12, borderRadius: 12, marginTop: 10 }}
-              />
+                  {/* Danger zone */}
+                  <View style={{ marginTop: 8, backgroundColor: '#fff5f5', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#fecaca' }}>
+                    <Text style={{ fontWeight: '700', color: '#dc2626', fontSize: 14 }}>Delete Match</Text>
+                    <Text style={{ marginTop: 4, color: '#6b7280', fontSize: 13 }}>
+                      Type <Text style={{ fontWeight: '700', color: '#111' }}>{match?.opponent || 'opponent'}</Text> to confirm deletion.
+                    </Text>
+                    <TextInput
+                      placeholder="Type to confirm…"
+                      value={confirmDeleteText}
+                      onChangeText={setConfirmDeleteText}
+                      style={{ backgroundColor: '#fff', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 8, fontSize: 14, color: '#111', marginTop: 10, borderWidth: 1, borderColor: '#fecaca' }}
+                      placeholderTextColor="#9ca3af"
+                    />
+                    <TouchableOpacity
+                      onPress={onDeleteFromEdit}
+                      disabled={deleting || norm(confirmDeleteText).toLowerCase() !== norm(match?.opponent || '').toLowerCase()}
+                      style={{ marginTop: 10, paddingVertical: 10, paddingHorizontal: 16, backgroundColor: '#dc2626', borderRadius: 10, alignSelf: 'flex-end',
+                        opacity: (deleting || norm(confirmDeleteText).toLowerCase() !== norm(match?.opponent || '').toLowerCase()) ? 0.35 : 1 }}>
+                      <Text style={{ fontWeight: '700', color: '#fff', fontSize: 14 }}>{deleting ? 'Deleting…' : 'Delete Match'}</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              }
+            />
 
-              <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 10 }}>
-                <TouchableOpacity
-                  onPress={onDeleteFromEdit}
-                  disabled={
-                    deleting ||
-                    norm(confirmDeleteText).toLowerCase() !== norm(match?.opponent || '').toLowerCase()
-                  }
-                  style={{
-                    paddingVertical: 10,
-                    paddingHorizontal: 14,
-                    borderWidth: 1,
-                    borderRadius: 12,
-                    opacity:
-                      deleting ||
-                      norm(confirmDeleteText).toLowerCase() !== norm(match?.opponent || '').toLowerCase()
-                        ? 0.4
-                        : 1,
-                  }}
-                >
-                  <Text style={{ fontWeight: '900', color: '#b00020' }}>{deleting ? 'Deleting…' : 'Delete Match'}</Text>
-                </TouchableOpacity>
-              </View>
+            <View style={{ flexDirection: 'row', gap: 10, justifyContent: 'flex-end', paddingHorizontal: 16, paddingVertical: 14, borderTopWidth: 1, borderTopColor: '#e5e7eb' }}>
+              <TouchableOpacity onPress={() => setShowEdit(false)} disabled={savingEdit || deleting} style={{ paddingVertical: 10, paddingHorizontal: 16 }}>
+                <Text style={{ color: '#6b7280', fontWeight: '600', fontSize: 15 }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={saveEdit} disabled={savingEdit || deleting} style={{ paddingVertical: 10, paddingHorizontal: 24, backgroundColor: '#111', borderRadius: 12, opacity: savingEdit ? 0.6 : 1 }}>
+                <Text style={{ fontWeight: '700', color: '#fff', fontSize: 15 }}>{savingEdit ? 'Saving…' : 'Save'}</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
-        {/* ===== Edit Date Picker — must live INSIDE this Modal's tree ===== */}
         {showEditDatePicker && (
           <DateTimePickerModal
             visible={showEditDatePicker}
