@@ -1007,9 +1007,9 @@ const onEnd = async () => {
             )}
             <TouchableOpacity
               onPress={() => setShowLoadLineup(false)}
-              style={styles.lineupCancelBtn}
+              style={{ marginTop: 12, paddingVertical: 13, borderWidth: 1, borderRadius: 12, borderColor: '#d1d5db', alignItems: 'center' }}
             >
-              <Text style={styles.lineupCancelText}>Close</Text>
+              <Text style={{ fontWeight: '700', fontSize: 15, color: '#374151' }}>Close</Text>
             </TouchableOpacity>
           </View>
         </View>
