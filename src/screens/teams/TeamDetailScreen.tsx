@@ -396,7 +396,7 @@ export default function TeamDetailScreen() {
               >
                 <Text style={S.addBtnText}>+ Player</Text>
               </TouchableOpacity>
-              <Text style={[S.chevron, { transform: [{ rotate: rosterOpen ? '90deg' : '0deg' }] }]}>›</Text>
+              <Text style={[S.chevron, { transform: [{ rotate: rosterOpen ? '-90deg' : '90deg' }] }]}>›</Text>
             </View>
           </TouchableOpacity>
 
@@ -458,7 +458,7 @@ export default function TeamDetailScreen() {
               >
                 <Text style={S.addBtnText}>+ Match</Text>
               </TouchableOpacity>
-              <Text style={[S.chevron, { transform: [{ rotate: matchesOpen ? '90deg' : '0deg' }] }]}>›</Text>
+              <Text style={[S.chevron, { transform: [{ rotate: matchesOpen ? '-90deg' : '90deg' }] }]}>›</Text>
             </View>
           </TouchableOpacity>
 
@@ -535,7 +535,7 @@ export default function TeamDetailScreen() {
               >
                 <Text style={S.addBtnText}>+ Invite</Text>
               </TouchableOpacity>
-              <Text style={[S.chevron, { transform: [{ rotate: coachesOpen ? '90deg' : '0deg' }] }]}>›</Text>
+              <Text style={[S.chevron, { transform: [{ rotate: coachesOpen ? '-90deg' : '90deg' }] }]}>›</Text>
             </View>
           </TouchableOpacity>
 
