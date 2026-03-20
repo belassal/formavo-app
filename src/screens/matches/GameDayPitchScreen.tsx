@@ -969,7 +969,7 @@ const onEnd = async () => {
               Tap a lineup to apply its slot assignments to this match.
             </Text>
             {lineups.length === 0 ? (
-              <Text style={{ color: 'rgba(255,255,255,0.45)', fontSize: 14, marginVertical: 16, textAlign: 'center' }}>
+              <Text style={{ color: '#9ca3af', fontSize: 14, marginVertical: 16, textAlign: 'center' }}>
                 No saved lineups yet. Set up a lineup and tap 💾 Save.
               </Text>
             ) : (
@@ -977,7 +977,7 @@ const onEnd = async () => {
                 {lineups.map((lu) => (
                   <View key={lu.id} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
                     <TouchableOpacity
-                      style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 12, padding: 14 }}
+                      style={{ flex: 1, backgroundColor: '#f3f4f6', borderRadius: 12, padding: 14 }}
                       onPress={() => {
                         Alert.alert(
                           `Apply "${lu.name}"?`,
@@ -990,8 +990,8 @@ const onEnd = async () => {
                       }}
                       disabled={applyingLineup}
                     >
-                      <Text style={{ color: 'white', fontWeight: '700', fontSize: 15 }}>{lu.name}</Text>
-                      <Text style={{ color: 'rgba(255,255,255,0.45)', fontSize: 12, marginTop: 3 }}>
+                      <Text style={{ color: '#111', fontWeight: '700', fontSize: 15 }}>{lu.name}</Text>
+                      <Text style={{ color: '#6b7280', fontSize: 12, marginTop: 3 }}>
                         {lu.formation}{lu.format ? ` · ${lu.format}` : ''} · {Object.keys(lu.slots || {}).length} players
                       </Text>
                     </TouchableOpacity>
@@ -999,7 +999,7 @@ const onEnd = async () => {
                       onPress={() => onDeleteLineup(lu)}
                       style={{ padding: 12, marginLeft: 6 }}
                     >
-                      <Text style={{ fontSize: 18, color: '#ef4444' }}>×</Text>
+                      <Text style={{ fontSize: 20, color: '#ef4444' }}>×</Text>
                     </TouchableOpacity>
                   </View>
                 ))}
