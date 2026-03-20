@@ -55,7 +55,12 @@ export default function MatchHeader({
     return () => clearInterval(t);
   }, [state.status]);
 
-  const liveElapsed = useMemo(() => computeElapsedSec(state, now), [state, now]);
+  // Only depend on the fields that affect elapsed computation — not the whole object
+  const liveElapsed = useMemo(
+    () => computeElapsedSec(state, now),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [state.status, state.elapsedSec, state.startedAt, state.resumedAt, now],
+  );
 
   const clockText = computeDisplayMinute(state, now, halfDuration);
 

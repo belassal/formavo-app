@@ -193,9 +193,15 @@ export default function GameDayPitchScreen() {
   }, [teamId]);
 
   const formation = match?.formation || '4-3-3';
-  const state = getMatchState(match);
 
-  // ...you already have `state` and can compute current matchSec:
+  // Memoize so derivedState only updates when Firestore data actually changes,
+  // not on every render cycle (prevents MatchHeader re-render cascade).
+  const state = useMemo(() => getMatchState(match), [match]);
+
+  // Stable slotPos reference — avoids passing a new {} object every render
+  // which would cause GameDayPitch effects to re-fire unnecessarily.
+  const slotPos = useMemo(() => match?.slotPos || {}, [match?.slotPos]);
+
   const getCurrentMatchSec = () => computeElapsedSec(state, Date.now());
   const currentMinute = () => computeMinute(state, Date.now());
 
@@ -559,7 +565,7 @@ const onEnd = async () => {
         formation,
         format: match?.format || '',
         slots,
-        slotPos: match?.slotPos || {},
+        slotPos: slotPos,
       });
       setShowSaveLineup(false);
       setLineupName('');
@@ -679,7 +685,7 @@ const onEnd = async () => {
           starters={onPitch}
           playerToSlotKey={playerToSlotKey}
           containerSize={pitchContainerSize ?? undefined}
-          slotPos={match.slotPos || {}}
+          slotPos={slotPos}
           layoutMode={layoutMode}
           onSlotPosChange={onSlotPosChange}
           events={events}
@@ -930,7 +936,7 @@ const onEnd = async () => {
             <TextInput
               style={[styles.lineupInput]}
               placeholder="Lineup name (e.g. Standard 4-3-3)"
-              placeholderTextColor="rgba(255,255,255,0.35)"
+              placeholderTextColor="#9ca3af"
               value={lineupName}
               onChangeText={setLineupName}
               autoFocus
@@ -940,7 +946,7 @@ const onEnd = async () => {
                 onPress={() => setShowSaveLineup(false)}
                 style={[styles.modalBtn, { flex: 1, backgroundColor: 'transparent' }]}
               >
-                <Text style={[styles.modalBtnText, { color: '#ccc' }]}>Cancel</Text>
+                <Text style={[styles.modalBtnText, { color: '#444' }]}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={onSaveLineup}
@@ -1057,14 +1063,14 @@ const styles = StyleSheet.create({
   },
   lineupInput: {
     marginTop: 12,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: '#f3f4f6',
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
-    color: 'white',
+    color: '#111',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
+    borderColor: '#e5e7eb',
   },
 
   modalOverlay: {
