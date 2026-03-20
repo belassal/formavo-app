@@ -931,29 +931,29 @@ const onEnd = async () => {
           <View style={styles.modalSheet}>
             <Text style={styles.modalTitle}>Save Lineup</Text>
             <Text style={styles.modalSub}>
-              Saves the current slot assignments as a reusable lineup template.
+              Give this lineup a name so you can reuse it for future matches.
             </Text>
             <TextInput
-              style={[styles.lineupInput]}
-              placeholder="Lineup name (e.g. Standard 4-3-3)"
+              style={styles.lineupInput}
+              placeholder="e.g. Standard 4-3-3"
               placeholderTextColor="#9ca3af"
               value={lineupName}
               onChangeText={setLineupName}
               autoFocus
             />
-            <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
               <TouchableOpacity
                 onPress={() => setShowSaveLineup(false)}
-                style={[styles.modalBtn, { flex: 1, backgroundColor: 'transparent' }]}
+                style={styles.lineupCancelBtn}
               >
-                <Text style={[styles.modalBtnText, { color: '#444' }]}>Cancel</Text>
+                <Text style={styles.lineupCancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={onSaveLineup}
                 disabled={savingLineup}
-                style={[styles.modalBtn, { flex: 1, backgroundColor: '#16a34a' }, savingLineup && { opacity: 0.5 }]}
+                style={[styles.lineupSaveBtn, savingLineup && { opacity: 0.5 }]}
               >
-                <Text style={styles.modalBtnText}>{savingLineup ? 'Saving…' : 'Save'}</Text>
+                <Text style={styles.lineupSaveText}>{savingLineup ? 'Saving…' : 'Save'}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1007,9 +1007,9 @@ const onEnd = async () => {
             )}
             <TouchableOpacity
               onPress={() => setShowLoadLineup(false)}
-              style={[styles.modalBtn, { marginTop: 8, backgroundColor: 'transparent' }]}
+              style={styles.lineupCancelBtn}
             >
-              <Text style={[styles.modalBtnText, { color: '#ccc' }]}>Close</Text>
+              <Text style={styles.lineupCancelText}>Close</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1112,4 +1112,33 @@ const styles = StyleSheet.create({
   },
   pickName: { fontWeight: '900', color: '#111' },
   pickMeta: { marginTop: 4, color: '#666' },
+
+  // Lineup modal buttons — explicit colors so text is always legible
+  lineupCancelBtn: {
+    flex: 1,
+    paddingVertical: 13,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderRadius: 12,
+    borderColor: '#d1d5db',
+    alignItems: 'center',
+  },
+  lineupCancelText: {
+    fontWeight: '700',
+    fontSize: 15,
+    color: '#374151',
+  },
+  lineupSaveBtn: {
+    flex: 1,
+    paddingVertical: 13,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: '#16a34a',
+    alignItems: 'center',
+  },
+  lineupSaveText: {
+    fontWeight: '700',
+    fontSize: 15,
+    color: 'white',
+  },
 });
