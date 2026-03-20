@@ -90,16 +90,16 @@ export async function applyLineupToMatch(params: {
 
   const batch = db.batch();
 
-  // First, clear existing slotKeys for all roster players
+  // First, clear existing slotKeys and reset everyone to bench
   for (const doc of rosterSnap.docs) {
-    batch.set(doc.ref, { slotKey: firestore.FieldValue.delete(), updatedAt: serverTimestamp() }, { merge: true });
+    batch.set(doc.ref, { slotKey: firestore.FieldValue.delete(), role: 'bench', updatedAt: serverTimestamp() }, { merge: true });
   }
 
-  // Then apply lineup slot assignments for players in the roster
+  // Then apply lineup slot assignments and mark matched players as starters
   for (const [slotKey, entry] of Object.entries(lineup.slots)) {
     if (rosterPlayerIds.has(entry.playerId)) {
       const playerRef = rosterRef.doc(entry.playerId);
-      batch.set(playerRef, { slotKey, updatedAt: serverTimestamp() }, { merge: true });
+      batch.set(playerRef, { slotKey, role: 'starter', updatedAt: serverTimestamp() }, { merge: true });
     }
   }
 
