@@ -2,6 +2,7 @@ import React, { useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
+  Image,
   StyleSheet,
   Pressable,
   useWindowDimensions,
@@ -13,6 +14,24 @@ import type { PlayerLite } from '../../../services/lineupMapping';
 import type { MatchEvent } from '../../../models/matchEvent';
 
 type SlotPos = { x: number; y: number }; // 0..1 (relative)
+
+// ── Avatar helpers ────────────────────────────────────────────────────────────
+const AVATAR_COLORS = [
+  '#e63946', '#457b9d', '#2a9d8f', '#e9a84c',
+  '#6d6875', '#3d405b', '#2e86ab', '#a23b72',
+];
+
+function avatarColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+}
 
 type Props = {
   formation: string;
@@ -28,6 +47,8 @@ type Props = {
   containerSize?: { width: number; height: number };
   /** Match events — used to show goal badges on player bubbles. */
   events?: MatchEvent[];
+  /** Optional player photo URLs: playerId → uri */
+  avatarUrls?: Record<string, string>;
   /** Tap a filled bubble (player). */
   onPlayerPress?: (playerId: string) => void;
   /** Tap a slot (empty or filled) to open the assign modal. */
@@ -326,6 +347,7 @@ export default function GameDayPitch({
   onSlotPress,
   containerSize,
   events,
+  avatarUrls,
 }: Props) {
   const dims = useWindowDimensions();
 
@@ -417,13 +439,28 @@ export default function GameDayPitch({
                 onLongPress={openAssign}
                 style={[
                   styles.player,
-                  { transform: [{ translateX: -22 }, { translateY: -22 }] },
+                  { transform: [{ translateX: -25 }, { translateY: -25 }] },
                 ]}
               >
-                <Text style={styles.number}>{player.number || ''}</Text>
-                <Text numberOfLines={1} style={styles.name}>
-                  {player.name}
-                </Text>
+                {/* Avatar: photo if available, else colored initials */}
+                {avatarUrls?.[player.id] ? (
+                  <Image
+                    source={{ uri: avatarUrls[player.id] }}
+                    style={styles.avatarImg}
+                  />
+                ) : (
+                  <View style={[styles.avatarFill, { backgroundColor: avatarColor(player.name) }]}>
+                    <Text style={styles.avatarInitials}>{initials(player.name)}</Text>
+                  </View>
+                )}
+
+                {/* Number badge — bottom center */}
+                {!!player.number && (
+                  <View style={styles.numberBadge}>
+                    <Text style={styles.numberBadgeText}>{player.number}</Text>
+                  </View>
+                )}
+
                 <Text style={styles.slotHint}>{label}</Text>
 
                 {/* Card badge — top-left */}
@@ -441,6 +478,9 @@ export default function GameDayPitch({
                     </Text>
                   </View>
                 )}
+
+                {/* Name below bubble */}
+                <Text numberOfLines={1} style={styles.name}>{player.name}</Text>
               </SlotBubble>
             );
           }
@@ -494,26 +534,72 @@ const styles = StyleSheet.create({
 
   player: {
     position: 'absolute',
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     backgroundColor: 'white',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 4,
+    // white ring
+    borderWidth: 2.5,
+    borderColor: 'rgba(255,255,255,0.9)',
+    overflow: 'visible',
   },
 
-  number: {
+  avatarFill: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'absolute',
+    overflow: 'hidden',
+  },
+
+  avatarImg: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    position: 'absolute',
+  },
+
+  avatarInitials: {
+    fontSize: 16,
     fontWeight: '800',
-    fontSize: 12,
-    color: '#0b1220',
+    color: 'white',
+    letterSpacing: 0.5,
+  },
+
+  numberBadge: {
+    position: 'absolute',
+    bottom: -4,
+    alignSelf: 'center',
+    backgroundColor: '#0b1220',
+    borderRadius: 6,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.6)',
+    zIndex: 10,
+  },
+
+  numberBadgeText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: 'white',
   },
 
   name: {
+    position: 'absolute',
+    bottom: -20,
     fontSize: 9,
-    marginTop: 2,
-    color: '#0b1220',
+    fontWeight: '700',
+    color: 'white',
     textAlign: 'center',
+    width: 60,
+    textShadowColor: 'rgba(0,0,0,0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
 
   emptySlot: {
@@ -537,9 +623,10 @@ const styles = StyleSheet.create({
 
   slotHint: {
     position: 'absolute',
-    bottom: -12,
-    fontSize: 9,
-    color: 'rgba(255,255,255,0.85)',
+    bottom: -30,
+    fontSize: 8,
+    color: 'rgba(255,255,255,0.6)',
+    textAlign: 'center',
   },
 
   cardBadge: {

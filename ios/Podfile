@@ -35,6 +35,19 @@ target 'Formavo' do
         c.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
         c.build_settings['CLANG_WARN_NON_MODULAR_INCLUDE_IN_FRAMEWORK_MODULES'] = 'NO'
 
+        # ✅ Fix RNFBFirestore/RNFBStorage: RCTPromiseRejectBlock not visible in modular builds
+        if ['RNFBFirestore', 'RNFBStorage'].include?(t.name)
+          c.build_settings['CLANG_ENABLE_MODULES'] = 'NO'
+          if c.base_configuration_reference
+            xcconfig_path = c.base_configuration_reference.real_path
+            xcconfig = File.read(xcconfig_path)
+            unless xcconfig.include?('CLANG_ENABLE_MODULES = NO')
+              xcconfig << "\nCLANG_ENABLE_MODULES = NO\n"
+            end
+            File.write(xcconfig_path, xcconfig)
+          end
+        end
+
         # ✅ Fix iOS 26.2 SDK conflict: gRPC-Core zlib defines fdopen macro
         if t.name == 'gRPC-Core'
           cflags = c.build_settings['OTHER_CFLAGS'] || ['$(inherited)']

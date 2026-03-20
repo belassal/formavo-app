@@ -124,6 +124,32 @@ type MatchEvent = {
 - Player tap → goal/card log modal
 - Slot tap → assign player modal (allowed during live for sub corrections)
 
+### Player Photos
+- `storageService.ts`: `pickPlayerPhoto()` (image picker) + `uploadPlayerAvatar(playerId, uri)` (Firebase Storage)
+- Both require native packages (see setup below). Guards in place so the app builds without them.
+- `avatarUrl` stored on `teams/{teamId}/playerMemberships/{playerId}`
+- Edit Player modal in TeamDetailScreen shows current photo + "Add/Change photo" tap target
+- **Setup** (one-time, requires rebuild):
+  ```
+  npm install @react-native-firebase/storage react-native-image-picker
+  cd ios && pod install
+  ```
+
+### Saved Lineups
+- `src/models/lineup.ts`: `SavedLineup` type — name, formation, format, slots (slotKey→player), slotPos
+- `src/services/lineupService.ts`: `saveLineup`, `listenLineups`, `deleteLineup`, `applyLineupToMatch`
+- Stored at `teams/{teamId}/lineups/{lineupId}`
+- GameDayPitchScreen toolbar: **💾 Save** button → name modal → saves current slot assignments + positions
+- **📋 Lineup** button (draft matches only) → list of saved lineups → tap to apply, × to delete
+- `applyLineupToMatch()` clears existing slot assignments then re-applies from the lineup (skips players not in roster)
+
+### Player Avatar Bubbles (GameDay)
+- `GameDayPitch` accepts `avatarUrls?: Record<playerId, string>` prop
+- Bubble is now 50×50 with a colored initials circle (8 colors, hashed from name) as fallback
+- When `avatarUrls[playerId]` is set, shows the photo as a circular Image
+- Number shown as a small dark badge at the bottom of the bubble
+- Name shown below the bubble in white with drop shadow (easier to read on green)
+
 ### StatsScreen (`src/screens/teams/StatsScreen.tsx`)
 - Route: `TeamStats { teamId, teamName }` — navigated from TeamDetailScreen banner
 - Two segments: **Team** (W/D/L record, goals, form) and **Players** (leaderboard)

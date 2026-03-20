@@ -1203,6 +1203,9 @@ PODS:
   - Firebase/Firestore (12.8.0):
     - Firebase/CoreOnly
     - FirebaseFirestore (~> 12.8.0)
+  - Firebase/Storage (12.8.0):
+    - Firebase/CoreOnly
+    - FirebaseStorage (~> 12.8.0)
   - FirebaseAppCheckInterop (12.8.0)
   - FirebaseAuth (12.8.0):
     - FirebaseAppCheckInterop (~> 12.8.0)
@@ -1243,6 +1246,13 @@ PODS:
     - leveldb-library (~> 1.22)
     - nanopb (~> 3.30910.0)
   - FirebaseSharedSwift (12.8.0)
+  - FirebaseStorage (12.8.0):
+    - FirebaseAppCheckInterop (~> 12.8.0)
+    - FirebaseAuthInterop (~> 12.8.0)
+    - FirebaseCore (~> 12.8.0)
+    - FirebaseCoreExtension (~> 12.8.0)
+    - GoogleUtilities/Environment (~> 8.1)
+    - GTMSessionFetcher/Core (< 6.0, >= 3.4)
   - GoogleUtilities/AppDelegateSwizzler (8.1.0):
     - GoogleUtilities/Environment
     - GoogleUtilities/Logger
@@ -2763,6 +2773,28 @@ PODS:
     - React-RCTFBReactNativeSpec
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
+  - react-native-image-picker (8.2.1):
+    - hermes-engine
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-Core-prebuilt
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - ReactNativeDependencies
+    - Yoga
   - react-native-safe-area-context (5.6.2):
     - hermes-engine
     - RCTRequired
@@ -3289,6 +3321,30 @@ PODS:
     - ReactNativeDependencies
     - RNFBApp
     - Yoga
+  - RNFBStorage (23.8.6):
+    - Firebase/Storage (= 12.8.0)
+    - hermes-engine
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-Core-prebuilt
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - ReactNativeDependencies
+    - RNFBApp
+    - Yoga
   - RNScreens (4.23.0):
     - hermes-engine
     - RCTRequired
@@ -3379,6 +3435,7 @@ DEPENDENCIES:
   - React-logger (from `../node_modules/react-native/ReactCommon/logger`)
   - React-Mapbuffer (from `../node_modules/react-native/ReactCommon`)
   - React-microtasksnativemodule (from `../node_modules/react-native/ReactCommon/react/nativemodule/microtasks`)
+  - react-native-image-picker (from `../node_modules/react-native-image-picker`)
   - react-native-safe-area-context (from `../node_modules/react-native-safe-area-context`)
   - React-NativeModulesApple (from `../node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios`)
   - React-networking (from `../node_modules/react-native/ReactCommon/react/networking`)
@@ -3418,6 +3475,7 @@ DEPENDENCIES:
   - "RNFBApp (from `../node_modules/@react-native-firebase/app`)"
   - "RNFBAuth (from `../node_modules/@react-native-firebase/auth`)"
   - "RNFBFirestore (from `../node_modules/@react-native-firebase/firestore`)"
+  - "RNFBStorage (from `../node_modules/@react-native-firebase/storage`)"
   - RNScreens (from `../node_modules/react-native-screens`)
   - Yoga (from `../node_modules/react-native/ReactCommon/yoga`)
 
@@ -3435,6 +3493,7 @@ SPEC REPOS:
     - FirebaseFirestore
     - FirebaseFirestoreInternal
     - FirebaseSharedSwift
+    - FirebaseStorage
     - GoogleUtilities
     - "gRPC-C++"
     - gRPC-Core
@@ -3521,6 +3580,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon"
   React-microtasksnativemodule:
     :path: "../node_modules/react-native/ReactCommon/react/nativemodule/microtasks"
+  react-native-image-picker:
+    :path: "../node_modules/react-native-image-picker"
   react-native-safe-area-context:
     :path: "../node_modules/react-native-safe-area-context"
   React-NativeModulesApple:
@@ -3597,6 +3658,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/@react-native-firebase/auth"
   RNFBFirestore:
     :path: "../node_modules/@react-native-firebase/firestore"
+  RNFBStorage:
+    :path: "../node_modules/@react-native-firebase/storage"
   RNScreens:
     :path: "../node_modules/react-native-screens"
   Yoga:
@@ -3616,6 +3679,7 @@ SPEC CHECKSUMS:
   FirebaseFirestore: 67f23000ca238ccbab79127ed59636a9a2689e74
   FirebaseFirestoreInternal: a0e7382af3d208898dcd1d4d52d8a7870632e881
   FirebaseSharedSwift: f57ed48f4542b2d7eb4738f4f23ba443f78b3780
+  FirebaseStorage: 7c37558dc72731aa5f0a1a2401d8c6de10a513f5
   GoogleUtilities: 00c88b9a86066ef77f0da2fab05f65d7768ed8e1
   "gRPC-C++": cc207623316fb041a7a3e774c252cf68a058b9e8
   gRPC-Core: 860978b7db482de8b4f5e10677216309b5ff6330
@@ -3659,6 +3723,7 @@ SPEC CHECKSUMS:
   React-logger: 9e51e01455f15cb3ef87a09a1ec773cdb22d56c1
   React-Mapbuffer: 93685af84d050c469eb129b1e99cb44489eb1b77
   React-microtasksnativemodule: 3f3ac4c11be64f61e9b0e66f36a4827c1202d2dd
+  react-native-image-picker: 4123dc2b15a0b6fc2f027e6cf94ae5f48c9ae9b0
   react-native-safe-area-context: c5d42c4294aa175415947e23c2ac956253abfc7d
   React-NativeModulesApple: 44a9474594566cd03659f92e38f42599c6b9dee4
   React-networking: f5f2a5b571ec873b5332ffee0b5d318ec365de5b
@@ -3698,9 +3763,10 @@ SPEC CHECKSUMS:
   RNFBApp: a21d643ba6f5c2f3d567f69cac84a7549d8830d2
   RNFBAuth: c164611af498a81e32a98d7d713ca6c8a734b3bb
   RNFBFirestore: 806d010755cb82d58389f61904e9db2e3e92b2eb
+  RNFBStorage: d2cbdef479dbf8de8748cbc71dc759f368e21ddf
   RNScreens: 6c5b8c41580fe6b54ee1b332c96b782ee360e73f
   Yoga: 8f4ecfe9609f26267e75aa961f031fbb525d8e52
 
-PODFILE CHECKSUM: 840efced192d65bed9af101716dd6d3c15882862
+PODFILE CHECKSUM: 26eee2d59397ca20ef89d957f226b935400648a3
 
 COCOAPODS: 1.16.2

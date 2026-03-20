@@ -4,11 +4,13 @@ import auth from '@react-native-firebase/auth';
 import {
   View,
   Text,
+  TextInput,
   StyleSheet,
   ActivityIndicator,
   Alert,
   Modal,
   FlatList,
+  ScrollView,
   TouchableOpacity,
 } from 'react-native';
 import { RouteProp, useRoute } from '@react-navigation/native';
@@ -32,6 +34,8 @@ import {
   buildCardEvent,
   buildSubEvent,
 } from '../../services/matchService';
+import { saveLineup, listenLineups, deleteLineup, applyLineupToMatch } from '../../services/lineupService';
+import type { SavedLineup } from '../../models/lineup';
 import type { MatchEvent } from '../../models/matchEvent';
 type RouteT = RouteProp<TeamsStackParamList, 'GameDayPitch'>;
 
@@ -99,6 +103,17 @@ export default function GameDayPitchScreen() {
   // Measured available size for the pitch container
   const [pitchContainerSize, setPitchContainerSize] = useState<{width:number;height:number}|null>(null);
 
+  // Saved lineups
+  const [lineups, setLineups] = useState<SavedLineup[]>([]);
+  const [showSaveLineup, setShowSaveLineup] = useState(false);
+  const [showLoadLineup, setShowLoadLineup] = useState(false);
+  const [lineupName, setLineupName] = useState('');
+  const [savingLineup, setSavingLineup] = useState(false);
+  const [applyingLineup, setApplyingLineup] = useState(false);
+
+  // Player avatar URLs: playerId → avatarUrl
+  const [avatarUrls, setAvatarUrls] = useState<Record<string, string>>({});
+
   // 1) Match doc
   useEffect(() => {
     setLoading(true);
@@ -154,6 +169,28 @@ export default function GameDayPitchScreen() {
   useEffect(() => {
     return listenMatchEvents(teamId, matchId, (rows) => setEvents(rows));
   }, [teamId, matchId]);
+
+  // 4) Saved lineups for this team
+  useEffect(() => {
+    return listenLineups(teamId, setLineups);
+  }, [teamId]);
+
+  // 5) Avatar URLs from team memberships
+  useEffect(() => {
+    const unsub = db
+      .collection(COL.teams)
+      .doc(teamId)
+      .collection(COL.playerMemberships)
+      .onSnapshot((snap) => {
+        const urls: Record<string, string> = {};
+        snap.docs.forEach((d) => {
+          const data = d.data() as any;
+          if (data.avatarUrl) urls[d.id] = data.avatarUrl;
+        });
+        setAvatarUrls(urls);
+      }, () => {});
+    return () => unsub();
+  }, [teamId]);
 
   const formation = match?.formation || '4-3-3';
   const state = getMatchState(match);
@@ -503,6 +540,56 @@ const onEnd = async () => {
     }
   };
 
+  // ── Lineup handlers ───────────────────────────────────────────────────────
+  const onSaveLineup = async () => {
+    const name = lineupName.trim();
+    if (!name) { Alert.alert('Name required', 'Enter a name for this lineup.'); return; }
+    try {
+      setSavingLineup(true);
+      // Build slots from current assignments
+      const slots: Record<string, { playerId: string; playerName: string }> = {};
+      for (const r of roster) {
+        if (r.slotKey) {
+          slots[r.slotKey] = { playerId: r.playerId || r.id, playerName: r.playerName || 'Unknown' };
+        }
+      }
+      await saveLineup({
+        teamId,
+        name,
+        formation,
+        format: match?.format || '',
+        slots,
+        slotPos: match?.slotPos || {},
+      });
+      setShowSaveLineup(false);
+      setLineupName('');
+      Alert.alert('Saved!', `Lineup "${name}" saved for future matches.`);
+    } catch (e: any) {
+      Alert.alert('Save failed', e?.message ?? 'Unknown error');
+    } finally {
+      setSavingLineup(false);
+    }
+  };
+
+  const onApplyLineup = async (lineup: SavedLineup) => {
+    try {
+      setApplyingLineup(true);
+      await applyLineupToMatch({ teamId, matchId, lineup });
+      setShowLoadLineup(false);
+    } catch (e: any) {
+      Alert.alert('Apply failed', e?.message ?? 'Unknown error');
+    } finally {
+      setApplyingLineup(false);
+    }
+  };
+
+  const onDeleteLineup = (lineup: SavedLineup) => {
+    Alert.alert('Delete lineup?', `Remove "${lineup.name}"? This cannot be undone.`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => deleteLineup(teamId, lineup.id) },
+    ]);
+  };
+
   if (loading) {
     return (
       <View style={styles.center}>
@@ -530,14 +617,35 @@ const onEnd = async () => {
           <Text style={styles.subtitle}>Formation: {formation}</Text>
         </View>
 
-        <TouchableOpacity
-          onPress={() => setLayoutMode((v) => !v)}
-          style={[styles.modeBtn, layoutMode ? styles.modeBtnOn : null]}
-        >
-          <Text style={[styles.modeBtnText, layoutMode ? { color: 'white' } : null]}>
-            {layoutMode ? 'Done' : 'Edit layout'}
-          </Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 6 }}>
+          {/* Load lineup — draft only */}
+          {derivedState.status === 'draft' && (
+            <TouchableOpacity
+              onPress={() => setShowLoadLineup(true)}
+              style={styles.modeBtn}
+            >
+              <Text style={styles.modeBtnText}>📋 Lineup</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Save lineup */}
+          <TouchableOpacity
+            onPress={() => { setLineupName(''); setShowSaveLineup(true); }}
+            style={styles.modeBtn}
+          >
+            <Text style={styles.modeBtnText}>💾 Save</Text>
+          </TouchableOpacity>
+
+          {/* Edit layout toggle */}
+          <TouchableOpacity
+            onPress={() => setLayoutMode((v) => !v)}
+            style={[styles.modeBtn, layoutMode ? styles.modeBtnOn : null]}
+          >
+            <Text style={[styles.modeBtnText, layoutMode ? { color: 'white' } : null]}>
+              {layoutMode ? 'Done' : 'Layout'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
      <View style={styles.matchHeaderWrap}>
@@ -575,6 +683,7 @@ const onEnd = async () => {
           layoutMode={layoutMode}
           onSlotPosChange={onSlotPosChange}
           events={events}
+          avatarUrls={avatarUrls}
           onPlayerPress={(playerId) => {
             // optional: only allow logging when live
             if (derivedState.status !== 'live') return;
@@ -810,6 +919,96 @@ const onEnd = async () => {
         }}
       />
 
+      {/* ===== Save Lineup Modal ===== */}
+      <Modal visible={showSaveLineup} animationType="slide" transparent onRequestClose={() => setShowSaveLineup(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <Text style={styles.modalTitle}>Save Lineup</Text>
+            <Text style={styles.modalSub}>
+              Saves the current slot assignments as a reusable lineup template.
+            </Text>
+            <TextInput
+              style={[styles.lineupInput]}
+              placeholder="Lineup name (e.g. Standard 4-3-3)"
+              placeholderTextColor="rgba(255,255,255,0.35)"
+              value={lineupName}
+              onChangeText={setLineupName}
+              autoFocus
+            />
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
+              <TouchableOpacity
+                onPress={() => setShowSaveLineup(false)}
+                style={[styles.modalBtn, { flex: 1, backgroundColor: 'transparent' }]}
+              >
+                <Text style={[styles.modalBtnText, { color: '#ccc' }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={onSaveLineup}
+                disabled={savingLineup}
+                style={[styles.modalBtn, { flex: 1, backgroundColor: '#16a34a' }, savingLineup && { opacity: 0.5 }]}
+              >
+                <Text style={styles.modalBtnText}>{savingLineup ? 'Saving…' : 'Save'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ===== Load Lineup Modal ===== */}
+      <Modal visible={showLoadLineup} animationType="slide" transparent onRequestClose={() => setShowLoadLineup(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalSheet, { maxHeight: '75%' }]}>
+            <Text style={styles.modalTitle}>Load Lineup</Text>
+            <Text style={styles.modalSub}>
+              Tap a lineup to apply its slot assignments to this match.
+            </Text>
+            {lineups.length === 0 ? (
+              <Text style={{ color: 'rgba(255,255,255,0.45)', fontSize: 14, marginVertical: 16, textAlign: 'center' }}>
+                No saved lineups yet. Set up a lineup and tap 💾 Save.
+              </Text>
+            ) : (
+              <ScrollView style={{ marginTop: 8 }}>
+                {lineups.map((lu) => (
+                  <View key={lu.id} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                    <TouchableOpacity
+                      style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 12, padding: 14 }}
+                      onPress={() => {
+                        Alert.alert(
+                          `Apply "${lu.name}"?`,
+                          `This will replace the current slot assignments with the saved lineup. Players not in this match roster will be skipped.`,
+                          [
+                            { text: 'Cancel', style: 'cancel' },
+                            { text: 'Apply', onPress: () => onApplyLineup(lu) },
+                          ]
+                        );
+                      }}
+                      disabled={applyingLineup}
+                    >
+                      <Text style={{ color: 'white', fontWeight: '700', fontSize: 15 }}>{lu.name}</Text>
+                      <Text style={{ color: 'rgba(255,255,255,0.45)', fontSize: 12, marginTop: 3 }}>
+                        {lu.formation}{lu.format ? ` · ${lu.format}` : ''} · {Object.keys(lu.slots || {}).length} players
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => onDeleteLineup(lu)}
+                      style={{ padding: 12, marginLeft: 6 }}
+                    >
+                      <Text style={{ fontSize: 18, color: '#ef4444' }}>×</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+            <TouchableOpacity
+              onPress={() => setShowLoadLineup(false)}
+              style={[styles.modalBtn, { marginTop: 8, backgroundColor: 'transparent' }]}
+            >
+              <Text style={[styles.modalBtnText, { color: '#ccc' }]}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
     </View>
   );
 }
@@ -855,6 +1054,17 @@ const styles = StyleSheet.create({
   modeBtnText: {
     color: '#cbd5e1',
     fontWeight: '800',
+  },
+  lineupInput: {
+    marginTop: 12,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: 'white',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
   },
 
   modalOverlay: {

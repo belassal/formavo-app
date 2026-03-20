@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Image,
   Modal,
   SafeAreaView,
   ScrollView,
@@ -25,6 +26,7 @@ import {
 } from '../../services/playerService';
 import { createMatch, listenMatches } from '../../services/matchService';
 import { inviteCoach, listenTeamMembers } from '../../services/teamService';
+import { pickPlayerPhoto, uploadPlayerAvatar, storageReady, imagePickerReady } from '../../services/storageService';
 import FormationPickerModal, { FormationPickerResult } from '../matches/components/FormationPickerModal';
 import DateTimePickerModal, { formatDateISO } from '../../components/DateTimePickerModal';
 
@@ -153,6 +155,8 @@ export default function TeamDetailScreen() {
   const [editName, setEditName] = useState('');
   const [editNumber, setEditNumber] = useState('');
   const [editPosition, setEditPosition] = useState('');
+  const [editAvatarUrl, setEditAvatarUrl] = useState<string | undefined>(undefined);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
 
   // Create Match modal
@@ -236,12 +240,36 @@ export default function TeamDetailScreen() {
     setEditName(m.playerName || '');
     setEditNumber(String(m.number || ''));
     setEditPosition(String(m.position || ''));
+    setEditAvatarUrl(m.avatarUrl || undefined);
     setShowEditPlayer(true);
   };
 
   const closeEditPlayer = () => {
     setShowEditPlayer(false); setEditingMember(null);
     setEditName(''); setEditNumber(''); setEditPosition('');
+    setEditAvatarUrl(undefined);
+  };
+
+  const onPickPhoto = async () => {
+    if (!imagePickerReady) {
+      Alert.alert(
+        'Photos not set up',
+        'Run:\n  npm install react-native-image-picker @react-native-firebase/storage\n  cd ios && pod install\n\nthen rebuild the app.',
+      );
+      return;
+    }
+    try {
+      setUploadingPhoto(true);
+      const uri = await pickPlayerPhoto();
+      if (!uri || !editingMember) return;
+      const playerId = editingMember.id;
+      const url = await uploadPlayerAvatar(playerId, uri);
+      setEditAvatarUrl(url);
+    } catch (e: any) {
+      Alert.alert('Upload failed', e?.message ?? 'Unknown error');
+    } finally {
+      setUploadingPhoto(false);
+    }
   };
 
   const onSaveEditPlayer = async () => {
@@ -250,7 +278,7 @@ export default function TeamDetailScreen() {
     if (!name) { Alert.alert('Missing name', 'Player name is required.'); return; }
     try {
       setSavingEdit(true);
-      await updateTeamMembership({ teamId, membershipId: editingMember.id, playerName: name, number: editNumber.trim(), position: editPosition.trim() });
+      await updateTeamMembership({ teamId, membershipId: editingMember.id, playerName: name, number: editNumber.trim(), position: editPosition.trim(), avatarUrl: editAvatarUrl });
       closeEditPlayer();
     } catch (e: any) {
       Alert.alert('Update Failed', e?.message ?? 'Unknown error');
@@ -654,6 +682,30 @@ export default function TeamDetailScreen() {
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' }}>
           <View style={{ backgroundColor: 'white', padding: 20, borderTopLeftRadius: 20, borderTopRightRadius: 20, gap: 12 }}>
             <Text style={{ fontSize: 18, fontWeight: '700', color: '#111' }}>Edit Player</Text>
+
+            {/* Photo picker */}
+            <TouchableOpacity
+              onPress={onPickPhoto}
+              disabled={uploadingPhoto}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}
+            >
+              {editAvatarUrl ? (
+                <Image source={{ uri: editAvatarUrl }} style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: '#f3f4f6' }} />
+              ) : (
+                <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: '#f3f4f6', alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 24 }}>👤</Text>
+                </View>
+              )}
+              <View>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#111' }}>
+                  {uploadingPhoto ? 'Uploading…' : editAvatarUrl ? 'Change photo' : 'Add photo'}
+                </Text>
+                <Text style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>
+                  {storageReady && imagePickerReady ? 'Tap to pick from library' : 'Requires additional setup (see README)'}
+                </Text>
+              </View>
+            </TouchableOpacity>
+
             <TextInput placeholder="Player name (required)" value={editName} onChangeText={setEditName} style={S.input} />
             <TextInput placeholder="Number (optional)" value={editNumber} onChangeText={setEditNumber} style={S.input} keyboardType="numeric" />
             <TextInput placeholder="Position (optional)" value={editPosition} onChangeText={setEditPosition} style={S.input} />

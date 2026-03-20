@@ -151,8 +151,9 @@ export async function updateTeamMembership(params: {
   playerName: string;
   number: string;
   position: string;
+  avatarUrl?: string; // optional — only updated when provided
 }) {
-  const { teamId, membershipId, playerName, number, position } = params;
+  const { teamId, membershipId, playerName, number, position, avatarUrl } = params;
 
   const ref = db
     .collection(COL.teams)
@@ -160,15 +161,15 @@ export async function updateTeamMembership(params: {
     .collection(COL.playerMemberships) // ✅ correct
     .doc(membershipId);
 
-  await ref.set(
-    {
-      playerName: playerName.trim(),
-      number: number.trim(),
-      position: position.trim(),
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true }
-  );
+  const patch: any = {
+    playerName: playerName.trim(),
+    number: number.trim(),
+    position: position.trim(),
+    updatedAt: serverTimestamp(),
+  };
+  if (avatarUrl !== undefined) patch.avatarUrl = avatarUrl;
+
+  await ref.set(patch, { merge: true });
 }
 
 
