@@ -176,6 +176,22 @@ export async function softDeleteTeam(params: {
 }
 
 /**
+ * Listen to all member docs under a team (coaches, assistants, invites).
+ */
+export function listenTeamMembers(
+  teamId: string,
+  onData: (members: any[]) => void,
+) {
+  return db
+    .collection(COL.teams)
+    .doc(teamId)
+    .collection(COL.members)
+    .onSnapshot((snap) => {
+      onData(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+}
+
+/**
  * Invite an additional coach/assistant by email.
  * Creates a member invite doc under teams/{teamId}/members/{autoId}
  * (We use autoId so it supports multiple invites without collisions.)

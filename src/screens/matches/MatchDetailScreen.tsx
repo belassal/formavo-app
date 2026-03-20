@@ -20,6 +20,7 @@ import {
   addPlayerToMatchRoster,
   buildCardEvent,
   buildGoalEvent,
+  buildSubEvent,
   deleteMatchEvent,
   listenMatchEvents,
   listenMatchRoster,
@@ -40,6 +41,7 @@ import {
 import { db } from '../../services/firebase';
 import { COL } from '../../models/collections';
 import DateTimePickerModal, { formatDateISO } from '../../components/DateTimePickerModal';
+import MiniPitchDisplay from '../../components/MiniPitchDisplay';
 
 
 
@@ -115,7 +117,7 @@ export default function MatchDetailScreen() {
 
   // add-event modal
   const [showEvent, setShowEvent] = useState(false);
-  const [eventType, setEventType] = useState<'goal' | 'card'>('goal');
+  const [eventType, setEventType] = useState<'goal' | 'card' | 'sub'>('goal');
   const [eventMinute, setEventMinute] = useState('');
 
   // goal inputs (add)
@@ -129,6 +131,14 @@ export default function MatchDetailScreen() {
   // goal side + opponent scorer (add)
   const [goalSide, setGoalSide] = useState<'home' | 'away'>('home');
   const [oppScorerName, setOppScorerName] = useState('');
+
+  // sub inputs (add)
+  const [subOutId, setSubOutId] = useState('');
+  const [subInId, setSubInId] = useState('');
+
+  // goal location map
+  const [showGoalMap, setShowGoalMap] = useState(false);
+  const [mapEvent, setMapEvent] = useState<MatchEvent | null>(null);
 
   // edit-event modal state
   const [showEditEvent, setShowEditEvent] = useState(false);
@@ -392,6 +402,8 @@ const addSelectedToRoster = async () => {
     setCardColor('yellow');
     setGoalSide('home');
     setOppScorerName('');
+    setSubOutId('');
+    setSubInId('');
     setShowEvent(true);
   };
 
@@ -427,17 +439,21 @@ const addSelectedToRoster = async () => {
 
           await addMatchEvent({ teamId, matchId, event });
         }
-      } else {
+      } else if (eventType === 'card') {
         if (!cardPlayerId) return Alert.alert('Missing player', 'Pick who got the card.');
         const playerName = findRosterName(cardPlayerId);
-
-        const event = buildCardEvent({
+        const event = buildCardEvent({ minute, playerId: cardPlayerId, playerName, cardColor });
+        await addMatchEvent({ teamId, matchId, event });
+      } else {
+        if (!subOutId) return Alert.alert('Missing player', 'Pick the player coming off.');
+        if (!subInId) return Alert.alert('Missing player', 'Pick the player coming on.');
+        const event = buildSubEvent({
           minute,
-          playerId: cardPlayerId,
-          playerName,
-          cardColor,
+          outPlayerId: subOutId,
+          outPlayerName: findRosterName(subOutId),
+          inPlayerId: subInId,
+          inPlayerName: findRosterName(subInId),
         });
-
         await addMatchEvent({ teamId, matchId, event });
       }
 
@@ -787,20 +803,37 @@ const addSelectedToRoster = async () => {
                         {minLabel ? (
                           <Text style={{ fontSize: 12, fontWeight: '700', color: '#9ca3af', width: 28 }}>{minLabel}</Text>
                         ) : null}
-                        <View style={{ flex: 1 }}>
-                          {isGoal ? (
-                            <Text style={{ fontSize: 14, fontWeight: '600', color: '#111' }}>
-                              ⚽ {isHome ? item.scorerName || 'Unknown' : `${item.scorerName || 'Opp'} (away)`}
-                            </Text>
-                          ) : (
-                            <Text style={{ fontSize: 14, fontWeight: '600', color: '#111' }}>
-                              {cardDot} {item.playerName || 'Unknown'}
-                            </Text>
-                          )}
-                          {isGoal && item.assistName ? (
-                            <Text style={{ fontSize: 12, color: '#9ca3af', marginTop: 1 }}>Assist: {item.assistName}</Text>
-                          ) : null}
-                        </View>
+                        {item.type === 'goal' ? (
+                          <TouchableOpacity
+                            style={{ flex: 1 }}
+                            activeOpacity={0.6}
+                            onPress={() => { setMapEvent(item); setShowGoalMap(true); }}
+                          >
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                              <Text style={{ fontSize: 14, fontWeight: '600', color: '#111', flex: 1 }}>
+                                ⚽ {isHome ? item.scorerName || 'Unknown' : `${item.scorerName || 'Opp'} (away)`}
+                              </Text>
+                              {item.pos && (
+                                <Text style={{ fontSize: 12 }}>📍</Text>
+                              )}
+                            </View>
+                            {item.assistName ? (
+                              <Text style={{ fontSize: 12, color: '#9ca3af', marginTop: 1 }}>Assist: {item.assistName}</Text>
+                            ) : null}
+                          </TouchableOpacity>
+                        ) : (
+                          <View style={{ flex: 1 }}>
+                            {item.type === 'sub' ? (
+                              <Text style={{ fontSize: 14, fontWeight: '600', color: '#111' }}>
+                                ↕ {item.outPlayerName || '?'} → {item.inPlayerName || '?'}
+                              </Text>
+                            ) : (
+                              <Text style={{ fontSize: 14, fontWeight: '600', color: '#111' }}>
+                                {cardDot} {item.playerName || 'Unknown'}
+                              </Text>
+                            )}
+                          </View>
+                        )}
                         <View style={{ flexDirection: 'row', gap: 2 }}>
                           <TouchableOpacity onPress={() => openEditEvent(item)} style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }} hitSlop={ICON_HITSLOP}>
                             <Text style={{ fontSize: 15, color: '#9ca3af' }}>✎</Text>
@@ -968,10 +1001,12 @@ const addSelectedToRoster = async () => {
                 <View style={{ padding: 16, gap: 14 }}>
                   {/* Event type */}
                   <View style={{ flexDirection: 'row', gap: 8 }}>
-                    {(['goal', 'card'] as const).map((t) => (
+                    {(['goal', 'card', 'sub'] as const).map((t) => (
                       <TouchableOpacity key={t} onPress={() => setEventType(t)}
                         style={{ flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center', backgroundColor: eventType === t ? '#111' : '#f3f4f6' }}>
-                        <Text style={{ fontWeight: '700', fontSize: 14, color: eventType === t ? '#fff' : '#374151' }}>{t === 'goal' ? '⚽ Goal' : '🟨 Card'}</Text>
+                        <Text style={{ fontWeight: '700', fontSize: 13, color: eventType === t ? '#fff' : '#374151' }}>
+                          {t === 'goal' ? '⚽ Goal' : t === 'card' ? '🟨 Card' : '↕ Sub'}
+                        </Text>
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -981,7 +1016,36 @@ const addSelectedToRoster = async () => {
                     style={{ backgroundColor: '#f3f4f6', paddingHorizontal: 12, paddingVertical: 11, borderRadius: 10, fontSize: 15, color: '#111' }}
                     placeholderTextColor="#9ca3af" />
 
-                  {eventType === 'goal' ? (
+                  {eventType === 'sub' ? (
+                    <>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151' }}>Player Off (starter)</Text>
+                      {rosterForPick.filter((x: any) => x.role === 'starter').map((item: any) => {
+                        const active = item.id === subOutId;
+                        return (
+                          <TouchableOpacity key={item.id} onPress={() => setSubOutId(item.id)} activeOpacity={0.6}
+                            style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 11, paddingHorizontal: 12, backgroundColor: active ? '#111' : '#f9fafb', borderRadius: 10, marginBottom: 4 }}>
+                            <Text style={{ flex: 1, fontWeight: '600', fontSize: 14, color: active ? '#fff' : '#111' }}>
+                              {item.playerName}{item.number ? `  #${item.number}` : ''}
+                            </Text>
+                            {active && <Text style={{ color: '#fff', fontWeight: '800' }}>✓</Text>}
+                          </TouchableOpacity>
+                        );
+                      })}
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginTop: 4 }}>Player On (bench)</Text>
+                      {rosterForPick.filter((x: any) => x.role === 'bench' && x.id !== subOutId).map((item: any) => {
+                        const active = item.id === subInId;
+                        return (
+                          <TouchableOpacity key={item.id} onPress={() => setSubInId(item.id)} activeOpacity={0.6}
+                            style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 11, paddingHorizontal: 12, backgroundColor: active ? '#111' : '#f9fafb', borderRadius: 10, marginBottom: 4 }}>
+                            <Text style={{ flex: 1, fontWeight: '600', fontSize: 14, color: active ? '#fff' : '#111' }}>
+                              {item.playerName}{item.number ? `  #${item.number}` : ''}
+                            </Text>
+                            {active && <Text style={{ color: '#fff', fontWeight: '800' }}>✓</Text>}
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </>
+                  ) : eventType === 'goal' ? (
                     <>
                       {/* Goal side */}
                       <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -1162,6 +1226,34 @@ const addSelectedToRoster = async () => {
               <TouchableOpacity onPress={saveEditedEvent} style={{ paddingVertical: 10, paddingHorizontal: 24, backgroundColor: '#111', borderRadius: 12 }}>
                 <Text style={{ fontWeight: '700', color: '#fff', fontSize: 15 }}>Save</Text>
               </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ===== Goal Location Modal ===== */}
+      <Modal visible={showGoalMap} animationType="slide" transparent onRequestClose={() => setShowGoalMap(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 32 }}>
+            <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: '#e5e7eb', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <View>
+                <Text style={{ fontSize: 17, fontWeight: '700', color: '#111' }}>
+                  ⚽ {mapEvent?.scorerName || 'Goal'}
+                  {mapEvent?.minute ? `  ·  ${mapEvent.minute}'` : ''}
+                </Text>
+                {mapEvent?.assistName ? (
+                  <Text style={{ fontSize: 13, color: '#9ca3af', marginTop: 2 }}>Assist: {mapEvent.assistName}</Text>
+                ) : null}
+              </View>
+              <TouchableOpacity onPress={() => setShowGoalMap(false)}>
+                <Text style={{ fontSize: 20, color: '#9ca3af', fontWeight: '600' }}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={{ paddingHorizontal: 20, paddingTop: 16 }}>
+              <MiniPitchDisplay
+                goalPos={mapEvent?.pos}
+                assistPos={mapEvent?.assistPos}
+              />
             </View>
           </View>
         </View>

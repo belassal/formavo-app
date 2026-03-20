@@ -24,6 +24,7 @@ import {
   updateTeamMembership,
 } from '../../services/playerService';
 import { createMatch, listenMatches } from '../../services/matchService';
+import { inviteCoach, listenTeamMembers } from '../../services/teamService';
 import FormationPickerModal, { FormationPickerResult } from '../matches/components/FormationPickerModal';
 import DateTimePickerModal, { formatDateISO } from '../../components/DateTimePickerModal';
 
@@ -118,6 +119,16 @@ export default function TeamDetailScreen() {
   // Accordion open/close
   const [rosterOpen, setRosterOpen] = useState(false);
   const [matchesOpen, setMatchesOpen] = useState(false);
+  const [coachesOpen, setCoachesOpen] = useState(false);
+
+  // Coaches / members
+  const [teamMembers, setTeamMembers] = useState<any[]>([]);
+
+  // Invite modal
+  const [showInvite, setShowInvite] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<'assistant' | 'coach'>('assistant');
+  const [savingInvite, setSavingInvite] = useState(false);
 
   // Roster
   const [loadingRoster, setLoadingRoster] = useState(true);
@@ -167,7 +178,8 @@ export default function TeamDetailScreen() {
       setMatches(visible);
       setLoadingMatches(false);
     });
-    return () => { unsubRoster(); unsubMatches(); };
+    const unsubMembers = listenTeamMembers(teamId, (rows) => setTeamMembers(rows));
+    return () => { unsubRoster(); unsubMatches(); unsubMembers(); };
   }, [teamId]);
 
   useEffect(() => {
@@ -242,6 +254,31 @@ export default function TeamDetailScreen() {
     } catch (e: any) {
       Alert.alert('Update Failed', e?.message ?? 'Unknown error');
     } finally { setSavingEdit(false); }
+  };
+
+  // --- Invite actions ---
+  const openInvite = () => {
+    setInviteEmail('');
+    setInviteRole('assistant');
+    setShowInvite(true);
+  };
+
+  const sendInvite = async () => {
+    const email = inviteEmail.trim().toLowerCase();
+    if (!email || !email.includes('@')) {
+      Alert.alert('Invalid email', 'Please enter a valid email address.');
+      return;
+    }
+    setSavingInvite(true);
+    try {
+      await inviteCoach({ teamId, inviteEmail: email, invitedBy: uid!, role: inviteRole });
+      setShowInvite(false);
+      Alert.alert('Invite sent', `An invite has been sent to ${email}.`);
+    } catch (e: any) {
+      Alert.alert('Invite failed', e?.message ?? 'Unknown error');
+    } finally {
+      setSavingInvite(false);
+    }
   };
 
   // --- Match actions ---
@@ -425,7 +462,114 @@ export default function TeamDetailScreen() {
           )}
         </View>
 
+        {/* ===== COACHES ACCORDION ===== */}
+        <View style={S.sectionContainer}>
+          <TouchableOpacity
+            style={S.sectionHeader}
+            onPress={() => setCoachesOpen((v) => !v)}
+            activeOpacity={0.7}
+          >
+            <View style={S.sectionTitleRow}>
+              <Text style={S.sectionTitle}>Coaches</Text>
+              {teamMembers.length > 0 && (
+                <Text style={S.sectionCount}>{teamMembers.length}</Text>
+              )}
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <TouchableOpacity
+                onPress={(e) => { e.stopPropagation(); openInvite(); }}
+                style={S.addBtn}
+                hitSlop={ICON_HITSLOP}
+              >
+                <Text style={S.addBtnText}>+ Invite</Text>
+              </TouchableOpacity>
+              <Text style={[S.chevron, { transform: [{ rotate: coachesOpen ? '90deg' : '0deg' }] }]}>›</Text>
+            </View>
+          </TouchableOpacity>
+
+          {coachesOpen && (
+            teamMembers.length === 0 ? (
+              <>
+                <View style={S.divider} />
+                <View style={S.emptyRow}>
+                  <Text style={S.emptyText}>No coaches yet. Tap "+ Invite" to add one.</Text>
+                </View>
+              </>
+            ) : (
+              teamMembers.map((m) => {
+                const isInvite = m.status === 'invited';
+                return (
+                  <View key={m.id}>
+                    <View style={S.divider} />
+                    <View style={S.row}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 15, fontWeight: '600', color: '#111' }}>
+                          {isInvite ? m.invitedEmail || 'Invited' : (m.displayName || m.invitedEmail || m.id)}
+                        </Text>
+                        <Text style={{ marginTop: 2, fontSize: 13, color: '#9ca3af' }}>
+                          {m.role || 'assistant'}{isInvite ? ' · Pending' : ' · Active'}
+                        </Text>
+                      </View>
+                      {isInvite && (
+                        <View style={{ paddingHorizontal: 8, paddingVertical: 3, backgroundColor: '#fef9c3', borderRadius: 8 }}>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#a16207' }}>Pending</Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                );
+              })
+            )
+          )}
+        </View>
+
       </ScrollView>
+
+      {/* ===== INVITE COACH MODAL ===== */}
+      <Modal visible={showInvite} animationType="slide" transparent onRequestClose={() => setShowInvite(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, gap: 14 }}>
+            <Text style={{ fontSize: 17, fontWeight: '700', color: '#111' }}>Invite Coach</Text>
+
+            <TextInput
+              placeholder="Email address"
+              placeholderTextColor="#9ca3af"
+              autoCapitalize="none"
+              keyboardType="email-address"
+              value={inviteEmail}
+              onChangeText={setInviteEmail}
+              style={{ backgroundColor: '#f3f4f6', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 13, fontSize: 16, color: '#111' }}
+            />
+
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {(['assistant', 'coach'] as const).map((r) => (
+                <TouchableOpacity
+                  key={r}
+                  onPress={() => setInviteRole(r)}
+                  style={{ flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center', backgroundColor: inviteRole === r ? '#111' : '#f3f4f6' }}
+                >
+                  <Text style={{ fontWeight: '600', fontSize: 14, color: inviteRole === r ? '#fff' : '#374151' }}>
+                    {r === 'coach' ? 'Head Coach' : 'Assistant'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
+              <TouchableOpacity onPress={() => setShowInvite(false)} style={{ paddingVertical: 10, paddingHorizontal: 16 }}>
+                <Text style={{ color: '#6b7280', fontWeight: '600', fontSize: 15 }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={sendInvite}
+                disabled={savingInvite}
+                style={{ paddingVertical: 10, paddingHorizontal: 24, backgroundColor: '#111', borderRadius: 12, opacity: savingInvite ? 0.6 : 1 }}
+              >
+                <Text style={{ fontWeight: '700', color: '#fff', fontSize: 15 }}>Send Invite</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* ===== ADD PLAYER MODAL ===== */}
       <Modal visible={showAddPlayer} animationType="slide" transparent onRequestClose={() => setShowAddPlayer(false)}>

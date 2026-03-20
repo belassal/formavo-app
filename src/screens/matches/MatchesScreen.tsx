@@ -3,6 +3,8 @@ import {
   ActivityIndicator,
   FlatList,
   SafeAreaView,
+  ScrollView,
+  StyleSheet,
   Text,
   TouchableOpacity,
   View,
@@ -15,148 +17,140 @@ import { listenMatches } from '../../services/matchService';
 import { formatDateISO } from '../../components/DateTimePickerModal';
 
 type TeamRow = { id: string; teamName?: string };
+type StatusFilter = 'all' | 'scheduled' | 'live' | 'completed';
+
+const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'scheduled', label: 'Scheduled' },
+  { key: 'live', label: 'Live' },
+  { key: 'completed', label: 'Final' },
+];
 
 export default function MatchesScreen() {
   const navigation = useNavigation<any>();
   const uid = useMemo(() => auth().currentUser?.uid ?? null, []);
 
-  // --- icon buttons (make ALL edit/delete icons match the event style) ---
-  const ICON_BTN = {
-    width: 24,
-    height: 24,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    opacity: 0.6,
-  };
-
-  const ICON_HITSLOP = { top: 12, bottom: 12, left: 12, right: 12 };
-
-  const ICON_EDIT_TEXT = { fontSize: 16, fontWeight: '900' as const };
-  const ICON_X_TEXT = { fontSize: 16, fontWeight: '900' as const, color: '#b00020' };
-
   const [loading, setLoading] = useState(true);
-
   const [teams, setTeams] = useState<TeamRow[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [selectedTeamName, setSelectedTeamName] = useState<string>('');
-
   const [matches, setMatches] = useState<any[]>([]);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
   // teams
   useEffect(() => {
     if (!uid) return;
-
     const unsub = listenMyTeams(uid, (rows) => {
       const t = rows as TeamRow[];
       setTeams(t);
-
-      // auto-select first team
       if (!selectedTeamId && t.length > 0) {
         setSelectedTeamId(t[0].id);
         setSelectedTeamName(t[0].teamName || 'Team');
       }
-
       setLoading(false);
     });
-
     return () => unsub();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uid]);
 
   // matches for selected team
   useEffect(() => {
-    if (!selectedTeamId) {
-      setMatches([]);
-      return;
-    }
-
+    if (!selectedTeamId) { setMatches([]); return; }
     const unsub = listenMatches(selectedTeamId, (rows) => {
-      const visible = (rows || []).filter((m: any) => !m.isDeleted);
-      setMatches(visible);
+      setMatches((rows || []).filter((m: any) => !m.isDeleted));
     });
-
     return () => unsub();
   }, [selectedTeamId]);
 
-  const selectTeam = (t: TeamRow) => {
-    setSelectedTeamId(t.id);
-    setSelectedTeamName(t.teamName || 'Team');
-  };
-
-  const pill = (label: string) => (
-    <View style={{ paddingVertical: 4, paddingHorizontal: 10, borderWidth: 1, borderRadius: 999 }}>
-      <Text style={{ fontWeight: '800', fontSize: 12 }}>{label}</Text>
-    </View>
-  );
+  const filteredMatches = useMemo(() => {
+    if (statusFilter === 'all') return matches;
+    return matches.filter((m) => {
+      const st = String(m.status || 'scheduled');
+      if (statusFilter === 'completed') return st === 'completed';
+      return st === statusFilter;
+    });
+  }, [matches, statusFilter]);
 
   if (loading) {
     return (
-      <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator />
+      <SafeAreaView style={styles.root}>
+        <ActivityIndicator style={{ marginTop: 80 }} />
       </SafeAreaView>
     );
   }
 
   if (teams.length === 0) {
     return (
-      <SafeAreaView style={{ flex: 1, padding: 16 }}>
-        <Text style={{ fontSize: 22, fontWeight: '800' }}>Matches</Text>
-        <Text style={{ marginTop: 12, color: '#666' }}>
-          No teams yet. Create a team first, then you can create matches.
-        </Text>
+      <SafeAreaView style={styles.root}>
+        <Text style={styles.screenTitle}>Matches</Text>
+        <Text style={styles.emptyText}>No teams yet. Create a team first.</Text>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, padding: 16 }}>
-      <Text style={{ fontSize: 22, fontWeight: '800' }}>Matches</Text>
+    <SafeAreaView style={styles.root}>
+      <Text style={styles.screenTitle}>Matches</Text>
 
       {/* Team picker */}
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 12 }}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.teamScroll} contentContainerStyle={styles.teamScrollContent}>
         {teams.map((t) => {
           const active = t.id === selectedTeamId;
           return (
             <TouchableOpacity
               key={t.id}
-              onPress={() => selectTeam(t)}
-              style={{
-                paddingVertical: 8,
-                paddingHorizontal: 12,
-                borderWidth: 1,
-                borderRadius: 999,
-                backgroundColor: active ? '#111' : 'transparent',
-              }}
+              onPress={() => { setSelectedTeamId(t.id); setSelectedTeamName(t.teamName || 'Team'); }}
+              style={[styles.teamPill, active && styles.teamPillActive]}
             >
-              <Text style={{ fontWeight: '800', color: active ? 'white' : '#111' }}>
+              <Text style={[styles.teamPillText, active && styles.teamPillTextActive]}>
                 {t.teamName || 'Team'}
               </Text>
             </TouchableOpacity>
           );
         })}
+      </ScrollView>
+
+      {/* Status filter */}
+      <View style={styles.filterRow}>
+        {STATUS_FILTERS.map((f) => (
+          <TouchableOpacity
+            key={f.key}
+            onPress={() => setStatusFilter(f.key)}
+            style={[styles.filterPill, statusFilter === f.key && styles.filterPillActive]}
+          >
+            <Text style={[styles.filterPillText, statusFilter === f.key && styles.filterPillTextActive]}>
+              {f.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
-      <Text style={{ marginTop: 14, fontSize: 16, fontWeight: '800' }}>{selectedTeamName}</Text>
-
-      {matches.length === 0 ? (
-        <Text style={{ marginTop: 12, color: '#666' }}>
-          No matches for this team yet. Go to the team and create a match.
-        </Text>
+      {filteredMatches.length === 0 ? (
+        <View style={styles.emptyWrap}>
+          <Text style={styles.emptyText}>
+            {statusFilter === 'all'
+              ? 'No matches yet. Go to your team to create one.'
+              : `No ${statusFilter} matches.`}
+          </Text>
+        </View>
       ) : (
         <FlatList
-          style={{ marginTop: 12 }}
-          data={matches}
+          data={filteredMatches}
           keyExtractor={(m) => m.id}
+          style={styles.list}
+          contentContainerStyle={{ paddingBottom: 24 }}
+          ItemSeparatorComponent={() => <View style={styles.divider} />}
+          ListHeaderComponent={<View style={styles.cardTop} />}
+          ListFooterComponent={<View style={styles.cardBottom} />}
           renderItem={({ item }) => {
-            const count = Number.isFinite(item?.rosterCount) ? item.rosterCount : 0;
-
             const st = String(item.status || 'scheduled');
             const hg = Number.isFinite(item.homeScore) ? item.homeScore : 0;
             const ag = Number.isFinite(item.awayScore) ? item.awayScore : 0;
 
-            let rightLabel = 'Scheduled';
-            if (st === 'live') rightLabel = `LIVE ${hg}-${ag}`;
-            if (st === 'completed') rightLabel = `FT ${hg}-${ag}`;
+            let statusLabel = 'Scheduled';
+            let statusColor = '#9ca3af';
+            if (st === 'live') { statusLabel = `LIVE ${hg}–${ag}`; statusColor = '#16a34a'; }
+            if (st === 'completed') { statusLabel = `FT ${hg}–${ag}`; statusColor = '#374151'; }
 
             return (
               <TouchableOpacity
@@ -170,33 +164,158 @@ export default function MatchesScreen() {
                     },
                   })
                 }
-                style={{ borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 10 }}
+                style={styles.matchRow}
+                activeOpacity={0.7}
               >
-                {/* Top row: opponent + status */}
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <Text style={{ fontSize: 16, fontWeight: '800', flex: 1, marginRight: 8 }}>
-                    vs {item.opponent || 'Opponent'}
+                <View style={styles.matchRowLeft}>
+                  <Text style={styles.opponent}>vs {item.opponent || 'Opponent'}</Text>
+                  <Text style={styles.meta}>
+                    {item.dateISO ? formatDateISO(item.dateISO) : 'No date'}
+                    {item.location ? ` · ${item.location}` : ''}
                   </Text>
-                  {pill(rightLabel)}
+                  {item.format ? (
+                    <Text style={styles.formatLabel}>{item.format}{item.formation ? ` · ${item.formation}` : ''}</Text>
+                  ) : null}
                 </View>
-
-                {/* Date + location */}
-                <Text style={{ marginTop: 3, color: '#666', fontSize: 13 }}>
-                  {item.dateISO ? formatDateISO(item.dateISO) : ''}
-                  {item.location ? ` · ${item.location}` : ''}
-                </Text>
-
-                {/* Bottom pill row */}
-                <View style={{ flexDirection: 'row', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-                  {item.format ? pill(item.format) : null}
-                  {pill(`${count} players`)}
-                </View>
+                <Text style={[styles.statusLabel, { color: statusColor }]}>{statusLabel}</Text>
               </TouchableOpacity>
             );
           }}
-
         />
       )}
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: '#f2f2f7',
+  },
+  screenTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#111',
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 12,
+  },
+  teamScroll: {
+    flexGrow: 0,
+    marginBottom: 12,
+  },
+  teamScrollContent: {
+    paddingHorizontal: 16,
+    gap: 8,
+    flexDirection: 'row',
+  },
+  teamPill: {
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    backgroundColor: '#f3f4f6',
+  },
+  teamPillActive: {
+    backgroundColor: '#111',
+  },
+  teamPillText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  teamPillTextActive: {
+    color: '#fff',
+  },
+  filterRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
+  filterPill: {
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    backgroundColor: '#f3f4f6',
+  },
+  filterPillActive: {
+    backgroundColor: '#111',
+  },
+  filterPillText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6b7280',
+  },
+  filterPillTextActive: {
+    color: '#fff',
+  },
+  emptyWrap: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 24,
+  },
+  emptyText: {
+    color: '#9ca3af',
+    fontSize: 15,
+    paddingHorizontal: 16,
+  },
+  list: {
+    paddingHorizontal: 16,
+  },
+  cardTop: {
+    height: 0,
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
+    borderWidth: 1,
+    borderBottomWidth: 0,
+    borderColor: '#e5e7eb',
+  },
+  cardBottom: {
+    height: 0,
+    backgroundColor: '#fff',
+    borderBottomLeftRadius: 14,
+    borderBottomRightRadius: 14,
+    borderWidth: 1,
+    borderTopWidth: 0,
+    borderColor: '#e5e7eb',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#f3f4f6',
+    marginLeft: 16,
+  },
+  matchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: '#fff',
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  matchRowLeft: {
+    flex: 1,
+    marginRight: 12,
+  },
+  opponent: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111',
+  },
+  meta: {
+    fontSize: 13,
+    color: '#9ca3af',
+    marginTop: 2,
+  },
+  formatLabel: {
+    fontSize: 12,
+    color: '#9ca3af',
+    marginTop: 2,
+  },
+  statusLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+});

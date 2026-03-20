@@ -30,6 +30,7 @@ import {
   listenMatchEvents,
   buildGoalEvent,
   buildCardEvent,
+  buildSubEvent,
 } from '../../services/matchService';
 import type { MatchEvent } from '../../models/matchEvent';
 type RouteT = RouteProp<TeamsStackParamList, 'GameDayPitch'>;
@@ -89,7 +90,7 @@ export default function GameDayPitchScreen() {
 
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardPreset, setWizardPreset] =
-  useState<null | { type:'goal'; side:'home'|'away' } | { type:'card' }>(null);
+  useState<null | { type:'goal'; side:'home'|'away' } | { type:'card' } | { type:'sub' }>(null);
 
   // Layout mode (drag positions)
   const [layoutMode, setLayoutMode] = useState(false);
@@ -160,11 +161,35 @@ export default function GameDayPitchScreen() {
   const getCurrentMatchSec = () => computeElapsedSec(state, Date.now());
   const currentMinute = () => computeMinute(state, Date.now());
 
-  // Starters
+  // For auto-assign: original starters by role
   const starters = useMemo(() => {
     return roster
       .filter((r) => (r.role || 'bench') === 'starter')
       .filter((r) => (r.attendance || 'present') !== 'absent')
+      .map((r) => ({
+        id: r.playerId || r.id,
+        name: r.playerName || 'Unknown',
+        number: r.number ? String(r.number) : undefined,
+      }));
+  }, [roster]);
+
+  // onPitch: anyone currently assigned to a slot (accounts for subs)
+  const onPitch = useMemo(() => {
+    return roster
+      .filter((r) => !!r.slotKey)
+      .filter((r) => (r.attendance || 'present') !== 'absent')
+      .map((r) => ({
+        id: r.playerId || r.id,
+        name: r.playerName || 'Unknown',
+        number: r.number ? String(r.number) : undefined,
+      }));
+  }, [roster]);
+
+  // bench: anyone present without a slot (available to come on)
+  const bench = useMemo(() => {
+    return roster
+      .filter((r) => !r.slotKey)
+      .filter((r) => (r.attendance || 'present') === 'present')
       .map((r) => ({
         id: r.playerId || r.id,
         name: r.playerName || 'Unknown',
@@ -517,7 +542,7 @@ const onEnd = async () => {
       >
         <GameDayPitch
           formation={formation}
-          starters={starters}
+          starters={onPitch}
           playerToSlotKey={playerToSlotKey}
           containerSize={pitchContainerSize ?? undefined}
           slotPos={match.slotPos || {}}
@@ -536,7 +561,6 @@ const onEnd = async () => {
           }}
           onSlotPress={(slotKey) => {
             if (layoutMode) return;
-            if (derivedState.status === 'live') return; // ✅ block assign while live
             setAssignSlotKey(slotKey);
           }}
         />
@@ -573,10 +597,10 @@ const onEnd = async () => {
               </TouchableOpacity>
             </View>
 
-            <Text style={[styles.modalSectionTitle, { marginTop: 14 }]}>Pick a starter</Text>
+            <Text style={[styles.modalSectionTitle, { marginTop: 14 }]}>Pick a player</Text>
 
             <FlatList
-              data={starters}
+              data={[...onPitch, ...bench]}
               keyExtractor={(p) => p.id}
               renderItem={({ item }) => {
                 const current = playerToSlotKey[item.id] || '';
@@ -637,7 +661,7 @@ const onEnd = async () => {
               <>
                 <Text style={[styles.modalSectionTitle, { marginTop: 14 }]}>Assist (optional)</Text>
                 <FlatList
-                  data={starters.filter(p => p.id !== activePlayerId)}
+                  data={onPitch.filter(p => p.id !== activePlayerId)}
                   keyExtractor={(p) => p.id}
                   renderItem={({ item }) => {
                     const active = assistId === item.id;
@@ -693,7 +717,8 @@ const onEnd = async () => {
       <EventWizard
         visible={wizardOpen}
         preset={wizardPreset as any}
-        starters={starters}
+        starters={onPitch}
+        bench={bench}
         onCancel={() => {
           setWizardOpen(false);
           setWizardPreset(null);
@@ -705,7 +730,6 @@ const onEnd = async () => {
             if (p.type === 'goal') {
               const scorerName = p.scorerId ? getPlayerName(p.scorerId) : 'Team';
               const assistName = p.assistId ? getPlayerName(p.assistId) : '';
-
               await addMatchEvent({
                 teamId,
                 matchId,
@@ -717,9 +741,10 @@ const onEnd = async () => {
                   assistId: p.assistId || '',
                   assistName,
                   pos: p.pos,
+                  assistPos: p.assistPos,
                 }),
               });
-            } else {
+            } else if (p.type === 'card') {
               await addMatchEvent({
                 teamId,
                 matchId,
@@ -731,6 +756,24 @@ const onEnd = async () => {
                   pos: p.pos,
                 }),
               });
+            } else if (p.type === 'sub') {
+              await addMatchEvent({
+                teamId,
+                matchId,
+                event: buildSubEvent({
+                  minute,
+                  outPlayerId: p.outPlayerId!,
+                  outPlayerName: getPlayerName(p.outPlayerId!),
+                  inPlayerId: p.inPlayerId!,
+                  inPlayerName: getPlayerName(p.inPlayerId!),
+                }),
+              });
+              // Move the incoming player to the outgoing player's slot on the pitch
+              const outSlot = playerToSlotKey[p.outPlayerId!];
+              if (outSlot) {
+                await setMatchRosterSlotKey({ teamId, matchId, playerId: p.outPlayerId!, slotKey: null });
+                await setMatchRosterSlotKey({ teamId, matchId, playerId: p.inPlayerId!, slotKey: outSlot });
+              }
             }
 
             setWizardOpen(false);

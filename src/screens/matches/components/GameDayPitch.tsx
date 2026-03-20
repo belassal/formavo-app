@@ -10,6 +10,7 @@ import {
 
 import { buildSlots, type Slot } from '../../../services/formation';
 import type { PlayerLite } from '../../../services/lineupMapping';
+import type { MatchEvent } from '../../../models/matchEvent';
 
 type SlotPos = { x: number; y: number }; // 0..1 (relative)
 
@@ -25,6 +26,8 @@ type Props = {
 
   /** Available container size — when provided, pitch fills it exactly */
   containerSize?: { width: number; height: number };
+  /** Match events — used to show goal badges on player bubbles. */
+  events?: MatchEvent[];
   /** Tap a filled bubble (player). */
   onPlayerPress?: (playerId: string) => void;
   /** Tap a slot (empty or filled) to open the assign modal. */
@@ -322,6 +325,7 @@ export default function GameDayPitch({
   onPlayerPress,
   onSlotPress,
   containerSize,
+  events,
 }: Props) {
   const dims = useWindowDimensions();
 
@@ -347,6 +351,30 @@ export default function GameDayPitch({
     }
     return m;
   }, [starters, playerToSlotKey]);
+
+  // Count home-side goals per player
+  const goalsByPlayerId = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const e of events || []) {
+      if (e.type === 'goal' && e.side === 'home' && e.scorerId) {
+        m[e.scorerId] = (m[e.scorerId] || 0) + 1;
+      }
+    }
+    return m;
+  }, [events]);
+
+  // Highest card colour per player (red beats yellow)
+  const cardByPlayerId = useMemo(() => {
+    const m: Record<string, 'yellow' | 'red'> = {};
+    for (const e of events || []) {
+      if (e.type === 'card' && e.playerId) {
+        if (e.cardColor === 'red' || m[e.playerId] !== 'red') {
+          m[e.playerId] = e.cardColor === 'red' ? 'red' : 'yellow';
+        }
+      }
+    }
+    return m;
+  }, [events]);
 
   return (
     <View style={styles.container}>
@@ -374,6 +402,8 @@ export default function GameDayPitch({
           const openAssign = () => onSlotPress?.(slot.key);
 
           if (player) {
+            const goals = goalsByPlayerId[player.id] || 0;
+            const card  = cardByPlayerId[player.id] || null;
             return (
               <SlotBubble
                 key={slot.key}
@@ -395,6 +425,22 @@ export default function GameDayPitch({
                   {player.name}
                 </Text>
                 <Text style={styles.slotHint}>{label}</Text>
+
+                {/* Card badge — top-left */}
+                {card && (
+                  <View style={[styles.cardBadge, card === 'red' && styles.cardBadgeRed]}>
+                    <View style={styles.cardRect} />
+                  </View>
+                )}
+
+                {/* Goal badge — top-right */}
+                {goals > 0 && (
+                  <View style={[styles.goalBadge, goals > 1 && styles.goalBadgeWide]}>
+                    <Text style={styles.goalBadgeText}>
+                      {goals > 1 ? `⚽ ${goals}` : '⚽'}
+                    </Text>
+                  </View>
+                )}
               </SlotBubble>
             );
           }
@@ -494,6 +540,54 @@ const styles = StyleSheet.create({
     bottom: -12,
     fontSize: 9,
     color: 'rgba(255,255,255,0.85)',
+  },
+
+  cardBadge: {
+    position: 'absolute',
+    top: -6,
+    left: -6,
+    width: 18,
+    height: 18,
+    borderRadius: 4,
+    backgroundColor: '#facc15',
+    borderWidth: 1.5,
+    borderColor: 'white',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardBadgeRed: {
+    backgroundColor: '#ef4444',
+  },
+  cardRect: {
+    width: 7,
+    height: 10,
+    borderRadius: 1,
+    backgroundColor: 'white',
+    opacity: 0.85,
+  },
+
+  goalBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#facc15',
+    borderWidth: 1.5,
+    borderColor: 'white',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  goalBadgeWide: {
+    minWidth: 28,
+    borderRadius: 9,
+  },
+  goalBadgeText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#111',
   },
 
   slotHintEmpty: {

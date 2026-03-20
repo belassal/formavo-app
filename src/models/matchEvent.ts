@@ -35,7 +35,9 @@ export type MatchEvent = {
 
   // substitution
   inPlayerId?: string;
+  inPlayerName?: string;
   outPlayerId?: string;
+  outPlayerName?: string;
 
   // bookkeeping
   createdAt?: any;

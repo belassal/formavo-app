@@ -494,6 +494,23 @@ export function buildCardEvent(p: {
   };
 }
 
+export function buildSubEvent(p: {
+  minute: number | string;
+  inPlayerId: string;
+  inPlayerName: string;
+  outPlayerId: string;
+  outPlayerName: string;
+}): Omit<MatchEvent, 'id' | 'createdAt' | 'updatedAt'> {
+  return {
+    type: 'sub',
+    minute: clampMinute(p.minute),
+    inPlayerId: p.inPlayerId,
+    inPlayerName: norm(p.inPlayerName),
+    outPlayerId: p.outPlayerId,
+    outPlayerName: norm(p.outPlayerName),
+  };
+}
+
 /** Mark match as live (start game) */
 export async function markMatchLive(params: { teamId: string; matchId: string }) {
   const { teamId, matchId } = params;

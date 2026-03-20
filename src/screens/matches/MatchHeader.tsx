@@ -20,7 +20,7 @@ type Props = {
   onPause: () => void;
   onResume: () => void;
   onEnd: () => void;
-  onQuickEvent: (preset: { type: 'goal'|'card'; side?: 'home'|'away' }) => void;
+  onQuickEvent: (preset: { type: 'goal'|'card'|'sub'; side?: 'home'|'away' }) => void;
 };
 
 function fmt(sec: number) {
@@ -114,6 +114,10 @@ export default function MatchHeader({
 
         <Pressable style={styles.quickBtn} onPress={() => onQuickEvent({ type: 'card' })}>
           <Text style={styles.quickText}>🟨 Card</Text>
+        </Pressable>
+
+        <Pressable style={styles.quickBtn} onPress={() => onQuickEvent({ type: 'sub' })}>
+          <Text style={styles.quickText}>↕ Sub</Text>
         </Pressable>
       </View>
     </View>
