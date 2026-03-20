@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { computeElapsedSec } from '../../services/matchClock'; // adjust path
+import { computeElapsedSec, computeDisplayMinute } from '../../services/matchClock';
 
-export type MatchStatus = 'draft' | 'live' | 'paused' | 'final';
+export type MatchStatus = 'draft' | 'live' | 'paused' | 'halftime' | 'final';
 
 export type MatchState = {
   status: MatchStatus;
+  half?: 1 | 2;
   startedAt?: number;   // epoch ms
   resumedAt?: number;   // epoch ms
   elapsedSec: number;   // accumulated seconds
@@ -16,9 +17,12 @@ export type MatchState = {
 type Props = {
   state: MatchState;
   canEdit?: boolean; // coach vs parent
+  halfDuration?: number; // minutes per half, default 45
   onStart: () => void;
   onPause: () => void;
   onResume: () => void;
+  onHalfTime: () => void;
+  onStartSecondHalf: () => void;
   onEnd: () => void;
   onQuickEvent: (preset: { type: 'goal'|'card'|'sub'; side?: 'home'|'away' }) => void;
 };
@@ -33,40 +37,46 @@ function fmt(sec: number) {
 export default function MatchHeader({
   state,
   canEdit = true,
+  halfDuration = 45,
   onStart,
   onPause,
   onResume,
+  onHalfTime,
+  onStartSecondHalf,
   onEnd,
   onQuickEvent,
 }: Props) {
   const [now, setNow] = useState(() => Date.now());
 
-  // tick while live
+  // tick while live (pause/resume still needs the clock updating for elapsed display)
   useEffect(() => {
     if (state.status !== 'live') return;
     const t = setInterval(() => setNow(Date.now()), 500);
     return () => clearInterval(t);
   }, [state.status]);
 
-  const liveElapsed = useMemo(() => {
-    return computeElapsedSec(state, now);
-  }, [state, now]);
+  const liveElapsed = useMemo(() => computeElapsedSec(state, now), [state, now]);
 
-  const clockText = fmt(liveElapsed);
+  const clockText = computeDisplayMinute(state, now, halfDuration);
 
   const leftBtn = useMemo(() => {
     if (!canEdit) return null;
-    if (state.status === 'draft') return { label: 'Start', onPress: onStart };
-    if (state.status === 'live') return { label: 'Pause', onPress: onPause };
-    if (state.status === 'paused') return { label: 'Resume', onPress: onResume };
+    if (state.status === 'draft')     return { label: 'Kick Off',  onPress: onStart };
+    if (state.status === 'halftime')  return { label: '2nd Half',  onPress: onStartSecondHalf };
+    if (state.status === 'live') {
+      if ((state.half ?? 1) === 1)    return { label: 'Half Time', onPress: onHalfTime };
+      return                                 { label: 'Pause',      onPress: onPause };
+    }
+    if (state.status === 'paused')    return { label: 'Resume',    onPress: onResume };
     return null;
-  }, [state.status, canEdit, onStart, onPause, onResume]);
+  }, [state.status, state.half, canEdit, onStart, onHalfTime, onStartSecondHalf, onPause, onResume]);
 
   const rightBtn = useMemo(() => {
     if (!canEdit) return null;
     if (state.status === 'final') return null;
-    return { label: 'End', onPress: onEnd };
-  }, [state.status, canEdit, onEnd]);
+    const label = state.status === 'live' && (state.half ?? 1) === 2 ? 'Full Time' : 'End';
+    return { label, onPress: onEnd };
+  }, [state.status, state.half, canEdit, onEnd]);
 
   const homeMinusDisabled = (state.homeScore ?? 0) <= 0;
   const awayMinusDisabled = (state.awayScore ?? 0) <= 0;
@@ -97,10 +107,11 @@ export default function MatchHeader({
       </View>
 
       <Text style={styles.status}>
-        {state.status === 'draft' && 'Setup Mode'}
-        {state.status === 'live' && 'Live Mode'}
-        {state.status === 'paused' && 'Paused'}
-        {state.status === 'final' && 'Final'}
+        {state.status === 'draft'    && 'Setup'}
+        {state.status === 'live'     && ((state.half ?? 1) === 1 ? '1st Half' : '2nd Half')}
+        {state.status === 'halftime' && 'Half Time'}
+        {state.status === 'paused'   && 'Paused'}
+        {state.status === 'final'    && 'Full Time'}
       </Text>
 
       <View style={styles.quickRow}>

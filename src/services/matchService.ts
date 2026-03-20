@@ -33,8 +33,9 @@ export async function createMatch(params: {
   location?: string;
   format?: string;       // e.g. "7v7" | "9v9" | "11v11"
   formation?: string;    // e.g. "4-3-3"
+  halfDuration?: number; // minutes per half, default 45
 }) {
-  const { teamId, opponent, dateISO, location = '', format = '', formation = '' } = params;
+  const { teamId, opponent, dateISO, location = '', format = '', formation = '', halfDuration = 45 } = params;
 
   if (!opponent.trim()) throw new Error('Opponent is required');
   if (!dateISO.trim()) throw new Error('Date is required');
@@ -48,6 +49,7 @@ export async function createMatch(params: {
     location: location.trim(),
     format: format.trim(),
     formation: formation.trim(),
+    halfDuration,
     status: 'scheduled' as MatchStatus,
     homeScore: 0,
     awayScore: 0,

@@ -124,6 +124,15 @@ type MatchEvent = {
 - Player tap → goal/card log modal
 - Slot tap → assign player modal (allowed during live for sub corrections)
 
+### StatsScreen (`src/screens/teams/StatsScreen.tsx`)
+- Route: `TeamStats { teamId, teamName }` — navigated from TeamDetailScreen banner
+- Two segments: **Team** (W/D/L record, goals, form) and **Players** (leaderboard)
+- Team stats: computed from completed matches (`state.status === 'final'` or `status === 'completed'`)
+- Player stats: goals/assists/yellow/red cards aggregated from all match events (home goals only for scorer/assist)
+- Player leaderboard sortable by Goals / Assists / Cards; top row highlighted
+- Pull-to-refresh supported
+- No Firestore writes — pure client-side aggregation on read
+
 ## Preferences
 - Flat-list-with-dividers layout preferred over grouped cards with individual borders
 - Review and approve changes incrementally before moving to the next task

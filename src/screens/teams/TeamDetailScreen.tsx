@@ -165,6 +165,7 @@ export default function TeamDetailScreen() {
   const [pickedFormat, setPickedFormat] = useState('');
   const [pickedFormation, setPickedFormation] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [halfDuration, setHalfDuration] = useState(45);
 
   // --- Listeners ---
   useEffect(() => {
@@ -283,7 +284,7 @@ export default function TeamDetailScreen() {
 
   // --- Match actions ---
   const openCreateMatch = () => {
-    setOpponent(''); setDateISO(''); setLocation(''); setPickedFormat(''); setPickedFormation('');
+    setOpponent(''); setDateISO(''); setLocation(''); setPickedFormat(''); setPickedFormation(''); setHalfDuration(45);
     setShowFormationPicker(true);
   };
 
@@ -301,7 +302,7 @@ export default function TeamDetailScreen() {
     if (!dt) { Alert.alert('Missing Date', 'Please select a date and time.'); return; }
     try {
       setCreatingMatch(true);
-      const matchId = await createMatch({ teamId, opponent: opp, dateISO: dt, location: location.trim(), format: pickedFormat, formation: pickedFormation });
+      const matchId = await createMatch({ teamId, opponent: opp, dateISO: dt, location: location.trim(), format: pickedFormat, formation: pickedFormation, halfDuration });
       setShowCreateMatch(false);
       navigation.navigate('MatchDetail', { teamId, matchId, title: `${teamName} vs ${opp}` });
     } catch (e: any) {
@@ -321,6 +322,29 @@ export default function TeamDetailScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#f2f2f7' }}>
       <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
+
+        {/* ===== STATS BANNER ===== */}
+        <TouchableOpacity
+          onPress={() => navigation.navigate('TeamStats', { teamId, teamName })}
+          activeOpacity={0.8}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            backgroundColor: '#111',
+            borderRadius: 14,
+            paddingHorizontal: 18,
+            paddingVertical: 14,
+          }}
+        >
+          <View>
+            <Text style={{ fontSize: 16, fontWeight: '800', color: '#fff' }}>📊 Season Stats</Text>
+            <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', marginTop: 2 }}>
+              Team record · Player leaders · Form
+            </Text>
+          </View>
+          <Text style={{ fontSize: 20, color: 'rgba(255,255,255,0.4)' }}>›</Text>
+        </TouchableOpacity>
 
         {/* ===== ROSTER ACCORDION ===== */}
         <View style={S.sectionContainer}>
@@ -687,6 +711,28 @@ export default function TeamDetailScreen() {
               <Text style={{ fontSize: 16 }}>📅</Text>
             </TouchableOpacity>
             <TextInput placeholder="Location (optional)" value={location} onChangeText={setLocation} style={S.input} />
+
+            <View>
+              <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 8 }}>Half duration</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                {[20, 25, 30, 35, 40, 45].map((mins) => (
+                  <TouchableOpacity
+                    key={mins}
+                    onPress={() => setHalfDuration(mins)}
+                    style={{
+                      paddingVertical: 8,
+                      paddingHorizontal: 14,
+                      borderRadius: 10,
+                      backgroundColor: halfDuration === mins ? '#111' : '#f3f4f6',
+                    }}
+                  >
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: halfDuration === mins ? '#fff' : '#374151' }}>
+                      {mins} min
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
 
             <View style={{ flexDirection: 'row', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
               <TouchableOpacity onPress={() => setShowCreateMatch(false)} disabled={creatingMatch}>

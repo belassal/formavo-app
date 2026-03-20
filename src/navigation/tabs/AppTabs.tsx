@@ -1,10 +1,9 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import TeamsScreen from '../../screens/TeamsScreen';
 import MatchesScreen from '../../screens/matches/MatchesScreen';
-import StatsScreen from '../../screens/stats/StatsScreen';
 import ProfileScreen from '../../screens/profile/ProfileScreen';
 import TeamsStack from '../stacks/TeamsStack';
+import StatsStack from '../stacks/StatsStack';
 
 export type AppTabsParamList = {
   Teams: undefined;
@@ -18,11 +17,10 @@ const Tab = createBottomTabNavigator<AppTabsParamList>();
 export default function AppTabs() {
   return (
     <Tab.Navigator>
-      <Tab.Screen name="Teams" component={TeamsStack} />
+      <Tab.Screen name="Teams" component={TeamsStack} options={{ headerShown: false }} />
       <Tab.Screen name="Matches" component={MatchesScreen} />
-      <Tab.Screen name="Stats" component={StatsScreen} />
+      <Tab.Screen name="Stats" component={StatsStack} options={{ headerShown: false }} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );
 }
-

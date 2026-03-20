@@ -4,12 +4,14 @@ import TeamsScreen from '../../screens/TeamsScreen';
 import TeamDetailScreen from '../../screens/teams/TeamDetailScreen';
 import MatchDetailScreen from '../../screens/matches/MatchDetailScreen';
 import GameDayPitchScreen from '../../screens/matches/GameDayPitchScreen';
+import StatsScreen from '../../screens/teams/StatsScreen';
 
 export type TeamsStackParamList = {
   TeamsHome: undefined;
   TeamDetail: { teamId: string; teamName?: string };
   MatchDetail: { teamId: string; matchId: string; title?: string };
   GameDayPitch: { teamId: string; matchId: string };
+  TeamStats: { teamId: string; teamName?: string };
 };
 
 const Stack = createNativeStackNavigator<TeamsStackParamList>();
@@ -33,6 +35,11 @@ export default function TeamsStack() {
         name="GameDayPitch"
         component={GameDayPitchScreen}
         options={{ title: 'Game Day' }}
+      />
+      <Stack.Screen
+        name="TeamStats"
+        component={StatsScreen}
+        options={({ route }) => ({ title: `${route.params.teamName || 'Team'} Stats` })}
       />
     </Stack.Navigator>
   );

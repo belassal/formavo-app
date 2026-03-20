@@ -42,6 +42,7 @@ type MatchDoc = {
   dateISO?: string;
   status?: 'scheduled' | 'live' | 'completed'; // you can keep this if you want
   formation?: string;
+  halfDuration?: number;
   slotPos?: Record<string, SlotPos>;
   state?: MatchState;
 };
@@ -356,10 +357,32 @@ const derivedState = useMemo(() => {
 
 const onStart = async () => {
   const now = Date.now();
-  // first start
   await updateState({
     status: 'live',
+    half: 1,
     startedAt: state.startedAt ?? now,
+    resumedAt: now,
+  });
+};
+
+const onHalfTime = async () => {
+  const now = Date.now();
+  if (state.status !== 'live') return;
+  const resumedAt = state.resumedAt ?? state.startedAt ?? now;
+  const add = Math.max(0, (now - resumedAt) / 1000);
+  await updateState({
+    status: 'halftime',
+    elapsedSec: (state.elapsedSec || 0) + add,
+    resumedAt: undefined,
+  });
+};
+
+const onStartSecondHalf = async () => {
+  const now = Date.now();
+  if (state.status !== 'halftime') return;
+  await updateState({
+    status: 'live',
+    half: 2,
     resumedAt: now,
   });
 };
@@ -521,7 +544,10 @@ const onEnd = async () => {
         <MatchHeader
           state={derivedState}
           canEdit={true}
+          halfDuration={match?.halfDuration ?? 45}
           onStart={onStart}
+          onHalfTime={onHalfTime}
+          onStartSecondHalf={onStartSecondHalf}
           onPause={onPause}
           onResume={onResume}
           onEnd={onEnd}
