@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import Avatar from '../../components/Avatar';
 import auth from '@react-native-firebase/auth';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -414,6 +415,29 @@ export default function TeamDetailScreen() {
                 <View key={item.id}>
                   <View style={S.divider} />
                   <View style={S.row}>
+                    {/* Avatar — tapping navigates to player profile */}
+                    <TouchableOpacity
+                      onPress={() =>
+                        navigation.navigate('PlayerProfile', {
+                          teamId,
+                          playerId: item.id,
+                          playerName: item.playerName || '',
+                          playerNumber: item.number ? String(item.number) : undefined,
+                          playerPosition: item.position ? String(item.position) : undefined,
+                          avatarUrl: item.avatarUrl || undefined,
+                        })
+                      }
+                      activeOpacity={0.7}
+                      style={{ marginRight: 12 }}
+                    >
+                      <Avatar
+                        name={item.playerName || '?'}
+                        avatarUrl={item.avatarUrl ?? null}
+                        size={40}
+                      />
+                    </TouchableOpacity>
+
+                    {/* Name + meta — tapping opens edit */}
                     <TouchableOpacity onPress={() => openEditPlayer(item)} style={{ flex: 1 }} activeOpacity={0.6}>
                       <Text style={{ fontSize: 15, fontWeight: '600', color: '#111' }} numberOfLines={1}>
                         {item.playerName}{item.number ? `  #${item.number}` : ''}
@@ -422,6 +446,7 @@ export default function TeamDetailScreen() {
                         {item.position ? `${item.position} · ` : ''}{item.type || 'regular'} · {item.status || 'active'}
                       </Text>
                     </TouchableOpacity>
+
                     <View style={{ flexDirection: 'row', gap: 2 }}>
                       <TouchableOpacity onPress={() => openEditPlayer(item)} style={ICON_BTN} hitSlop={ICON_HITSLOP}>
                         <Text style={ICON_EDIT_TEXT}>✎</Text>
