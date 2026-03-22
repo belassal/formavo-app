@@ -397,7 +397,7 @@ export default function TeamDetailScreen() {
       setCreatingMatch(true);
       const matchId = await createMatch({ teamId, opponent: opp, dateISO: dt, location: location.trim(), format: pickedFormat, formation: pickedFormation, halfDuration });
       setShowCreateMatch(false);
-      navigation.navigate('MatchDetail', { teamId, matchId, title: `${teamName} vs ${opp}` });
+      navigation.navigate('MatchDetail', { teamId, matchId, title: `${teamName} vs ${opp}`, role: route.params.role });
     } catch (e: any) {
       Alert.alert('Create Match Failed', e?.message ?? 'Unknown error');
     } finally { setCreatingMatch(false); }
@@ -583,7 +583,7 @@ export default function TeamDetailScreen() {
                   <View key={item.id}>
                     <View style={S.divider} />
                     <TouchableOpacity
-                      onPress={() => navigation.navigate('MatchDetail', { teamId, matchId: item.id, title: `${teamName} vs ${item.opponent || 'Opponent'}` })}
+                      onPress={() => navigation.navigate('MatchDetail', { teamId, matchId: item.id, title: `${teamName} vs ${item.opponent || 'Opponent'}`, role: route.params.role })}
                       style={S.row}
                       activeOpacity={0.6}
                     >

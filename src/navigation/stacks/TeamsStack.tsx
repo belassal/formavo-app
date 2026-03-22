@@ -10,7 +10,7 @@ import PlayerProfileScreen from '../../screens/teams/PlayerProfileScreen';
 export type TeamsStackParamList = {
   TeamsHome: undefined;
   TeamDetail: { teamId: string; teamName?: string; role?: string };
-  MatchDetail: { teamId: string; matchId: string; title?: string };
+  MatchDetail: { teamId: string; matchId: string; title?: string; role?: string };
   GameDayPitch: { teamId: string; matchId: string };
   TeamStats: { teamId: string; teamName?: string };
   PlayerProfile: {

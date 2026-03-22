@@ -69,6 +69,7 @@ export default function MatchDetailScreen() {
   const route = useRoute<MatchDetailRoute>();
   const navigation = useNavigation<NativeStackNavigationProp<TeamsStackParamList>>();
   const { teamId, matchId } = route.params;
+  const isParent = route.params.role === 'parent';
 
   // --- icon buttons (make ALL edit/delete icons match the event style) ---
   const ICON_BTN = {
@@ -736,9 +737,9 @@ const addSelectedToRoster = async () => {
                     {pill(scoreLabel)}
                     {match?.format ? pill(match.format) : null}
                     {pill(`${playerCount} players`)}
-                    {pillBtn('Game Day', () => navigation.navigate('GameDayPitch', { teamId, matchId }))}
+                    {!isParent && pillBtn('Game Day', () => navigation.navigate('GameDayPitch', { teamId, matchId }))}
                   </View>
-                  {status === 'scheduled' && (
+                  {!isParent && status === 'scheduled' && (
                     <TouchableOpacity
                       onPress={() => markMatchLive({ teamId, matchId })}
                       style={{ marginTop: 12, alignSelf: 'flex-start', paddingVertical: 8, paddingHorizontal: 16, backgroundColor: '#111', borderRadius: 12 }}
@@ -746,7 +747,7 @@ const addSelectedToRoster = async () => {
                       <Text style={{ fontWeight: '700', color: '#fff' }}>Start Game</Text>
                     </TouchableOpacity>
                   )}
-                  {status === 'live' && (
+                  {!isParent && status === 'live' && (
                     <TouchableOpacity
                       onPress={confirmComplete}
                       style={{ marginTop: 12, alignSelf: 'flex-start', paddingVertical: 8, paddingHorizontal: 16, backgroundColor: '#ef4444', borderRadius: 12 }}
@@ -755,9 +756,11 @@ const addSelectedToRoster = async () => {
                     </TouchableOpacity>
                   )}
                 </View>
-                <TouchableOpacity onPress={openEdit} style={{ position: 'absolute', top: 12, right: 12 }} hitSlop={ICON_HITSLOP}>
-                  <Text style={{ fontSize: 16, color: '#9ca3af' }}>✎</Text>
-                </TouchableOpacity>
+                {!isParent && (
+                  <TouchableOpacity onPress={openEdit} style={{ position: 'absolute', top: 12, right: 12 }} hitSlop={ICON_HITSLOP}>
+                    <Text style={{ fontSize: 16, color: '#9ca3af' }}>✎</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
 
@@ -768,16 +771,18 @@ const addSelectedToRoster = async () => {
                   <Text style={SC.title}>Game Stats</Text>
                   {events.length > 0 && <Text style={SC.count}>{events.length} events</Text>}
                 </View>
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                  {events.length > 0 && (
-                    <TouchableOpacity onPress={confirmUndoLastEvent} style={SC.addBtn}>
-                      <Text style={SC.addBtnText}>Undo</Text>
+                {!isParent && (
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    {events.length > 0 && (
+                      <TouchableOpacity onPress={confirmUndoLastEvent} style={SC.addBtn}>
+                        <Text style={SC.addBtnText}>Undo</Text>
+                      </TouchableOpacity>
+                    )}
+                    <TouchableOpacity onPress={openAddEvent} style={SC.addBtn}>
+                      <Text style={SC.addBtnText}>+ Event</Text>
                     </TouchableOpacity>
-                  )}
-                  <TouchableOpacity onPress={openAddEvent} style={SC.addBtn}>
-                    <Text style={SC.addBtnText}>+ Event</Text>
-                  </TouchableOpacity>
-                </View>
+                  </View>
+                )}
               </View>
 
               {events.length > 0 && (
@@ -843,14 +848,16 @@ const addSelectedToRoster = async () => {
                             )}
                           </View>
                         )}
-                        <View style={{ flexDirection: 'row', gap: 2 }}>
-                          <TouchableOpacity onPress={() => openEditEvent(item)} style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }} hitSlop={ICON_HITSLOP}>
-                            <Text style={{ fontSize: 15, color: '#9ca3af' }}>✎</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity onPress={() => confirmDeleteEvent(item.id)} style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }} hitSlop={ICON_HITSLOP}>
-                            <Text style={{ fontSize: 18, fontWeight: '700', color: '#ef4444', lineHeight: 22 }}>×</Text>
-                          </TouchableOpacity>
-                        </View>
+                        {!isParent && (
+                          <View style={{ flexDirection: 'row', gap: 2 }}>
+                            <TouchableOpacity onPress={() => openEditEvent(item)} style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }} hitSlop={ICON_HITSLOP}>
+                              <Text style={{ fontSize: 15, color: '#9ca3af' }}>✎</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => confirmDeleteEvent(item.id)} style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }} hitSlop={ICON_HITSLOP}>
+                              <Text style={{ fontSize: 18, fontWeight: '700', color: '#ef4444', lineHeight: 22 }}>×</Text>
+                            </TouchableOpacity>
+                          </View>
+                        )}
                       </View>
                     </View>
                   );
@@ -914,57 +921,59 @@ const addSelectedToRoster = async () => {
             </View>
 
             {/* ===== Match Roster ===== */}
-            <View style={SC.container}>
-              <View style={SC.header}>
-                <View style={SC.titleRow}>
-                  <Text style={SC.title}>Match Roster</Text>
-                  {rosterSorted.length > 0 && <Text style={SC.count}>{rosterSorted.length} players</Text>}
-                </View>
-                <TouchableOpacity onPress={() => { setQ(''); setSelectedToAdd([]); setShowAdd(true); }} style={SC.addBtn}>
-                  <Text style={SC.addBtnText}>+ Add</Text>
-                </TouchableOpacity>
-              </View>
-
-              {rosterSorted.length === 0 ? (
-                <>
-                  <View style={SC.divider} />
-                  <View style={SC.emptyRow}>
-                    <Text style={SC.emptyText}>No one on the roster yet.</Text>
+            {!isParent && (
+              <View style={SC.container}>
+                <View style={SC.header}>
+                  <View style={SC.titleRow}>
+                    <Text style={SC.title}>Match Roster</Text>
+                    {rosterSorted.length > 0 && <Text style={SC.count}>{rosterSorted.length} players</Text>}
                   </View>
-                </>
-              ) : (
-                rosterSorted.map((item) => {
-                  const role: MatchRole = (item.role || 'bench') as MatchRole;
-                  const att: AttendanceStatus = (item.attendance || 'present') as AttendanceStatus;
+                  <TouchableOpacity onPress={() => { setQ(''); setSelectedToAdd([]); setShowAdd(true); }} style={SC.addBtn}>
+                    <Text style={SC.addBtnText}>+ Add</Text>
+                  </TouchableOpacity>
+                </View>
 
-                  return (
-                    <View key={item.id}>
-                      <View style={SC.divider} />
-                      <View style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
-                        {/* Name row */}
-                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <Text style={{ fontSize: 15, fontWeight: '600', color: '#111', flex: 1 }}>
-                            {item.playerName}{item.number ? `  #${item.number}` : ''}
-                          </Text>
-                          <TouchableOpacity onPress={() => confirmRemoveFromRoster(item.id, item.playerName)} hitSlop={ICON_HITSLOP}>
-                            <Text style={{ fontSize: 18, fontWeight: '700', color: '#ef4444', lineHeight: 22 }}>×</Text>
-                          </TouchableOpacity>
-                        </View>
-                        {/* Role + Attendance chips */}
-                        <View style={{ flexDirection: 'row', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-                          {choiceBtn(role === 'starter', 'Starter', () => setRole(item.id, 'starter'))}
-                          {choiceBtn(role === 'bench', 'Bench', () => setRole(item.id, 'bench'))}
-                          <View style={{ width: 1, backgroundColor: '#e5e7eb', marginHorizontal: 2 }} />
-                          {choiceBtn(att === 'present', 'Present', () => setAttendance(item.id, 'present'))}
-                          {choiceBtn(att === 'injured', 'Injured', () => setAttendance(item.id, 'injured'))}
-                          {choiceBtn(att === 'absent', 'Absent', () => setAttendance(item.id, 'absent'))}
+                {rosterSorted.length === 0 ? (
+                  <>
+                    <View style={SC.divider} />
+                    <View style={SC.emptyRow}>
+                      <Text style={SC.emptyText}>No one on the roster yet.</Text>
+                    </View>
+                  </>
+                ) : (
+                  rosterSorted.map((item) => {
+                    const role: MatchRole = (item.role || 'bench') as MatchRole;
+                    const att: AttendanceStatus = (item.attendance || 'present') as AttendanceStatus;
+
+                    return (
+                      <View key={item.id}>
+                        <View style={SC.divider} />
+                        <View style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
+                          {/* Name row */}
+                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <Text style={{ fontSize: 15, fontWeight: '600', color: '#111', flex: 1 }}>
+                              {item.playerName}{item.number ? `  #${item.number}` : ''}
+                            </Text>
+                            <TouchableOpacity onPress={() => confirmRemoveFromRoster(item.id, item.playerName)} hitSlop={ICON_HITSLOP}>
+                              <Text style={{ fontSize: 18, fontWeight: '700', color: '#ef4444', lineHeight: 22 }}>×</Text>
+                            </TouchableOpacity>
+                          </View>
+                          {/* Role + Attendance chips */}
+                          <View style={{ flexDirection: 'row', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                            {choiceBtn(role === 'starter', 'Starter', () => setRole(item.id, 'starter'))}
+                            {choiceBtn(role === 'bench', 'Bench', () => setRole(item.id, 'bench'))}
+                            <View style={{ width: 1, backgroundColor: '#e5e7eb', marginHorizontal: 2 }} />
+                            {choiceBtn(att === 'present', 'Present', () => setAttendance(item.id, 'present'))}
+                            {choiceBtn(att === 'injured', 'Injured', () => setAttendance(item.id, 'injured'))}
+                            {choiceBtn(att === 'absent', 'Absent', () => setAttendance(item.id, 'absent'))}
+                          </View>
                         </View>
                       </View>
-                    </View>
-                  );
-                })
-              )}
-            </View>
+                    );
+                  })
+                )}
+              </View>
+            )}
           </>
         }
       />
