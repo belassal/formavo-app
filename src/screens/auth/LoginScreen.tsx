@@ -42,7 +42,7 @@ export default function LoginScreen() {
       // Sign in directly — if there's an anonymous session Firebase replaces it
       const result = await auth().signInWithEmailAndPassword(email.trim(), password);
       // Accept any pending team invites matching this email (e.g. parent invites)
-      await acceptTeamInvitesForUser({ uid: result.user.uid, email: result.user.email! }).catch(() => {});
+      await acceptTeamInvitesForUser({ uid: result.user.uid, email: result.user.email! }).catch((e) => console.warn('[Login] acceptInvites error:', e));
     } catch (e: any) {
       Alert.alert('Sign in failed', friendlyError(e));
     } finally {
@@ -84,7 +84,7 @@ export default function LoginScreen() {
 
       await user.updateProfile({ displayName: name.trim() });
       // Accept any pending team invites for this email (e.g. parent invites sent before sign-up)
-      await acceptTeamInvitesForUser({ uid: user.uid, email: user.email! }).catch(() => {});
+      await acceptTeamInvitesForUser({ uid: user.uid, email: user.email! }).catch((e) => console.warn('[SignUp] acceptInvites error:', e));
     } catch (e: any) {
       Alert.alert('Sign up failed', friendlyError(e));
     } finally {
