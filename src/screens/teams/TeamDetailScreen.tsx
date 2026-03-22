@@ -117,6 +117,7 @@ export default function TeamDetailScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<TeamsStackParamList>>();
   const teamId = route.params.teamId;
   const teamName = route.params.teamName || 'Team';
+  const isParent = route.params.role === 'parent';
   const uid = useMemo(() => auth().currentUser?.uid ?? null, []);
 
   // Accordion open/close
@@ -453,13 +454,15 @@ export default function TeamDetailScreen() {
               )}
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <TouchableOpacity
-                onPress={(e) => { e.stopPropagation(); openAddPlayer(); }}
-                style={S.addBtn}
-                hitSlop={ICON_HITSLOP}
-              >
-                <Text style={S.addBtnText}>+ Player</Text>
-              </TouchableOpacity>
+              {!isParent && (
+                <TouchableOpacity
+                  onPress={(e) => { e.stopPropagation(); openAddPlayer(); }}
+                  style={S.addBtn}
+                  hitSlop={ICON_HITSLOP}
+                >
+                  <Text style={S.addBtnText}>+ Player</Text>
+                </TouchableOpacity>
+              )}
               <Text style={[S.chevron, { transform: [{ rotate: rosterOpen ? '-90deg' : '90deg' }] }]}>›</Text>
             </View>
           </TouchableOpacity>
@@ -500,8 +503,12 @@ export default function TeamDetailScreen() {
                       />
                     </TouchableOpacity>
 
-                    {/* Name + meta — tapping opens edit */}
-                    <TouchableOpacity onPress={() => openEditPlayer(item)} style={{ flex: 1 }} activeOpacity={0.6}>
+                    {/* Name + meta */}
+                    <TouchableOpacity
+                      onPress={() => !isParent && openEditPlayer(item)}
+                      style={{ flex: 1 }}
+                      activeOpacity={isParent ? 1 : 0.6}
+                    >
                       <Text style={{ fontSize: 15, fontWeight: '600', color: '#111' }} numberOfLines={1}>
                         {item.playerName}{item.number ? `  #${item.number}` : ''}
                       </Text>
@@ -510,14 +517,16 @@ export default function TeamDetailScreen() {
                       </Text>
                     </TouchableOpacity>
 
-                    <View style={{ flexDirection: 'row', gap: 2 }}>
-                      <TouchableOpacity onPress={() => openEditPlayer(item)} style={ICON_BTN} hitSlop={ICON_HITSLOP}>
-                        <Text style={ICON_EDIT_TEXT}>✎</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={() => confirmRemovePlayer(item)} style={ICON_BTN} hitSlop={ICON_HITSLOP}>
-                        <Text style={ICON_X_TEXT}>×</Text>
-                      </TouchableOpacity>
-                    </View>
+                    {!isParent && (
+                      <View style={{ flexDirection: 'row', gap: 2 }}>
+                        <TouchableOpacity onPress={() => openEditPlayer(item)} style={ICON_BTN} hitSlop={ICON_HITSLOP}>
+                          <Text style={ICON_EDIT_TEXT}>✎</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => confirmRemovePlayer(item)} style={ICON_BTN} hitSlop={ICON_HITSLOP}>
+                          <Text style={ICON_X_TEXT}>×</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
                   </View>
                 </View>
               ))
@@ -539,13 +548,15 @@ export default function TeamDetailScreen() {
               )}
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <TouchableOpacity
-                onPress={(e) => { e.stopPropagation(); openCreateMatch(); }}
-                style={S.addBtn}
-                hitSlop={ICON_HITSLOP}
-              >
-                <Text style={S.addBtnText}>+ Match</Text>
-              </TouchableOpacity>
+              {!isParent && (
+                <TouchableOpacity
+                  onPress={(e) => { e.stopPropagation(); openCreateMatch(); }}
+                  style={S.addBtn}
+                  hitSlop={ICON_HITSLOP}
+                >
+                  <Text style={S.addBtnText}>+ Match</Text>
+                </TouchableOpacity>
+              )}
               <Text style={[S.chevron, { transform: [{ rotate: matchesOpen ? '-90deg' : '90deg' }] }]}>›</Text>
             </View>
           </TouchableOpacity>
@@ -602,8 +613,8 @@ export default function TeamDetailScreen() {
           )}
         </View>
 
-        {/* ===== COACHES ACCORDION ===== */}
-        <View style={S.sectionContainer}>
+        {/* ===== COACHES ACCORDION — coaches only ===== */}
+        {!isParent && <View style={S.sectionContainer}>
           <TouchableOpacity
             style={S.sectionHeader}
             onPress={() => setCoachesOpen((v) => !v)}
@@ -661,10 +672,10 @@ export default function TeamDetailScreen() {
               })
             )
           )}
-        </View>
+        </View>}
 
-        {/* ===== PARENTS ACCORDION ===== */}
-        <View style={S.sectionContainer}>
+        {/* ===== PARENTS ACCORDION — coaches only ===== */}
+        {!isParent && <View style={S.sectionContainer}>
           <TouchableOpacity
             style={S.sectionHeader}
             onPress={() => setParentsOpen((v) => !v)}
@@ -735,7 +746,7 @@ export default function TeamDetailScreen() {
               })
             )
           )}
-        </View>
+        </View>}
 
       </ScrollView>
 

@@ -237,7 +237,7 @@ export default function TeamsScreen() {
             <View key={item.id}>
               <View style={S.divider} />
               <TouchableOpacity
-                onPress={() => navigation.navigate('TeamDetail', { teamId: item.id, teamName: item.teamName })}
+                onPress={() => navigation.navigate('TeamDetail', { teamId: item.id, teamName: item.teamName, role: item.role })}
                 style={S.row}
                 activeOpacity={0.6}
               >
