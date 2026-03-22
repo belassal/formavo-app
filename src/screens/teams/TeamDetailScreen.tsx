@@ -30,6 +30,12 @@ import { inviteCoach, inviteParent, resendParentInvite, listenTeamMembers } from
 import { pickPlayerPhoto, uploadPlayerAvatar, storageReady, imagePickerReady } from '../../services/storageService';
 import FormationPickerModal, { FormationPickerResult } from '../matches/components/FormationPickerModal';
 import DateTimePickerModal, { formatDateISO } from '../../components/DateTimePickerModal';
+import {
+  listenAnnouncements,
+  postAnnouncement,
+  deleteAnnouncement,
+  type Announcement,
+} from '../../services/announcementService';
 
 type TeamDetailRoute = RouteProp<TeamsStackParamList, 'TeamDetail'>;
 
@@ -125,6 +131,13 @@ export default function TeamDetailScreen() {
   const [matchesOpen, setMatchesOpen] = useState(false);
   const [coachesOpen, setCoachesOpen] = useState(false);
   const [parentsOpen, setParentsOpen] = useState(false);
+  const [announcementsOpen, setAnnouncementsOpen] = useState(true);
+
+  // Announcements
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [showPostAnnouncement, setShowPostAnnouncement] = useState(false);
+  const [announcementText, setAnnouncementText] = useState('');
+  const [postingAnnouncement, setPostingAnnouncement] = useState(false);
 
   // Coaches / members
   const [teamMembers, setTeamMembers] = useState<any[]>([]);
@@ -194,7 +207,8 @@ export default function TeamDetailScreen() {
       setLoadingMatches(false);
     });
     const unsubMembers = listenTeamMembers(teamId, (rows) => setTeamMembers(rows));
-    return () => { unsubRoster(); unsubMatches(); unsubMembers(); };
+    const unsubAnnouncements = listenAnnouncements(teamId, setAnnouncements);
+    return () => { unsubRoster(); unsubMatches(); unsubMembers(); unsubAnnouncements(); };
   }, [teamId]);
 
   useEffect(() => {
@@ -403,6 +417,41 @@ export default function TeamDetailScreen() {
     } finally { setCreatingMatch(false); }
   };
 
+  // ── Announcements ────────────────────────────────────────────────────────
+  const onPostAnnouncement = async () => {
+    const trimmed = announcementText.trim();
+    if (!trimmed) return;
+    const displayName = auth().currentUser?.displayName || auth().currentUser?.email || 'Coach';
+    if (!uid) return;
+    try {
+      setPostingAnnouncement(true);
+      await postAnnouncement({ teamId, text: trimmed, createdBy: uid, createdByName: displayName });
+      setAnnouncementText('');
+      setShowPostAnnouncement(false);
+    } catch (e: any) {
+      Alert.alert('Failed', e?.message ?? 'Could not post announcement');
+    } finally {
+      setPostingAnnouncement(false);
+    }
+  };
+
+  const onDeleteAnnouncement = (id: string) => {
+    Alert.alert('Delete announcement?', 'This cannot be undone.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => deleteAnnouncement(teamId, id).catch(console.warn) },
+    ]);
+  };
+
+  function formatAnnouncementTime(ts: any): string {
+    if (!ts?.toDate) return '';
+    const date: Date = ts.toDate();
+    const now = new Date();
+    if (date.toDateString() === now.toDateString()) {
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+    return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  }
+
   const overallLoading = loadingRoster || loadingMatches;
   if (overallLoading) {
     return (
@@ -605,6 +654,62 @@ export default function TeamDetailScreen() {
                           <Text style={ICON_X_TEXT}>×</Text>
                         </TouchableOpacity>
                       </View>
+                    )}
+                  </View>
+                </View>
+              ))
+            )
+          )}
+        </View>
+
+        {/* ===== ANNOUNCEMENTS ACCORDION ===== */}
+        <View style={S.sectionContainer}>
+          <TouchableOpacity
+            style={S.sectionHeader}
+            onPress={() => setAnnouncementsOpen((v) => !v)}
+            activeOpacity={0.7}
+          >
+            <View style={S.sectionTitleRow}>
+              <Text style={S.sectionTitle}>Announcements</Text>
+              {announcements.length > 0 && <Text style={S.sectionCount}>{announcements.length}</Text>}
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              {!isParent && (
+                <TouchableOpacity
+                  onPress={(e) => { e.stopPropagation(); setAnnouncementText(''); setShowPostAnnouncement(true); }}
+                  style={S.addBtn}
+                  hitSlop={ICON_HITSLOP}
+                >
+                  <Text style={S.addBtnText}>📣 Post</Text>
+                </TouchableOpacity>
+              )}
+              <Text style={[S.chevron, { transform: [{ rotate: announcementsOpen ? '-90deg' : '90deg' }] }]}>›</Text>
+            </View>
+          </TouchableOpacity>
+
+          {announcementsOpen && (
+            announcements.length === 0 ? (
+              <>
+                <View style={S.divider} />
+                <View style={S.emptyRow}>
+                  <Text style={S.emptyText}>No announcements yet.</Text>
+                </View>
+              </>
+            ) : (
+              announcements.map((item) => (
+                <View key={item.id}>
+                  <View style={S.divider} />
+                  <View style={{ paddingHorizontal: 16, paddingVertical: 13, flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: '#111', lineHeight: 20 }}>{item.text}</Text>
+                      <Text style={{ fontSize: 12, color: '#9ca3af', marginTop: 3 }}>
+                        {item.createdByName}{item.createdAt ? `  ·  ${formatAnnouncementTime(item.createdAt)}` : ''}
+                      </Text>
+                    </View>
+                    {!isParent && (
+                      <TouchableOpacity onPress={() => onDeleteAnnouncement(item.id)} hitSlop={ICON_HITSLOP}>
+                        <Text style={ICON_X_TEXT}>×</Text>
+                      </TouchableOpacity>
                     )}
                   </View>
                 </View>
@@ -1043,6 +1148,52 @@ export default function TeamDetailScreen() {
             onClose={() => setShowDatePicker(false)}
           />
         )}
+      </Modal>
+
+      {/* ===== POST ANNOUNCEMENT MODAL ===== */}
+      <Modal visible={showPostAnnouncement} animationType="slide" transparent onRequestClose={() => setShowPostAnnouncement(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: 'white', padding: 20, borderTopLeftRadius: 20, borderTopRightRadius: 20, gap: 12 }}>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: '#111' }}>Post Announcement</Text>
+            <TextInput
+              placeholder="Write a message for the team…"
+              placeholderTextColor="#9ca3af"
+              value={announcementText}
+              onChangeText={setAnnouncementText}
+              multiline
+              numberOfLines={4}
+              style={{
+                borderWidth: 1,
+                borderColor: '#e5e7eb',
+                borderRadius: 12,
+                padding: 12,
+                fontSize: 15,
+                color: '#111',
+                minHeight: 100,
+                textAlignVertical: 'top',
+              }}
+            />
+            <View style={{ flexDirection: 'row', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
+              <TouchableOpacity onPress={() => setShowPostAnnouncement(false)} disabled={postingAnnouncement}>
+                <Text style={{ padding: 10, color: '#6b7280', fontWeight: '500' }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={onPostAnnouncement}
+                disabled={postingAnnouncement || !announcementText.trim()}
+                style={{
+                  paddingVertical: 10,
+                  paddingHorizontal: 20,
+                  backgroundColor: announcementText.trim() ? '#111' : '#e5e7eb',
+                  borderRadius: 12,
+                }}
+              >
+                <Text style={{ fontWeight: '700', color: announcementText.trim() ? '#fff' : '#9ca3af' }}>
+                  {postingAnnouncement ? 'Posting…' : 'Post'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );

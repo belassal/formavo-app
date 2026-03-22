@@ -90,6 +90,7 @@ export default function MatchDetailScreen() {
   // section collapse state (open by default)
   const [statsOpen, setStatsOpen] = useState(true);
   const [availabilityOpen, setAvailabilityOpen] = useState(true);
+  const [lineupOpen, setLineupOpen] = useState(true);
 
   // match doc
   const [match, setMatch] = useState<any | null>(null);
@@ -632,6 +633,16 @@ const addSelectedToRoster = async () => {
     return 'Scheduled';
   }, [score, status]);
 
+  const availabilitySummary = useMemo(() => {
+    const attending = rosterSorted.filter((p) => (rsvpMap[p.id] ?? 'pending') === 'attending').length;
+    const absent = rosterSorted.filter((p) => (rsvpMap[p.id] ?? 'pending') === 'absent').length;
+    const pending = rosterSorted.filter((p) => (rsvpMap[p.id] ?? 'pending') === 'pending').length;
+    return { attending, absent, pending };
+  }, [rosterSorted, rsvpMap]);
+
+  const starters = useMemo(() => rosterSorted.filter((p) => p.role === 'starter'), [rosterSorted]);
+  const bench = useMemo(() => rosterSorted.filter((p) => p.role !== 'starter'), [rosterSorted]);
+
   const playerCount = roster.length;
 
   // --- UI helpers ---
@@ -881,6 +892,22 @@ const addSelectedToRoster = async () => {
                 </View>
                 <Text style={{ fontSize: 18, color: '#c7c7cc', transform: [{ rotate: availabilityOpen ? '-90deg' : '90deg' }] }}>›</Text>
               </TouchableOpacity>
+              {availabilityOpen && rosterSorted.length > 0 && (
+                <>
+                  <View style={SC.divider} />
+                  <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingVertical: 10, flexWrap: 'wrap' }}>
+                    <View style={{ paddingVertical: 4, paddingHorizontal: 10, backgroundColor: '#dcfce7', borderRadius: 999 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#16a34a' }}>✓ {availabilitySummary.attending} Attending</Text>
+                    </View>
+                    <View style={{ paddingVertical: 4, paddingHorizontal: 10, backgroundColor: '#fee2e2', borderRadius: 999 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#dc2626' }}>✗ {availabilitySummary.absent} Can't Make It</Text>
+                    </View>
+                    <View style={{ paddingVertical: 4, paddingHorizontal: 10, backgroundColor: '#f3f4f6', borderRadius: 999 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#6b7280' }}>⏳ {availabilitySummary.pending} Pending</Text>
+                    </View>
+                  </View>
+                </>
+              )}
               {availabilityOpen && (rosterSorted.length === 0 ? (
                 <>
                   <View style={SC.divider} />
@@ -979,6 +1006,80 @@ const addSelectedToRoster = async () => {
                       </View>
                     );
                   })
+                )}
+              </View>
+            )}
+
+            {/* ===== Lineup (parent read-only view) ===== */}
+            {isParent && (
+              <View style={SC.container}>
+                <TouchableOpacity style={SC.header} onPress={() => setLineupOpen((v) => !v)} activeOpacity={0.7}>
+                  <View style={SC.titleRow}>
+                    <Text style={SC.title}>Lineup</Text>
+                    {starters.length > 0 && <Text style={SC.count}>{starters.length} starters</Text>}
+                  </View>
+                  <Text style={{ fontSize: 18, color: '#c7c7cc', transform: [{ rotate: lineupOpen ? '-90deg' : '90deg' }] }}>›</Text>
+                </TouchableOpacity>
+
+                {lineupOpen && (
+                  starters.length === 0 ? (
+                    <>
+                      <View style={SC.divider} />
+                      <View style={SC.emptyRow}>
+                        <Text style={SC.emptyText}>Lineup not set yet.</Text>
+                      </View>
+                    </>
+                  ) : (
+                    <>
+                      {/* Starters */}
+                      <View style={SC.divider} />
+                      <View style={{ paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#f9fafb' }}>
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#9ca3af', letterSpacing: 0.5 }}>STARTING XI</Text>
+                      </View>
+                      {starters.map((item) => (
+                        <View key={item.id}>
+                          <View style={SC.divider} />
+                          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, gap: 12 }}>
+                            {item.number ? (
+                              <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#f3f4f6', alignItems: 'center', justifyContent: 'center' }}>
+                                <Text style={{ fontSize: 12, fontWeight: '700', color: '#374151' }}>{item.number}</Text>
+                              </View>
+                            ) : null}
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ fontSize: 14, fontWeight: '700', color: '#111' }}>{item.playerName}</Text>
+                              {item.position ? <Text style={{ fontSize: 12, color: '#9ca3af', marginTop: 1 }}>{item.position}</Text> : null}
+                            </View>
+                          </View>
+                        </View>
+                      ))}
+
+                      {/* Bench */}
+                      {bench.length > 0 && (
+                        <>
+                          <View style={SC.divider} />
+                          <View style={{ paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#f9fafb' }}>
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: '#9ca3af', letterSpacing: 0.5 }}>BENCH</Text>
+                          </View>
+                          {bench.map((item) => (
+                            <View key={item.id}>
+                              <View style={SC.divider} />
+                              <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, gap: 12 }}>
+                                {item.number ? (
+                                  <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#f3f4f6', alignItems: 'center', justifyContent: 'center' }}>
+                                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#374151' }}>{item.number}</Text>
+                                  </View>
+                                ) : null}
+                                <View style={{ flex: 1 }}>
+                                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151' }}>{item.playerName}</Text>
+                                  {item.position ? <Text style={{ fontSize: 12, color: '#9ca3af', marginTop: 1 }}>{item.position}</Text> : null}
+                                </View>
+                              </View>
+                            </View>
+                          ))}
+                        </>
+                      )}
+                    </>
+                  )
                 )}
               </View>
             )}

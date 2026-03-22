@@ -152,8 +152,9 @@ export async function updateTeamMembership(params: {
   number: string;
   position: string;
   avatarUrl?: string; // optional — only updated when provided
+  status?: MembershipStatus; // optional — toggle active/inactive
 }) {
-  const { teamId, membershipId, playerName, number, position, avatarUrl } = params;
+  const { teamId, membershipId, playerName, number, position, avatarUrl, status } = params;
 
   const ref = db
     .collection(COL.teams)
@@ -168,6 +169,7 @@ export async function updateTeamMembership(params: {
     updatedAt: serverTimestamp(),
   };
   if (avatarUrl !== undefined) patch.avatarUrl = avatarUrl;
+  if (status !== undefined) patch.status = status;
 
   await ref.set(patch, { merge: true });
 }
