@@ -239,6 +239,11 @@ export async function inviteParent(params: {
 
   const teamRef = db.collection(COL.teams).doc(teamId);
 
+  // Fetch team name for the email
+  const teamSnap = await teamRef.get();
+  const teamName = (teamSnap.data() as any)?.name || 'your child\'s team';
+
+  // 1) Create the invite doc
   await teamRef.collection(COL.members).add({
     role: 'parent' as TeamRole,
     status: 'invited' as MemberStatus,
@@ -248,6 +253,38 @@ export async function inviteParent(params: {
     invitedBy,
     linkedPlayerId,
     linkedPlayerName,
+  });
+
+  // 2) Write to the `mail` collection — picked up by the Trigger Email extension
+  await db.collection('mail').add({
+    to: [emailLower],
+    message: {
+      subject: `You've been invited to follow ${linkedPlayerName} on Formavo`,
+      html: `
+        <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px;">
+          <h2 style="font-size: 22px; font-weight: 800; color: #111; margin-bottom: 8px;">
+            You're invited to Formavo 👋
+          </h2>
+          <p style="color: #374151; font-size: 16px; line-height: 1.6;">
+            You've been added as a parent/guardian for <strong>${linkedPlayerName}</strong>
+            on <strong>${teamName}</strong>.
+          </p>
+          <p style="color: #374151; font-size: 16px; line-height: 1.6;">
+            Download the Formavo app and sign up with this email address
+            (<strong>${emailLower}</strong>) to:
+          </p>
+          <ul style="color: #374151; font-size: 15px; line-height: 2;">
+            <li>See upcoming match schedules</li>
+            <li>Confirm attendance for each match</li>
+            <li>View match results and player stats</li>
+          </ul>
+          <p style="color: #9ca3af; font-size: 13px; margin-top: 32px;">
+            This invite was sent by the coaching staff of ${teamName}.
+          </p>
+        </div>
+      `,
+      text: `You've been invited to Formavo!\n\nYou've been added as a parent/guardian for ${linkedPlayerName} on ${teamName}.\n\nDownload the Formavo app and sign up with this email address (${emailLower}) to see match schedules, confirm attendance, and view results.\n\nThis invite was sent by the coaching staff of ${teamName}.`,
+    },
   });
 }
 
