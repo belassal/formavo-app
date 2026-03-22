@@ -125,7 +125,7 @@ export default function MatchesScreen() {
                   onNavigateToMatch={({ teamId, matchId, teamName, opponent }) =>
                     navigation.navigate('Teams', {
                       screen: 'MatchDetail',
-                      params: { teamId, matchId, title: `${teamName} vs ${opponent}` },
+                      params: { teamId, matchId, title: `${teamName} vs ${opponent}`, role: 'parent' },
                     })
                   }
                 />
