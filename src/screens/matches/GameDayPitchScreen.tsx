@@ -76,6 +76,7 @@ function getMatchState(m: MatchDoc | null): MatchState {
 export default function GameDayPitchScreen() {
   const route = useRoute<RouteT>();
   const { teamId, matchId } = route.params;
+  const isParent = route.params.role === 'parent';
 
   const [loading, setLoading] = useState(true);
   const [match, setMatch] = useState<MatchDoc | null>(null);
@@ -623,41 +624,43 @@ const onEnd = async () => {
           <Text style={styles.subtitle}>Formation: {formation}</Text>
         </View>
 
-        <View style={{ flexDirection: 'row', gap: 6 }}>
-          {/* Load lineup — draft only */}
-          {derivedState.status === 'draft' && (
+        {!isParent && (
+          <View style={{ flexDirection: 'row', gap: 6 }}>
+            {/* Load lineup — draft only */}
+            {derivedState.status === 'draft' && (
+              <TouchableOpacity
+                onPress={() => setShowLoadLineup(true)}
+                style={styles.modeBtn}
+              >
+                <Text style={styles.modeBtnText}>📋 Lineup</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Save lineup */}
             <TouchableOpacity
-              onPress={() => setShowLoadLineup(true)}
+              onPress={() => { setLineupName(''); setShowSaveLineup(true); }}
               style={styles.modeBtn}
             >
-              <Text style={styles.modeBtnText}>📋 Lineup</Text>
+              <Text style={styles.modeBtnText}>💾 Save</Text>
             </TouchableOpacity>
-          )}
 
-          {/* Save lineup */}
-          <TouchableOpacity
-            onPress={() => { setLineupName(''); setShowSaveLineup(true); }}
-            style={styles.modeBtn}
-          >
-            <Text style={styles.modeBtnText}>💾 Save</Text>
-          </TouchableOpacity>
-
-          {/* Edit layout toggle */}
-          <TouchableOpacity
-            onPress={() => setLayoutMode((v) => !v)}
-            style={[styles.modeBtn, layoutMode ? styles.modeBtnOn : null]}
-          >
-            <Text style={[styles.modeBtnText, layoutMode ? { color: 'white' } : null]}>
-              {layoutMode ? 'Done' : 'Layout'}
-            </Text>
-          </TouchableOpacity>
-        </View>
+            {/* Edit layout toggle */}
+            <TouchableOpacity
+              onPress={() => setLayoutMode((v) => !v)}
+              style={[styles.modeBtn, layoutMode ? styles.modeBtnOn : null]}
+            >
+              <Text style={[styles.modeBtnText, layoutMode ? { color: 'white' } : null]}>
+                {layoutMode ? 'Done' : 'Layout'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
      <View style={styles.matchHeaderWrap}>
         <MatchHeader
           state={derivedState}
-          canEdit={true}
+          canEdit={!isParent}
           halfDuration={match?.halfDuration ?? 45}
           onStart={onStart}
           onHalfTime={onHalfTime}
@@ -666,7 +669,8 @@ const onEnd = async () => {
           onResume={onResume}
           onEnd={onEnd}
           onQuickEvent={(preset) => {
-            if (derivedState.status !== 'live') return; // optional: only log while live
+            if (isParent) return;
+            if (derivedState.status !== 'live') return;
             setWizardPreset(preset as any);
             setWizardOpen(true);
           }}
@@ -691,7 +695,7 @@ const onEnd = async () => {
           events={events}
           avatarUrls={avatarUrls}
           onPlayerPress={(playerId) => {
-            // optional: only allow logging when live
+            if (isParent) return;
             if (derivedState.status !== 'live') return;
 
             setActivePlayerId(playerId);
@@ -701,6 +705,7 @@ const onEnd = async () => {
             setShowPlayerModal(true);
           }}
           onSlotPress={(slotKey) => {
+            if (isParent) return;
             if (layoutMode) return;
             setAssignSlotKey(slotKey);
           }}

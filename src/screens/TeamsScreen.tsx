@@ -88,6 +88,12 @@ export default function TeamsScreen() {
   const [loading, setLoading] = useState(true);
   const [teams, setTeams] = useState<TeamRow[]>([]);
   const [error, setError] = useState<string | null>(null);
+
+  // Hide "Create Team" if the user is only ever a parent (no coach/admin role on any team)
+  const canCreateTeam = useMemo(
+    () => teams.length === 0 || teams.some((t) => t.role !== 'parent'),
+    [teams]
+  );
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
@@ -228,9 +234,11 @@ export default function TeamsScreen() {
           {/* Header */}
           <View style={S.sectionHeader}>
             <Text style={S.sectionTitle}>My Teams</Text>
-            <TouchableOpacity onPress={openCreate} style={S.addBtn}>
-              <Text style={S.addBtnText}>+ Team</Text>
-            </TouchableOpacity>
+            {canCreateTeam && (
+              <TouchableOpacity onPress={openCreate} style={S.addBtn}>
+                <Text style={S.addBtnText}>+ Team</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           {teams.map((item) => (
