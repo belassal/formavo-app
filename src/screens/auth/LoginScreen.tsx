@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
+import { acceptTeamInvitesForUser } from '../../services/teamService';
 
 type Mode = 'signin' | 'signup';
 
@@ -39,7 +40,9 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       // Sign in directly — if there's an anonymous session Firebase replaces it
-      await auth().signInWithEmailAndPassword(email.trim(), password);
+      const result = await auth().signInWithEmailAndPassword(email.trim(), password);
+      // Accept any pending team invites matching this email (e.g. parent invites)
+      await acceptTeamInvitesForUser({ uid: result.user.uid, email: result.user.email! }).catch(() => {});
     } catch (e: any) {
       Alert.alert('Sign in failed', friendlyError(e));
     } finally {
@@ -80,6 +83,8 @@ export default function LoginScreen() {
       }
 
       await user.updateProfile({ displayName: name.trim() });
+      // Accept any pending team invites for this email (e.g. parent invites sent before sign-up)
+      await acceptTeamInvitesForUser({ uid: user.uid, email: user.email! }).catch(() => {});
     } catch (e: any) {
       Alert.alert('Sign up failed', friendlyError(e));
     } finally {

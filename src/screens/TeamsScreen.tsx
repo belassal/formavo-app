@@ -143,6 +143,84 @@ export default function TeamsScreen() {
     );
   }
 
+  // Empty state — shown when user has no teams at all
+  if (teams.length === 0) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#f2f2f7' }}>
+        <View style={{ flex: 1, padding: 24, justifyContent: 'center', gap: 16 }}>
+          {/* Welcome header */}
+          <View style={{ alignItems: 'center', marginBottom: 8 }}>
+            <Text style={{ fontSize: 28, fontWeight: '800', color: '#111' }}>Welcome to Formavo</Text>
+            <Text style={{ fontSize: 15, color: '#9ca3af', marginTop: 6, textAlign: 'center', lineHeight: 22 }}>
+              You're not part of any team yet.{'\n'}What would you like to do?
+            </Text>
+          </View>
+
+          {/* Option 1 — Create a team (coaches) */}
+          <TouchableOpacity
+            onPress={openCreate}
+            activeOpacity={0.85}
+            style={{
+              backgroundColor: '#111',
+              borderRadius: 14,
+              padding: 20,
+              gap: 4,
+            }}
+          >
+            <Text style={{ fontSize: 17, fontWeight: '800', color: '#fff' }}>⚽  Create a Team</Text>
+            <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>
+              For coaches — set up your roster, matches and lineups
+            </Text>
+          </TouchableOpacity>
+
+          {/* Option 2 — Waiting for invite (parents / new members) */}
+          <View
+            style={{
+              backgroundColor: '#fff',
+              borderRadius: 14,
+              borderWidth: 1,
+              borderColor: '#e5e7eb',
+              padding: 20,
+              gap: 4,
+            }}
+          >
+            <Text style={{ fontSize: 17, fontWeight: '700', color: '#111' }}>📩  Waiting for an invite?</Text>
+            <Text style={{ fontSize: 13, color: '#6b7280', marginTop: 4, lineHeight: 20 }}>
+              If a coach invited you as a parent or staff member, make sure you signed up using the{' '}
+              <Text style={{ fontWeight: '700', color: '#111' }}>same email address</Text> that the invite was sent to.
+              {'\n\n'}
+              Your team will appear here automatically once the invite is accepted.
+            </Text>
+          </View>
+        </View>
+
+        {/* CREATE TEAM MODAL */}
+        <Modal visible={showCreate} animationType="slide" transparent onRequestClose={() => setShowCreate(false)}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' }}>
+            <View style={{ backgroundColor: 'white', padding: 20, borderTopLeftRadius: 20, borderTopRightRadius: 20, gap: 12 }}>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: '#111' }}>Create Team</Text>
+              <TextInput placeholder="Team name (required)" value={name} onChangeText={setName} style={S.input} />
+              <TextInput placeholder="Age group (optional) — e.g., U12" value={ageGroup} onChangeText={setAgeGroup} style={S.input} />
+              <TextInput placeholder="Season (optional) — e.g., 2026 Winter" value={season} onChangeText={setSeason} style={S.input} />
+              <View style={{ flexDirection: 'row', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
+                <TouchableOpacity onPress={() => setShowCreate(false)} disabled={creating}>
+                  <Text style={{ padding: 10, color: '#6b7280', fontWeight: '500' }}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={onCreate}
+                  disabled={creating}
+                  style={{ paddingVertical: 10, paddingHorizontal: 20, backgroundColor: '#111', borderRadius: 12 }}
+                >
+                  <Text style={{ fontWeight: '700', color: '#fff' }}>{creating ? 'Creating…' : 'Create'}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#f2f2f7' }}>
       <View style={{ padding: 16 }}>
@@ -155,35 +233,26 @@ export default function TeamsScreen() {
             </TouchableOpacity>
           </View>
 
-          {teams.length === 0 ? (
-            <>
+          {teams.map((item) => (
+            <View key={item.id}>
               <View style={S.divider} />
-              <View style={S.emptyRow}>
-                <Text style={S.emptyText}>No teams yet. Tap "+ Team" to create your first.</Text>
-              </View>
-            </>
-          ) : (
-            teams.map((item) => (
-              <View key={item.id}>
-                <View style={S.divider} />
-                <TouchableOpacity
-                  onPress={() => navigation.navigate('TeamDetail', { teamId: item.id, teamName: item.teamName })}
-                  style={S.row}
-                  activeOpacity={0.6}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 15, fontWeight: '600', color: '#111' }}>
-                      {item.teamName || item.id}
-                    </Text>
-                    <Text style={{ marginTop: 2, fontSize: 13, color: '#9ca3af' }}>
-                      {item.role || 'member'}
-                    </Text>
-                  </View>
-                  <Text style={{ fontSize: 18, color: '#c7c7cc' }}>›</Text>
-                </TouchableOpacity>
-              </View>
-            ))
-          )}
+              <TouchableOpacity
+                onPress={() => navigation.navigate('TeamDetail', { teamId: item.id, teamName: item.teamName })}
+                style={S.row}
+                activeOpacity={0.6}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 15, fontWeight: '600', color: '#111' }}>
+                    {item.teamName || item.id}
+                  </Text>
+                  <Text style={{ marginTop: 2, fontSize: 13, color: '#9ca3af' }}>
+                    {item.role || 'member'}
+                  </Text>
+                </View>
+                <Text style={{ fontSize: 18, color: '#c7c7cc' }}>›</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
         </View>
       </View>
 
