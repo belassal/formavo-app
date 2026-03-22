@@ -289,6 +289,52 @@ export async function inviteParent(params: {
 }
 
 /**
+ * Resend a parent invite email without creating a new invite doc.
+ */
+export async function resendParentInvite(params: {
+  teamId: string;
+  inviteEmail: string;
+  linkedPlayerName: string;
+}) {
+  const { teamId, inviteEmail, linkedPlayerName } = params;
+  const emailLower = normLower(inviteEmail);
+
+  const teamSnap = await db.collection(COL.teams).doc(teamId).get();
+  const teamName = (teamSnap.data() as any)?.name || 'your child\'s team';
+
+  await db.collection('mail').add({
+    to: [emailLower],
+    message: {
+      subject: `Reminder: You've been invited to follow ${linkedPlayerName} on Formavo`,
+      html: `
+        <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px;">
+          <h2 style="font-size: 22px; font-weight: 800; color: #111; margin-bottom: 8px;">
+            Reminder: You're invited to Formavo 👋
+          </h2>
+          <p style="color: #374151; font-size: 16px; line-height: 1.6;">
+            You've been added as a parent/guardian for <strong>${linkedPlayerName}</strong>
+            on <strong>${teamName}</strong>.
+          </p>
+          <p style="color: #374151; font-size: 16px; line-height: 1.6;">
+            Download the Formavo app and sign up with this email address
+            (<strong>${emailLower}</strong>) to:
+          </p>
+          <ul style="color: #374151; font-size: 15px; line-height: 2;">
+            <li>See upcoming match schedules</li>
+            <li>Confirm attendance for each match</li>
+            <li>View match results and player stats</li>
+          </ul>
+          <p style="color: #9ca3af; font-size: 13px; margin-top: 32px;">
+            This invite was sent by the coaching staff of ${teamName}.
+          </p>
+        </div>
+      `,
+      text: `Reminder: You've been invited to Formavo!\n\nYou've been added as a parent/guardian for ${linkedPlayerName} on ${teamName}.\n\nDownload the Formavo app and sign up with this email address (${emailLower}) to see match schedules, confirm attendance, and view results.\n\nThis invite was sent by the coaching staff of ${teamName}.`,
+    },
+  });
+}
+
+/**
  * Accept any pending invites for the signed-in user email.
  * Uses collectionGroup on COL.members, so this works across all teams.
  *

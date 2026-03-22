@@ -882,16 +882,30 @@ const addSelectedToRoster = async () => {
                       : rsvp === 'absent'
                       ? { bg: '#fee2e2', text: '#dc2626', label: "Can't Make It" }
                       : { bg: '#f3f4f6', text: '#6b7280', label: 'Pending' };
+                  const rsvpByName = (item as any).rsvpByName;
+                  const rsvpNote = (item as any).rsvpNote;
                   return (
                     <View key={item.id}>
                       <View style={SC.divider} />
-                      <View style={[SC.row, { justifyContent: 'space-between' }]}>
-                        <Text style={{ fontSize: 14, fontWeight: '600', color: '#111', flex: 1, marginRight: 10 }} numberOfLines={1}>
-                          {item.playerName}{item.number ? `  #${item.number}` : ''}
-                        </Text>
-                        <View style={{ paddingHorizontal: 10, paddingVertical: 4, backgroundColor: badge.bg, borderRadius: 999 }}>
-                          <Text style={{ fontSize: 12, fontWeight: '700', color: badge.text }}>{badge.label}</Text>
+                      <View style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <Text style={{ fontSize: 14, fontWeight: '600', color: '#111', flex: 1, marginRight: 10 }} numberOfLines={1}>
+                            {item.playerName}{item.number ? `  #${item.number}` : ''}
+                          </Text>
+                          <View style={{ paddingHorizontal: 10, paddingVertical: 4, backgroundColor: badge.bg, borderRadius: 999 }}>
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: badge.text }}>{badge.label}</Text>
+                          </View>
                         </View>
+                        {rsvpByName ? (
+                          <Text style={{ fontSize: 12, color: '#9ca3af', marginTop: 3 }}>
+                            Confirmed by {rsvpByName}
+                          </Text>
+                        ) : null}
+                        {rsvpNote ? (
+                          <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 2, fontStyle: 'italic' }}>
+                            "{rsvpNote}"
+                          </Text>
+                        ) : null}
                       </View>
                     </View>
                   );

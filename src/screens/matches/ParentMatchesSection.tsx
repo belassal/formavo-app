@@ -2,9 +2,11 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import auth from '@react-native-firebase/auth';
 import { listenMatches } from '../../services/matchService';
 import { setRsvp, type RsvpStatus } from '../../services/rsvpService';
 import { db } from '../../services/firebase';
@@ -48,7 +50,10 @@ function ChildSection({ teamRef, uid, onNavigateToMatch }: ChildSectionProps) {
   const [matches, setMatches] = useState<any[]>([]);
   const [loadingMatches, setLoadingMatches] = useState(true);
   const [rsvpMap, setRsvpMap] = useState<RsvpMap>({});
+  const [noteMap, setNoteMap] = useState<Record<string, string>>({}); // matchId -> draft note
   const [savingRsvp, setSavingRsvp] = useState<string | null>(null); // matchId being saved
+
+  const displayName = auth().currentUser?.displayName || auth().currentUser?.email || 'Parent';
 
   // Listen to all matches for this team
   useEffect(() => {
@@ -90,7 +95,15 @@ function ChildSection({ teamRef, uid, onNavigateToMatch }: ChildSectionProps) {
   const handleRsvp = async (matchId: string, status: RsvpStatus) => {
     setSavingRsvp(matchId);
     try {
-      await setRsvp({ teamId, matchId, playerId: linkedPlayerId, status, byUid: uid });
+      await setRsvp({
+        teamId,
+        matchId,
+        playerId: linkedPlayerId,
+        status,
+        byUid: uid,
+        confirmedByName: displayName,
+        note: noteMap[matchId]?.trim() || undefined,
+      });
       setRsvpMap((prev) => ({ ...prev, [matchId]: status }));
     } catch (e) {
       console.warn('[ParentMatchesSection] RSVP error', e);
@@ -193,6 +206,23 @@ function ChildSection({ teamRef, uid, onNavigateToMatch }: ChildSectionProps) {
                           </Text>
                         </TouchableOpacity>
                       </View>
+
+                      {/* Note input */}
+                      <TextInput
+                        placeholder="Add a note (optional)…"
+                        placeholderTextColor="#9ca3af"
+                        value={noteMap[match.id] || ''}
+                        onChangeText={(t) => setNoteMap((prev) => ({ ...prev, [match.id]: t }))}
+                        style={{
+                          marginTop: 8,
+                          backgroundColor: '#f3f4f6',
+                          borderRadius: 8,
+                          paddingHorizontal: 12,
+                          paddingVertical: 8,
+                          fontSize: 13,
+                          color: '#111',
+                        }}
+                      />
                     </TouchableOpacity>
                   </View>
                 );

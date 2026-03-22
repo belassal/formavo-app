@@ -26,7 +26,7 @@ import {
   updateTeamMembership,
 } from '../../services/playerService';
 import { createMatch, listenMatches } from '../../services/matchService';
-import { inviteCoach, inviteParent, listenTeamMembers } from '../../services/teamService';
+import { inviteCoach, inviteParent, resendParentInvite, listenTeamMembers } from '../../services/teamService';
 import { pickPlayerPhoto, uploadPlayerAvatar, storageReady, imagePickerReady } from '../../services/storageService';
 import FormationPickerModal, { FormationPickerResult } from '../matches/components/FormationPickerModal';
 import DateTimePickerModal, { formatDateISO } from '../../components/DateTimePickerModal';
@@ -204,6 +204,27 @@ export default function TeamDetailScreen() {
   // Partition members into coaches and parents
   const coachMembers = useMemo(() => teamMembers.filter((m) => m.role !== 'parent'), [teamMembers]);
   const parentMembers = useMemo(() => teamMembers.filter((m) => m.role === 'parent'), [teamMembers]);
+
+  const onResendParentInvite = (m: any) => {
+    Alert.alert(
+      'Resend Invite?',
+      `Resend the invite email to ${m.invitedEmail}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Resend',
+          onPress: async () => {
+            try {
+              await resendParentInvite({ teamId, inviteEmail: m.invitedEmail, linkedPlayerName: m.linkedPlayerName });
+              Alert.alert('Invite resent!', `A new invite was sent to ${m.invitedEmail}.`);
+            } catch (e: any) {
+              Alert.alert('Failed', e?.message ?? 'Unknown error');
+            }
+          },
+        },
+      ],
+    );
+  };
 
   // --- Parent invite actions ---
   const openInviteParent = () => {
@@ -690,9 +711,22 @@ export default function TeamDetailScreen() {
                           Parent of {m.linkedPlayerName || 'Unknown Player'}{isInvite ? ' · Pending' : ' · Active'}
                         </Text>
                       </View>
-                      {isInvite && (
-                        <View style={{ paddingHorizontal: 8, paddingVertical: 3, backgroundColor: '#fef9c3', borderRadius: 8 }}>
-                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#a16207' }}>Pending</Text>
+                      {isInvite ? (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <View style={{ paddingHorizontal: 8, paddingVertical: 3, backgroundColor: '#fef9c3', borderRadius: 8 }}>
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: '#a16207' }}>Pending</Text>
+                          </View>
+                          <TouchableOpacity
+                            onPress={() => onResendParentInvite(m)}
+                            hitSlop={ICON_HITSLOP}
+                            style={{ paddingHorizontal: 8, paddingVertical: 4, backgroundColor: '#f3f4f6', borderRadius: 8 }}
+                          >
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: '#374151' }}>Resend</Text>
+                          </TouchableOpacity>
+                        </View>
+                      ) : (
+                        <View style={{ paddingHorizontal: 8, paddingVertical: 3, backgroundColor: '#dcfce7', borderRadius: 8 }}>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#16a34a' }}>Active</Text>
                         </View>
                       )}
                     </View>
