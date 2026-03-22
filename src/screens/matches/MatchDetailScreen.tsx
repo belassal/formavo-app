@@ -87,6 +87,10 @@ export default function MatchDetailScreen() {
 
   const [loading, setLoading] = useState(true);
 
+  // section collapse state (open by default)
+  const [statsOpen, setStatsOpen] = useState(true);
+  const [availabilityOpen, setAvailabilityOpen] = useState(true);
+
   // match doc
   const [match, setMatch] = useState<any | null>(null);
 
@@ -766,26 +770,29 @@ const addSelectedToRoster = async () => {
 
             {/* ===== Game Stats ===== */}
             <View style={SC.container}>
-              <View style={SC.header}>
+              <TouchableOpacity style={SC.header} onPress={() => setStatsOpen((v) => !v)} activeOpacity={0.7}>
                 <View style={SC.titleRow}>
                   <Text style={SC.title}>Game Stats</Text>
                   {events.length > 0 && <Text style={SC.count}>{events.length} events</Text>}
                 </View>
-                {!isParent && (
-                  <View style={{ flexDirection: 'row', gap: 8 }}>
-                    {events.length > 0 && (
-                      <TouchableOpacity onPress={confirmUndoLastEvent} style={SC.addBtn}>
-                        <Text style={SC.addBtnText}>Undo</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  {!isParent && statsOpen && (
+                    <>
+                      {events.length > 0 && (
+                        <TouchableOpacity onPress={(e) => { e.stopPropagation(); confirmUndoLastEvent(); }} style={SC.addBtn}>
+                          <Text style={SC.addBtnText}>Undo</Text>
+                        </TouchableOpacity>
+                      )}
+                      <TouchableOpacity onPress={(e) => { e.stopPropagation(); openAddEvent(); }} style={SC.addBtn}>
+                        <Text style={SC.addBtnText}>+ Event</Text>
                       </TouchableOpacity>
-                    )}
-                    <TouchableOpacity onPress={openAddEvent} style={SC.addBtn}>
-                      <Text style={SC.addBtnText}>+ Event</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </View>
+                    </>
+                  )}
+                  <Text style={{ fontSize: 18, color: '#c7c7cc', transform: [{ rotate: statsOpen ? '-90deg' : '90deg' }] }}>›</Text>
+                </View>
+              </TouchableOpacity>
 
-              {events.length > 0 && (
+              {statsOpen && events.length > 0 && (
                 <>
                   <View style={SC.divider} />
                   <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingVertical: 10, flexWrap: 'wrap' }}>
@@ -796,7 +803,7 @@ const addSelectedToRoster = async () => {
                 </>
               )}
 
-              {events.length === 0 ? (
+              {statsOpen && (events.length === 0 ? (
                 <>
                   <View style={SC.divider} />
                   <View style={SC.emptyRow}>
@@ -862,18 +869,19 @@ const addSelectedToRoster = async () => {
                     </View>
                   );
                 })
-              )}
+              ))}
             </View>
 
             {/* ===== Availability (RSVP) ===== */}
             <View style={SC.container}>
-              <View style={SC.header}>
+              <TouchableOpacity style={SC.header} onPress={() => setAvailabilityOpen((v) => !v)} activeOpacity={0.7}>
                 <View style={SC.titleRow}>
                   <Text style={SC.title}>Availability</Text>
                   {rosterSorted.length > 0 && <Text style={SC.count}>{rosterSorted.length} players</Text>}
                 </View>
-              </View>
-              {rosterSorted.length === 0 ? (
+                <Text style={{ fontSize: 18, color: '#c7c7cc', transform: [{ rotate: availabilityOpen ? '-90deg' : '90deg' }] }}>›</Text>
+              </TouchableOpacity>
+              {availabilityOpen && (rosterSorted.length === 0 ? (
                 <>
                   <View style={SC.divider} />
                   <View style={SC.emptyRow}>
@@ -917,7 +925,7 @@ const addSelectedToRoster = async () => {
                     </View>
                   );
                 })
-              )}
+              ))}
             </View>
 
             {/* ===== Match Roster ===== */}
