@@ -220,6 +220,38 @@ export async function inviteCoach(params: {
 }
 
 /**
+ * Invite a parent by email, linked to a specific player on the roster.
+ * Creates a member invite doc under teams/{teamId}/members/{autoId}.
+ * linkedPlayerId is the playerMembership doc id (same as playerId in roster).
+ */
+export async function inviteParent(params: {
+  teamId: string;
+  inviteEmail: string;
+  invitedBy: string; // uid
+  linkedPlayerId: string;
+  linkedPlayerName: string;
+}) {
+  const { teamId, inviteEmail, invitedBy, linkedPlayerId, linkedPlayerName } = params;
+
+  const emailLower = normLower(inviteEmail);
+  if (!emailLower || !emailLower.includes('@')) throw new Error('Valid email is required');
+  if (!linkedPlayerId) throw new Error('A player must be selected to link this parent invite');
+
+  const teamRef = db.collection(COL.teams).doc(teamId);
+
+  await teamRef.collection(COL.members).add({
+    role: 'parent' as TeamRole,
+    status: 'invited' as MemberStatus,
+    invitedEmail: emailLower,
+    invitedEmailLower: emailLower,
+    invitedAt: serverTimestamp(),
+    invitedBy,
+    linkedPlayerId,
+    linkedPlayerName,
+  });
+}
+
+/**
  * Accept any pending invites for the signed-in user email.
  * Uses collectionGroup on COL.members, so this works across all teams.
  *
@@ -250,6 +282,15 @@ export async function acceptTeamInvitesForUser(params: {
     const inviteData: any = inviteDoc.data();
     const role: TeamRole = inviteData.role || 'assistant';
 
+    // Propagate parent-player link fields if present
+    const parentFields =
+      role === 'parent'
+        ? {
+            linkedPlayerId: inviteData.linkedPlayerId || '',
+            linkedPlayerName: inviteData.linkedPlayerName || '',
+          }
+        : {};
+
     const membersColRef = inviteDoc.ref.parent; // .../members
     const teamRef = membersColRef.parent;       // .../teams/{teamId}
     if (!teamRef) continue;
@@ -272,6 +313,7 @@ export async function acceptTeamInvitesForUser(params: {
         status: 'active' as MemberStatus,
         joinedAt: serverTimestamp(),
         invitedEmailLower: emailLower,
+        ...parentFields,
       },
       { merge: true }
     );
@@ -293,6 +335,7 @@ export async function acceptTeamInvitesForUser(params: {
         teamName,
         teamNameLower: String(teamName).toLowerCase(),
         isDeleted: !!teamData?.isDeleted,
+        ...parentFields,
       },
       { merge: true }
     );

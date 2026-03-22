@@ -220,6 +220,15 @@ export default function MatchDetailScreen() {
 
   const rosterForPick = rosterSorted;
 
+  // Derive RSVP map from the existing roster state (no extra listener needed)
+  const rsvpMap = useMemo(() => {
+    const map: Record<string, 'attending' | 'absent' | 'pending'> = {};
+    roster.forEach((r: any) => {
+      map[r.id] = (r.rsvpStatus as 'attending' | 'absent' | 'pending') || 'pending';
+    });
+    return map;
+  }, [roster]);
+
   const findRosterName = (playerId: string) => {
     const r = rosterForPick.find((x: any) => x.id === playerId);
     return r?.playerName || 'Player';
@@ -841,6 +850,47 @@ const addSelectedToRoster = async () => {
                           <TouchableOpacity onPress={() => confirmDeleteEvent(item.id)} style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }} hitSlop={ICON_HITSLOP}>
                             <Text style={{ fontSize: 18, fontWeight: '700', color: '#ef4444', lineHeight: 22 }}>×</Text>
                           </TouchableOpacity>
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })
+              )}
+            </View>
+
+            {/* ===== Availability (RSVP) ===== */}
+            <View style={SC.container}>
+              <View style={SC.header}>
+                <View style={SC.titleRow}>
+                  <Text style={SC.title}>Availability</Text>
+                  {rosterSorted.length > 0 && <Text style={SC.count}>{rosterSorted.length} players</Text>}
+                </View>
+              </View>
+              {rosterSorted.length === 0 ? (
+                <>
+                  <View style={SC.divider} />
+                  <View style={SC.emptyRow}>
+                    <Text style={SC.emptyText}>Add players to the roster to see their availability.</Text>
+                  </View>
+                </>
+              ) : (
+                rosterSorted.map((item) => {
+                  const rsvp = rsvpMap[item.id] ?? 'pending';
+                  const badge =
+                    rsvp === 'attending'
+                      ? { bg: '#dcfce7', text: '#16a34a', label: 'Attending' }
+                      : rsvp === 'absent'
+                      ? { bg: '#fee2e2', text: '#dc2626', label: "Can't Make It" }
+                      : { bg: '#f3f4f6', text: '#6b7280', label: 'Pending' };
+                  return (
+                    <View key={item.id}>
+                      <View style={SC.divider} />
+                      <View style={[SC.row, { justifyContent: 'space-between' }]}>
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: '#111', flex: 1, marginRight: 10 }} numberOfLines={1}>
+                          {item.playerName}{item.number ? `  #${item.number}` : ''}
+                        </Text>
+                        <View style={{ paddingHorizontal: 10, paddingVertical: 4, backgroundColor: badge.bg, borderRadius: 999 }}>
+                          <Text style={{ fontSize: 12, fontWeight: '700', color: badge.text }}>{badge.label}</Text>
                         </View>
                       </View>
                     </View>

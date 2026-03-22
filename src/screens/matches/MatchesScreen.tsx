@@ -15,8 +15,16 @@ import { useNavigation } from '@react-navigation/native';
 import { listenMyTeams } from '../../services/teamService';
 import { listenMatches } from '../../services/matchService';
 import { formatDateISO } from '../../components/DateTimePickerModal';
+import ParentMatchesSection from './ParentMatchesSection';
 
-type TeamRow = { id: string; teamName?: string };
+type TeamRow = {
+  id: string;
+  teamId?: string;
+  teamName?: string;
+  role?: string;
+  linkedPlayerId?: string;
+  linkedPlayerName?: string;
+};
 type StatusFilter = 'all' | 'scheduled' | 'live' | 'completed';
 
 const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
@@ -37,15 +45,23 @@ export default function MatchesScreen() {
   const [matches, setMatches] = useState<any[]>([]);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
+  // Partition teams by role
+  const coachTeams = useMemo(() => teams.filter((t) => t.role !== 'parent'), [teams]);
+  const parentTeamRefs = useMemo(
+    () => teams.filter((t) => t.role === 'parent' && !!t.linkedPlayerId),
+    [teams],
+  );
+
   // teams
   useEffect(() => {
     if (!uid) return;
     const unsub = listenMyTeams(uid, (rows) => {
       const t = rows as TeamRow[];
       setTeams(t);
-      if (!selectedTeamId && t.length > 0) {
-        setSelectedTeamId(t[0].id);
-        setSelectedTeamName(t[0].teamName || 'Team');
+      const coachRows = t.filter((r) => r.role !== 'parent');
+      if (!selectedTeamId && coachRows.length > 0) {
+        setSelectedTeamId(coachRows[0].id);
+        setSelectedTeamName(coachRows[0].teamName || 'Team');
       }
       setLoading(false);
     });
@@ -90,99 +106,130 @@ export default function MatchesScreen() {
 
   return (
     <SafeAreaView style={styles.root}>
-      <Text style={styles.screenTitle}>Matches</Text>
+      <FlatList
+        data={filteredMatches}
+        keyExtractor={(m) => m.id}
+        style={styles.list}
+        contentContainerStyle={{ paddingBottom: 24 }}
+        ItemSeparatorComponent={() => coachTeams.length > 0 ? <View style={styles.divider} /> : null}
+        ListHeaderComponent={
+          <>
+            <Text style={styles.screenTitle}>Matches</Text>
 
-      {/* Team picker */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.teamScroll} contentContainerStyle={styles.teamScrollContent}>
-        {teams.map((t) => {
-          const active = t.id === selectedTeamId;
+            {/* ── Parent "My Child's Matches" section ── */}
+            {parentTeamRefs.length > 0 && (
+              <View style={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 8 }}>
+                <ParentMatchesSection
+                  parentTeamRefs={parentTeamRefs as any}
+                  uid={uid!}
+                  onNavigateToMatch={({ teamId, matchId, teamName, opponent }) =>
+                    navigation.navigate('Teams', {
+                      screen: 'MatchDetail',
+                      params: { teamId, matchId, title: `${teamName} vs ${opponent}` },
+                    })
+                  }
+                />
+              </View>
+            )}
+
+            {/* ── Coach / team-manager section ── */}
+            {coachTeams.length > 0 && (
+              <>
+                {parentTeamRefs.length > 0 && (
+                  <Text style={[styles.screenTitle, { fontSize: 20, paddingTop: 4, paddingBottom: 8 }]}>
+                    Team Matches
+                  </Text>
+                )}
+
+                {/* Team picker */}
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.teamScroll} contentContainerStyle={styles.teamScrollContent}>
+                  {coachTeams.map((t) => {
+                    const active = t.id === selectedTeamId;
+                    return (
+                      <TouchableOpacity
+                        key={t.id}
+                        onPress={() => { setSelectedTeamId(t.id); setSelectedTeamName(t.teamName || 'Team'); }}
+                        style={[styles.teamPill, active && styles.teamPillActive]}
+                      >
+                        <Text style={[styles.teamPillText, active && styles.teamPillTextActive]}>
+                          {t.teamName || 'Team'}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+
+                {/* Status filter */}
+                <View style={styles.filterRow}>
+                  {STATUS_FILTERS.map((f) => (
+                    <TouchableOpacity
+                      key={f.key}
+                      onPress={() => setStatusFilter(f.key)}
+                      style={[styles.filterPill, statusFilter === f.key && styles.filterPillActive]}
+                    >
+                      <Text style={[styles.filterPillText, statusFilter === f.key && styles.filterPillTextActive]}>
+                        {f.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </>
+            )}
+
+            {coachTeams.length > 0 && filteredMatches.length === 0 ? (
+              <View style={styles.emptyWrap}>
+                <Text style={styles.emptyText}>
+                  {statusFilter === 'all'
+                    ? 'No matches yet. Go to your team to create one.'
+                    : `No ${statusFilter} matches.`}
+                </Text>
+              </View>
+            ) : coachTeams.length > 0 ? (
+              <View style={styles.cardTop} />
+            ) : null}
+          </>
+        }
+        ListFooterComponent={coachTeams.length > 0 && filteredMatches.length > 0 ? <View style={styles.cardBottom} /> : null}
+        renderItem={coachTeams.length === 0 ? () => null : ({ item }) => {
+          const st = String(item.status || 'scheduled');
+          const hg = Number.isFinite(item.homeScore) ? item.homeScore : 0;
+          const ag = Number.isFinite(item.awayScore) ? item.awayScore : 0;
+
+          let statusLabel = 'Scheduled';
+          let statusColor = '#9ca3af';
+          if (st === 'live') { statusLabel = `LIVE ${hg}–${ag}`; statusColor = '#16a34a'; }
+          if (st === 'completed') { statusLabel = `FT ${hg}–${ag}`; statusColor = '#374151'; }
+
           return (
             <TouchableOpacity
-              key={t.id}
-              onPress={() => { setSelectedTeamId(t.id); setSelectedTeamName(t.teamName || 'Team'); }}
-              style={[styles.teamPill, active && styles.teamPillActive]}
+              onPress={() =>
+                navigation.navigate('Teams', {
+                  screen: 'MatchDetail',
+                  params: {
+                    teamId: selectedTeamId,
+                    matchId: item.id,
+                    title: `${selectedTeamName} vs ${item.opponent || 'Opponent'}`,
+                  },
+                })
+              }
+              style={styles.matchRow}
+              activeOpacity={0.7}
             >
-              <Text style={[styles.teamPillText, active && styles.teamPillTextActive]}>
-                {t.teamName || 'Team'}
-              </Text>
+              <View style={styles.matchRowLeft}>
+                <Text style={styles.opponent}>vs {item.opponent || 'Opponent'}</Text>
+                <Text style={styles.meta}>
+                  {item.dateISO ? formatDateISO(item.dateISO) : 'No date'}
+                  {item.location ? ` · ${item.location}` : ''}
+                </Text>
+                {item.format ? (
+                  <Text style={styles.formatLabel}>{item.format}{item.formation ? ` · ${item.formation}` : ''}</Text>
+                ) : null}
+              </View>
+              <Text style={[styles.statusLabel, { color: statusColor }]}>{statusLabel}</Text>
             </TouchableOpacity>
           );
-        })}
-      </ScrollView>
-
-      {/* Status filter */}
-      <View style={styles.filterRow}>
-        {STATUS_FILTERS.map((f) => (
-          <TouchableOpacity
-            key={f.key}
-            onPress={() => setStatusFilter(f.key)}
-            style={[styles.filterPill, statusFilter === f.key && styles.filterPillActive]}
-          >
-            <Text style={[styles.filterPillText, statusFilter === f.key && styles.filterPillTextActive]}>
-              {f.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {filteredMatches.length === 0 ? (
-        <View style={styles.emptyWrap}>
-          <Text style={styles.emptyText}>
-            {statusFilter === 'all'
-              ? 'No matches yet. Go to your team to create one.'
-              : `No ${statusFilter} matches.`}
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={filteredMatches}
-          keyExtractor={(m) => m.id}
-          style={styles.list}
-          contentContainerStyle={{ paddingBottom: 24 }}
-          ItemSeparatorComponent={() => <View style={styles.divider} />}
-          ListHeaderComponent={<View style={styles.cardTop} />}
-          ListFooterComponent={<View style={styles.cardBottom} />}
-          renderItem={({ item }) => {
-            const st = String(item.status || 'scheduled');
-            const hg = Number.isFinite(item.homeScore) ? item.homeScore : 0;
-            const ag = Number.isFinite(item.awayScore) ? item.awayScore : 0;
-
-            let statusLabel = 'Scheduled';
-            let statusColor = '#9ca3af';
-            if (st === 'live') { statusLabel = `LIVE ${hg}–${ag}`; statusColor = '#16a34a'; }
-            if (st === 'completed') { statusLabel = `FT ${hg}–${ag}`; statusColor = '#374151'; }
-
-            return (
-              <TouchableOpacity
-                onPress={() =>
-                  navigation.navigate('Teams', {
-                    screen: 'MatchDetail',
-                    params: {
-                      teamId: selectedTeamId,
-                      matchId: item.id,
-                      title: `${selectedTeamName} vs ${item.opponent || 'Opponent'}`,
-                    },
-                  })
-                }
-                style={styles.matchRow}
-                activeOpacity={0.7}
-              >
-                <View style={styles.matchRowLeft}>
-                  <Text style={styles.opponent}>vs {item.opponent || 'Opponent'}</Text>
-                  <Text style={styles.meta}>
-                    {item.dateISO ? formatDateISO(item.dateISO) : 'No date'}
-                    {item.location ? ` · ${item.location}` : ''}
-                  </Text>
-                  {item.format ? (
-                    <Text style={styles.formatLabel}>{item.format}{item.formation ? ` · ${item.formation}` : ''}</Text>
-                  ) : null}
-                </View>
-                <Text style={[styles.statusLabel, { color: statusColor }]}>{statusLabel}</Text>
-              </TouchableOpacity>
-            );
-          }}
-        />
-      )}
+        }}
+      />
     </SafeAreaView>
   );
 }

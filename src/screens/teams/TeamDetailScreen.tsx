@@ -26,7 +26,7 @@ import {
   updateTeamMembership,
 } from '../../services/playerService';
 import { createMatch, listenMatches } from '../../services/matchService';
-import { inviteCoach, listenTeamMembers } from '../../services/teamService';
+import { inviteCoach, inviteParent, listenTeamMembers } from '../../services/teamService';
 import { pickPlayerPhoto, uploadPlayerAvatar, storageReady, imagePickerReady } from '../../services/storageService';
 import FormationPickerModal, { FormationPickerResult } from '../matches/components/FormationPickerModal';
 import DateTimePickerModal, { formatDateISO } from '../../components/DateTimePickerModal';
@@ -123,9 +123,17 @@ export default function TeamDetailScreen() {
   const [rosterOpen, setRosterOpen] = useState(false);
   const [matchesOpen, setMatchesOpen] = useState(false);
   const [coachesOpen, setCoachesOpen] = useState(false);
+  const [parentsOpen, setParentsOpen] = useState(false);
 
   // Coaches / members
   const [teamMembers, setTeamMembers] = useState<any[]>([]);
+
+  // Invite Parent modal
+  const [showInviteParent, setShowInviteParent] = useState(false);
+  const [inviteParentEmail, setInviteParentEmail] = useState('');
+  const [inviteParentPlayerId, setInviteParentPlayerId] = useState('');
+  const [inviteParentPlayerName, setInviteParentPlayerName] = useState('');
+  const [savingParentInvite, setSavingParentInvite] = useState(false);
 
   // Invite modal
   const [showInvite, setShowInvite] = useState(false);
@@ -192,6 +200,40 @@ export default function TeamDetailScreen() {
     const unsub = listenPlayerSearch(search, setSearchResults);
     return () => { try { unsub(); } catch {} };
   }, [search]);
+
+  // Partition members into coaches and parents
+  const coachMembers = useMemo(() => teamMembers.filter((m) => m.role !== 'parent'), [teamMembers]);
+  const parentMembers = useMemo(() => teamMembers.filter((m) => m.role === 'parent'), [teamMembers]);
+
+  // --- Parent invite actions ---
+  const openInviteParent = () => {
+    setInviteParentEmail('');
+    setInviteParentPlayerId('');
+    setInviteParentPlayerName('');
+    setShowInviteParent(true);
+  };
+
+  const sendParentInvite = async () => {
+    const email = inviteParentEmail.trim().toLowerCase();
+    if (!email || !email.includes('@')) {
+      Alert.alert('Invalid email', 'Please enter a valid email address.');
+      return;
+    }
+    if (!inviteParentPlayerId) {
+      Alert.alert('No player selected', 'Please select the player this parent is linked to.');
+      return;
+    }
+    setSavingParentInvite(true);
+    try {
+      await inviteParent({ teamId, inviteEmail: email, invitedBy: uid!, linkedPlayerId: inviteParentPlayerId, linkedPlayerName: inviteParentPlayerName });
+      setShowInviteParent(false);
+      Alert.alert('Invite sent', `An invite has been sent to ${email}.`);
+    } catch (e: any) {
+      Alert.alert('Invite failed', e?.message ?? 'Unknown error');
+    } finally {
+      setSavingParentInvite(false);
+    }
+  };
 
   // --- Player actions ---
   const openAddPlayer = () => {
@@ -548,8 +590,8 @@ export default function TeamDetailScreen() {
           >
             <View style={S.sectionTitleRow}>
               <Text style={S.sectionTitle}>Coaches</Text>
-              {teamMembers.length > 0 && (
-                <Text style={S.sectionCount}>{teamMembers.length}</Text>
+              {coachMembers.length > 0 && (
+                <Text style={S.sectionCount}>{coachMembers.length}</Text>
               )}
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -565,7 +607,7 @@ export default function TeamDetailScreen() {
           </TouchableOpacity>
 
           {coachesOpen && (
-            teamMembers.length === 0 ? (
+            coachMembers.length === 0 ? (
               <>
                 <View style={S.divider} />
                 <View style={S.emptyRow}>
@@ -573,7 +615,7 @@ export default function TeamDetailScreen() {
                 </View>
               </>
             ) : (
-              teamMembers.map((m) => {
+              coachMembers.map((m) => {
                 const isInvite = m.status === 'invited';
                 return (
                   <View key={m.id}>
@@ -585,6 +627,67 @@ export default function TeamDetailScreen() {
                         </Text>
                         <Text style={{ marginTop: 2, fontSize: 13, color: '#9ca3af' }}>
                           {m.role || 'assistant'}{isInvite ? ' · Pending' : ' · Active'}
+                        </Text>
+                      </View>
+                      {isInvite && (
+                        <View style={{ paddingHorizontal: 8, paddingVertical: 3, backgroundColor: '#fef9c3', borderRadius: 8 }}>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#a16207' }}>Pending</Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                );
+              })
+            )
+          )}
+        </View>
+
+        {/* ===== PARENTS ACCORDION ===== */}
+        <View style={S.sectionContainer}>
+          <TouchableOpacity
+            style={S.sectionHeader}
+            onPress={() => setParentsOpen((v) => !v)}
+            activeOpacity={0.7}
+          >
+            <View style={S.sectionTitleRow}>
+              <Text style={S.sectionTitle}>Parents</Text>
+              {parentMembers.length > 0 && (
+                <Text style={S.sectionCount}>{parentMembers.length}</Text>
+              )}
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <TouchableOpacity
+                onPress={(e) => { e.stopPropagation(); openInviteParent(); }}
+                style={S.addBtn}
+                hitSlop={ICON_HITSLOP}
+              >
+                <Text style={S.addBtnText}>+ Invite</Text>
+              </TouchableOpacity>
+              <Text style={[S.chevron, { transform: [{ rotate: parentsOpen ? '-90deg' : '90deg' }] }]}>›</Text>
+            </View>
+          </TouchableOpacity>
+
+          {parentsOpen && (
+            parentMembers.length === 0 ? (
+              <>
+                <View style={S.divider} />
+                <View style={S.emptyRow}>
+                  <Text style={S.emptyText}>No parents yet. Tap "+ Invite" to link a parent to a player.</Text>
+                </View>
+              </>
+            ) : (
+              parentMembers.map((m) => {
+                const isInvite = m.status === 'invited';
+                return (
+                  <View key={m.id}>
+                    <View style={S.divider} />
+                    <View style={S.row}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 15, fontWeight: '600', color: '#111' }}>
+                          {isInvite ? m.invitedEmail || 'Invited' : (m.displayName || m.invitedEmail || m.id)}
+                        </Text>
+                        <Text style={{ marginTop: 2, fontSize: 13, color: '#9ca3af' }}>
+                          Parent of {m.linkedPlayerName || 'Unknown Player'}{isInvite ? ' · Pending' : ' · Active'}
                         </Text>
                       </View>
                       {isInvite && (
@@ -642,6 +745,72 @@ export default function TeamDetailScreen() {
                 style={{ paddingVertical: 10, paddingHorizontal: 24, backgroundColor: '#111', borderRadius: 12, opacity: savingInvite ? 0.6 : 1 }}
               >
                 <Text style={{ fontWeight: '700', color: '#fff', fontSize: 15 }}>Send Invite</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ===== INVITE PARENT MODAL ===== */}
+      <Modal visible={showInviteParent} animationType="slide" transparent onRequestClose={() => setShowInviteParent(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, gap: 14, maxHeight: '80%' }}>
+            <Text style={{ fontSize: 17, fontWeight: '700', color: '#111' }}>Invite Parent</Text>
+
+            <TextInput
+              placeholder="Parent's email address"
+              placeholderTextColor="#9ca3af"
+              autoCapitalize="none"
+              keyboardType="email-address"
+              value={inviteParentEmail}
+              onChangeText={setInviteParentEmail}
+              style={{ backgroundColor: '#f3f4f6', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 13, fontSize: 16, color: '#111' }}
+            />
+
+            <Text style={{ fontWeight: '600', color: '#374151', fontSize: 14 }}>Link to player</Text>
+
+            <ScrollView style={{ maxHeight: 220 }} showsVerticalScrollIndicator={false}>
+              {memberships.length === 0 ? (
+                <Text style={{ color: '#9ca3af', fontSize: 14 }}>No players on roster yet. Add players first.</Text>
+              ) : (
+                memberships.map((item, idx) => {
+                  const active = inviteParentPlayerId === item.id;
+                  return (
+                    <View key={item.id}>
+                      {idx > 0 && <View style={{ height: 1, backgroundColor: '#f3f4f6' }} />}
+                      <TouchableOpacity
+                        onPress={() => { setInviteParentPlayerId(item.id); setInviteParentPlayerName(item.playerName || ''); }}
+                        style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 11, paddingHorizontal: 4, backgroundColor: active ? '#f0fdf4' : 'transparent', borderRadius: 8 }}
+                      >
+                        <Avatar name={item.playerName || '?'} avatarUrl={item.avatarUrl ?? null} size={32} />
+                        <View style={{ flex: 1, marginLeft: 10 }}>
+                          <Text style={{ fontWeight: '600', color: '#111', fontSize: 14 }}>
+                            {item.playerName}{item.number ? `  #${item.number}` : ''}
+                          </Text>
+                          {item.position ? <Text style={{ color: '#9ca3af', fontSize: 12, marginTop: 1 }}>{item.position}</Text> : null}
+                        </View>
+                        <View style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: active ? '#16a34a' : '#d1d5db', backgroundColor: active ? '#16a34a' : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
+                          {active ? <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800', lineHeight: 14 }}>✓</Text> : null}
+                        </View>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })
+              )}
+            </ScrollView>
+
+            <View style={{ flexDirection: 'row', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
+              <TouchableOpacity onPress={() => setShowInviteParent(false)} style={{ paddingVertical: 10, paddingHorizontal: 16 }}>
+                <Text style={{ color: '#6b7280', fontWeight: '600', fontSize: 15 }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={sendParentInvite}
+                disabled={savingParentInvite}
+                style={{ paddingVertical: 10, paddingHorizontal: 24, backgroundColor: '#111', borderRadius: 12, opacity: savingParentInvite ? 0.6 : 1 }}
+              >
+                <Text style={{ fontWeight: '700', color: '#fff', fontSize: 15 }}>
+                  {savingParentInvite ? 'Sending…' : 'Send Invite'}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
