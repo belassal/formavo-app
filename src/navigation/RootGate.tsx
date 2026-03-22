@@ -4,6 +4,7 @@ import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
 
 import AppTabs from './tabs/AppTabs';
 import AuthStack from './stacks/AuthStack';
+import { setupNotifications } from '../services/notificationService';
 
 type AuthState = 'loading' | 'unauthenticated' | 'anonymous' | 'authenticated';
 
@@ -18,6 +19,7 @@ export function RootGate() {
         setAuthState('anonymous');
       } else {
         setAuthState('authenticated');
+        setupNotifications(user.uid).catch(console.warn);
       }
     });
     return unsub;
