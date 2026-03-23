@@ -35,8 +35,8 @@ target 'Formavo' do
         c.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
         c.build_settings['CLANG_WARN_NON_MODULAR_INCLUDE_IN_FRAMEWORK_MODULES'] = 'NO'
 
-        # ✅ Fix RNFBFirestore/RNFBStorage: RCTPromiseRejectBlock not visible in modular builds
-        if ['RNFBFirestore', 'RNFBStorage'].include?(t.name)
+        # ✅ Fix RNFBFirestore/RNFBStorage/RNFBMessaging: RCTPromiseRejectBlock not visible in modular builds
+        if ['RNFBFirestore', 'RNFBStorage', 'RNFBMessaging'].include?(t.name)
           c.build_settings['CLANG_ENABLE_MODULES'] = 'NO'
           if c.base_configuration_reference
             xcconfig_path = c.base_configuration_reference.real_path

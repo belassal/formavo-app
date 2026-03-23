@@ -1,5 +1,6 @@
 import { db, serverTimestamp } from './firebase';
 import { COL } from '../models/collections';
+import { getOrCreateClubForUser } from './clubService';
 
 export type TeamRole = 'coach' | 'assistant' | 'parent';
 export type MemberStatus = 'active' | 'invited';
@@ -16,8 +17,10 @@ export async function createTeam(params: {
   ageGroup?: string;
   season?: string;
   createdBy: string; // uid
+  createdByEmail?: string;
+  createdByName?: string;
 }) {
-  const { name, ageGroup = '', season = '', createdBy } = params;
+  const { name, ageGroup = '', season = '', createdBy, createdByEmail = '', createdByName = '' } = params;
 
   if (!name.trim()) throw new Error('Team name is required');
 
@@ -60,7 +63,38 @@ export async function createTeam(params: {
     });
   });
 
-  return teamRef.id;
+  const teamId = teamRef.id;
+
+  // Link team to club (best effort — does not block team creation)
+  try {
+    const clubId = await getOrCreateClubForUser({
+      uid: createdBy,
+      email: createdByEmail,
+      displayName: createdByName || 'Coach',
+    });
+
+    // Store clubId on the team doc
+    await teamRef.update({ clubId });
+
+    // Add teamId to the owner's member doc in the club
+    const memberDocRef = db
+      .collection('clubs')
+      .doc(clubId)
+      .collection('members')
+      .doc(createdBy);
+
+    const memberSnap = await memberDocRef.get();
+    if (memberSnap.exists) {
+      const existing = (memberSnap.data() as any)?.teamIds ?? [];
+      if (!existing.includes(teamId)) {
+        await memberDocRef.update({ teamIds: [...existing, teamId] });
+      }
+    }
+  } catch (_e) {
+    // Non-fatal: club linkage failed, team was still created
+  }
+
+  return teamId;
 }
 
 export function listenMyTeams(uid: string, onData: (teams: any[]) => void) {

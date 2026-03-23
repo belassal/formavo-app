@@ -6,6 +6,9 @@ import MatchDetailScreen from '../../screens/matches/MatchDetailScreen';
 import GameDayPitchScreen from '../../screens/matches/GameDayPitchScreen';
 import StatsScreen from '../../screens/teams/StatsScreen';
 import PlayerProfileScreen from '../../screens/teams/PlayerProfileScreen';
+import ClubSettingsScreen from '../../screens/club/ClubSettingsScreen';
+import StaffListScreen from '../../screens/club/StaffListScreen';
+import StaffProfileScreen from '../../screens/club/StaffProfileScreen';
 
 export type TeamsStackParamList = {
   TeamsHome: undefined;
@@ -21,6 +24,9 @@ export type TeamsStackParamList = {
     playerPosition?: string;
     avatarUrl?: string;
   };
+  ClubSettings: { clubId: string; clubName?: string };
+  StaffList: { clubId: string; clubName?: string; viewerRole?: string };
+  StaffProfile: { clubId: string; memberId: string; memberName?: string; viewerRole?: string };
 };
 
 const Stack = createNativeStackNavigator<TeamsStackParamList>();
@@ -35,11 +41,10 @@ export default function TeamsStack() {
         options={({ route }) => ({ title: route.params.teamName || 'Team' })}
       />
       <Stack.Screen
-  	name="MatchDetail"
-  	component={MatchDetailScreen}
-  	options={({ route }) => ({ title: route.params.title || 'Match' })} 
+        name="MatchDetail"
+        component={MatchDetailScreen}
+        options={({ route }) => ({ title: route.params.title || 'Match' })}
       />
-
       <Stack.Screen
         name="GameDayPitch"
         component={GameDayPitchScreen}
@@ -55,7 +60,21 @@ export default function TeamsStack() {
         component={PlayerProfileScreen}
         options={({ route }) => ({ title: route.params.playerName || 'Player' })}
       />
+      <Stack.Screen
+        name="ClubSettings"
+        component={ClubSettingsScreen}
+        options={({ route }) => ({ title: route.params.clubName || 'Club Settings' })}
+      />
+      <Stack.Screen
+        name="StaffList"
+        component={StaffListScreen}
+        options={({ route }) => ({ title: route.params.clubName || 'Staff' })}
+      />
+      <Stack.Screen
+        name="StaffProfile"
+        component={StaffProfileScreen}
+        options={({ route }) => ({ title: route.params.memberName || 'Staff Member' })}
+      />
     </Stack.Navigator>
   );
 }
-
