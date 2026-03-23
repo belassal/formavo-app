@@ -9,6 +9,7 @@ import PlayerProfileScreen from '../../screens/teams/PlayerProfileScreen';
 import ClubSettingsScreen from '../../screens/club/ClubSettingsScreen';
 import StaffListScreen from '../../screens/club/StaffListScreen';
 import StaffProfileScreen from '../../screens/club/StaffProfileScreen';
+import ClubPlayersScreen from '../../screens/club/ClubPlayersScreen';
 
 export type TeamsStackParamList = {
   TeamsHome: undefined;
@@ -28,6 +29,7 @@ export type TeamsStackParamList = {
   ClubSettings: { clubId: string; clubName?: string };
   StaffList: { clubId: string; clubName?: string; viewerRole?: string };
   StaffProfile: { clubId: string; memberId: string; memberName?: string; viewerRole?: string };
+  ClubPlayers: { clubId: string; clubName?: string };
 };
 
 const Stack = createNativeStackNavigator<TeamsStackParamList>();
@@ -75,6 +77,11 @@ export default function TeamsStack() {
         name="StaffProfile"
         component={StaffProfileScreen}
         options={({ route }) => ({ title: route.params.memberName || 'Staff Member' })}
+      />
+      <Stack.Screen
+        name="ClubPlayers"
+        component={ClubPlayersScreen}
+        options={({ route }) => ({ title: `${route.params.clubName || 'Club'} Players` })}
       />
     </Stack.Navigator>
   );

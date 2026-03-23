@@ -315,35 +315,52 @@ export default function TeamsScreen() {
 
         {/* Club Section — only when user has multiple teams OR has staff beyond themselves */}
         {!isParentOnly && clubId && club && (staffCount > 1 || teamCount > 1) && (
-          <TouchableOpacity
-            onPress={() =>
-              navigation.navigate('StaffList', {
-                clubId,
-                clubName: club.name,
-                viewerRole: viewerClubRole,
-              })
-            }
-            activeOpacity={0.85}
-            style={{
-              backgroundColor: '#111',
-              borderRadius: 14,
-              padding: 16,
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }}
-          >
-            <View style={{ gap: 4 }}>
+          <View style={{ backgroundColor: '#111', borderRadius: 14, overflow: 'hidden' }}>
+            {/* Club name + subtitle */}
+            <View style={{ padding: 16, paddingBottom: 12 }}>
               <Text style={{ fontSize: 17, fontWeight: '800', color: '#fff' }}>{club.name}</Text>
-              <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)' }}>
-                {staffCount} {staffCount === 1 ? 'staff' : 'staff'} · {teamCount} {teamCount === 1 ? 'team' : 'teams'}
-              </Text>
-              <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>
-                Manage Club
+              <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>
+                {staffCount} staff · {teamCount} {teamCount === 1 ? 'team' : 'teams'}
               </Text>
             </View>
-            <Text style={{ fontSize: 22, color: 'rgba(255,255,255,0.5)' }}>›</Text>
-          </TouchableOpacity>
+
+            {/* Action buttons */}
+            <View style={{
+              flexDirection: 'row',
+              borderTopWidth: 1,
+              borderTopColor: 'rgba(255,255,255,0.1)',
+            }}>
+              <TouchableOpacity
+                onPress={() => navigation.navigate('ClubPlayers', { clubId, clubName: club.name })}
+                activeOpacity={0.7}
+                style={{
+                  flex: 1, paddingVertical: 12, alignItems: 'center',
+                  borderRightWidth: 1, borderRightColor: 'rgba(255,255,255,0.1)',
+                }}
+              >
+                <Text style={{ fontSize: 13, fontWeight: '700', color: 'rgba(255,255,255,0.85)' }}>👤 Players</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => navigation.navigate('StaffList', { clubId, clubName: club.name, viewerRole: viewerClubRole })}
+                activeOpacity={0.7}
+                style={{ flex: 1, paddingVertical: 12, alignItems: 'center' }}
+              >
+                <Text style={{ fontSize: 13, fontWeight: '700', color: 'rgba(255,255,255,0.85)' }}>🪪 Staff</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => navigation.navigate('ClubSettings', { clubId, clubName: club.name })}
+                activeOpacity={0.7}
+                style={{
+                  flex: 1, paddingVertical: 12, alignItems: 'center',
+                  borderLeftWidth: 1, borderLeftColor: 'rgba(255,255,255,0.1)',
+                }}
+              >
+                <Text style={{ fontSize: 13, fontWeight: '700', color: 'rgba(255,255,255,0.85)' }}>⚙️ Settings</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         )}
 
         {/* My Teams */}
