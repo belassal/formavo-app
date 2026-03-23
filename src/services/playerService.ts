@@ -13,11 +13,16 @@ export type PlayerCreate = {
 export type MembershipType = 'regular' | 'callup' | 'trial';
 export type MembershipStatus = 'active' | 'inactive';
 
-export async function createGlobalPlayer(p: PlayerCreate) {
+export async function createGlobalPlayer(p: PlayerCreate & { clubId?: string }) {
   const name = p.name.trim();
   if (!name) throw new Error('Player name is required');
 
-  const playerRef = db.collection(COL.players).doc();
+  // Prefer club-scoped registry when clubId is available
+  const collection = p.clubId
+    ? db.collection(COL.clubs).doc(p.clubId).collection(COL.clubPlayers)
+    : db.collection(COL.players);
+
+  const playerRef = collection.doc();
   const nameLower = name.toLowerCase();
 
   await playerRef.set({
@@ -34,15 +39,23 @@ export async function createGlobalPlayer(p: PlayerCreate) {
 }
 
 // Prefix search by nameLower using startAt/endAt
-export function listenPlayerSearch(q: string, onData: (rows: any[]) => void) {
+// If clubId is provided, searches club-scoped registry; otherwise global players
+export function listenPlayerSearch(
+  q: string,
+  onData: (rows: any[]) => void,
+  clubId?: string,
+) {
   const query = q.trim().toLowerCase();
   if (!query) {
     onData([]);
     return () => {};
   }
 
-  return db
-    .collection(COL.players)
+  const collection = clubId
+    ? db.collection(COL.clubs).doc(clubId).collection(COL.clubPlayers)
+    : db.collection(COL.players);
+
+  return collection
     .orderBy('nameLower')
     .startAt(query)
     .endAt(query + '\uf8ff')

@@ -43,6 +43,7 @@ import {
   type Season,
 } from '../../services/seasonService';
 import { db } from '../../services/firebase';
+import { migrateTeamPlayersToClub } from '../../services/clubPlayerService';
 import SeasonPickerModal from './components/SeasonPickerModal';
 import NewSeasonModal from './components/NewSeasonModal';
 
@@ -134,6 +135,9 @@ export default function TeamDetailScreen() {
   const teamName = route.params.teamName || 'Team';
   const isParent = route.params.role === 'parent';
   const uid = useMemo(() => auth().currentUser?.uid ?? null, []);
+
+  // Club state
+  const [clubId, setClubId] = useState<string | null>(null);
 
   // Season state
   const [seasons, setSeasons] = useState<Season[]>([]);
@@ -243,11 +247,20 @@ export default function TeamDetailScreen() {
 
     const bootstrap = async () => {
       try {
-        // Fetch team doc to check activeSeasonId and existing season text
+        // Fetch team doc to check activeSeasonId, clubId and existing season text
         const teamSnap = await db.collection('teams').doc(teamId).get();
         const teamData = teamSnap.data() as any;
         const existingActiveSeasonId: string | null = teamData?.activeSeasonId ?? null;
         const existingSeasonText: string = teamData?.season ?? '';
+        const teamClubId: string | null = teamData?.clubId ?? null;
+
+        if (teamClubId) {
+          setClubId(teamClubId);
+          // Migrate existing players to club registry (idempotent)
+          migrateTeamPlayersToClub({ teamId, clubId: teamClubId }).catch((e) =>
+            console.warn('[TeamDetail] migration error:', e),
+          );
+        }
 
         // Always call getOrCreateDefaultSeason — it handles re-tagging
         // any untagged matches/roster docs idempotently
@@ -275,9 +288,9 @@ export default function TeamDetailScreen() {
   }, [teamId]);
 
   useEffect(() => {
-    const unsub = listenPlayerSearch(search, setSearchResults);
+    const unsub = listenPlayerSearch(search, setSearchResults, clubId ?? undefined);
     return () => { try { unsub(); } catch {} };
-  }, [search]);
+  }, [search, clubId]);
 
   // Partition members into coaches and parents
   const coachMembers = useMemo(() => teamMembers.filter((m) => m.role !== 'parent'), [teamMembers]);
@@ -365,7 +378,7 @@ export default function TeamDetailScreen() {
     if (!name) { Alert.alert('Missing name', 'Enter player name.'); return; }
     try {
       setSavingPlayer(true);
-      const playerId = await createGlobalPlayer({ name, number: newNumber, position: newPosition, createdBy: uid });
+      const playerId = await createGlobalPlayer({ name, number: newNumber, position: newPosition, createdBy: uid, clubId: clubId ?? undefined });
       await addPlayerToTeam({
         teamId,
         playerId,
