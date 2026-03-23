@@ -8,6 +8,8 @@ import {
   Alert,
 } from 'react-native';
 import auth from '@react-native-firebase/auth';
+import messaging from '@react-native-firebase/messaging';
+import { removeFCMToken } from '../../services/notificationService';
 
 export default function ProfileScreen() {
   const user = auth().currentUser;
@@ -18,7 +20,15 @@ export default function ProfileScreen() {
       {
         text: 'Sign Out',
         style: 'destructive',
-        onPress: () => auth().signOut(),
+        onPress: async () => {
+          try {
+            const uid = auth().currentUser?.uid;
+            const token = await messaging().getToken().catch(() => null);
+            if (uid && token) await removeFCMToken(uid, token).catch(console.warn);
+          } finally {
+            auth().signOut();
+          }
+        },
       },
     ]);
   };
