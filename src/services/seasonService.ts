@@ -67,7 +67,28 @@ export async function getOrCreateDefaultSeason(params: {
     .get();
 
   if (!snap.empty) {
-    return snap.docs[0].id;
+    const existingSeasonId = snap.docs[0].id;
+    // Re-tag any docs that were missed (idempotent — only updates docs without seasonId)
+    try {
+      const [matchSnap, memberSnap] = await Promise.all([
+        db.collection(COL.teams).doc(teamId).collection(COL.matches).get(),
+        db.collection(COL.teams).doc(teamId).collection(COL.playerMemberships).get(),
+      ]);
+      const untagged = [...matchSnap.docs, ...memberSnap.docs].filter((d) => !d.data().seasonId);
+      if (untagged.length > 0) {
+        const BATCH_SIZE = 400;
+        for (let i = 0; i < untagged.length; i += BATCH_SIZE) {
+          const batch = db.batch();
+          untagged.slice(i, i + BATCH_SIZE).forEach((d) => {
+            batch.update(d.ref, { seasonId: existingSeasonId });
+          });
+          await batch.commit();
+        }
+      }
+    } catch (e) {
+      console.warn('[getOrCreateDefaultSeason] re-tag error:', e);
+    }
+    return existingSeasonId;
   }
 
   // No seasons exist — create the default one
@@ -80,10 +101,8 @@ export async function getOrCreateDefaultSeason(params: {
   // so season filtering works correctly for legacy data
   try {
     const [matchSnap, memberSnap] = await Promise.all([
-      db.collection(COL.teams).doc(teamId).collection(COL.matches)
-        .where('isDeleted', '==', false).get(),
-      db.collection(COL.teams).doc(teamId).collection(COL.playerMemberships)
-        .where('status', '==', 'active').get(),
+      db.collection(COL.teams).doc(teamId).collection(COL.matches).get(),
+      db.collection(COL.teams).doc(teamId).collection(COL.playerMemberships).get(),
     ]);
 
     const BATCH_SIZE = 400;
