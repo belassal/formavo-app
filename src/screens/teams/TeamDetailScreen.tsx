@@ -249,18 +249,16 @@ export default function TeamDetailScreen() {
         const existingActiveSeasonId: string | null = teamData?.activeSeasonId ?? null;
         const existingSeasonText: string = teamData?.season ?? '';
 
-        if (existingActiveSeasonId) {
-          // Team already has an active season
-          setViewingSeasonId(existingActiveSeasonId);
-        } else {
-          // Bootstrap: create default season and set it as active
-          const seasonId = await getOrCreateDefaultSeason({
-            teamId,
-            existingSeasonText,
-          });
+        // Always call getOrCreateDefaultSeason — it handles re-tagging
+        // any untagged matches/roster docs idempotently
+        const seasonId = await getOrCreateDefaultSeason({
+          teamId,
+          existingSeasonText,
+        });
+        if (!existingActiveSeasonId) {
           await setActiveSeasonId({ teamId, seasonId });
-          setViewingSeasonId(seasonId);
         }
+        setViewingSeasonId(seasonId);
       } catch (err) {
         console.log('[TeamDetailScreen] season bootstrap error:', err);
       }
