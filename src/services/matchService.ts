@@ -78,15 +78,16 @@ export function listenMatches(
     .doc(teamId)
     .collection(COL.matches);
 
-  if (options?.seasonId) {
-    query = query.where('seasonId', '==', options.seasonId);
-  }
-
   query = query.orderBy('createdAt', 'desc');
 
-  return query.onSnapshot((snap: any) =>
-    onData(snap.docs.map((d: any) => ({ id: d.id, ...d.data() }))),
-  );
+  return query.onSnapshot((snap: any) => {
+    let rows = snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
+    // Filter by season client-side to avoid needing a composite Firestore index
+    if (options?.seasonId) {
+      rows = rows.filter((m: any) => m.seasonId === options.seasonId);
+    }
+    onData(rows);
+  });
 }
 
 export async function updateMatch(params: {

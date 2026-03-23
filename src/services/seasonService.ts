@@ -74,7 +74,34 @@ export async function getOrCreateDefaultSeason(params: {
   const label = (existingSeasonText || '').trim() || '2025/2026';
   const year = 2026;
 
-  return createSeason({ teamId, label, year, status: 'active' });
+  const seasonId = await createSeason({ teamId, label, year, status: 'active' });
+
+  // Tag all existing matches and playerMemberships with this seasonId
+  // so season filtering works correctly for legacy data
+  try {
+    const [matchSnap, memberSnap] = await Promise.all([
+      db.collection(COL.teams).doc(teamId).collection(COL.matches)
+        .where('isDeleted', '==', false).get(),
+      db.collection(COL.teams).doc(teamId).collection(COL.playerMemberships)
+        .where('status', '==', 'active').get(),
+    ]);
+
+    const BATCH_SIZE = 400;
+    const allDocs = [...matchSnap.docs, ...memberSnap.docs];
+    for (let i = 0; i < allDocs.length; i += BATCH_SIZE) {
+      const batch = db.batch();
+      allDocs.slice(i, i + BATCH_SIZE).forEach((d) => {
+        if (!d.data().seasonId) {
+          batch.update(d.ref, { seasonId });
+        }
+      });
+      await batch.commit();
+    }
+  } catch (e) {
+    console.warn('[getOrCreateDefaultSeason] tag existing docs error:', e);
+  }
+
+  return seasonId;
 }
 
 /**
