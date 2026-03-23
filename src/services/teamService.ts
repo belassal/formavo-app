@@ -1,6 +1,7 @@
 import { db, serverTimestamp } from './firebase';
 import { COL } from '../models/collections';
 import { getOrCreateClubForUser } from './clubService';
+import { getOrCreateDefaultSeason, setActiveSeasonId } from './seasonService';
 
 export type TeamRole = 'coach' | 'assistant' | 'parent';
 export type MemberStatus = 'active' | 'invited';
@@ -64,6 +65,18 @@ export async function createTeam(params: {
   });
 
   const teamId = teamRef.id;
+
+  // Create default season and set as active (best effort — does not block team creation)
+  try {
+    const seasonId = await getOrCreateDefaultSeason({
+      teamId,
+      teamName: name.trim(),
+      existingSeasonText: season,
+    });
+    await setActiveSeasonId({ teamId, seasonId });
+  } catch (_e) {
+    // Non-fatal: season creation failed, team was still created
+  }
 
   // Link team to club (best effort — does not block team creation)
   try {

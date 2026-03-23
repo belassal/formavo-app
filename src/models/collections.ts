@@ -12,5 +12,6 @@ export const COL = {
   announcements: 'announcements', // teams/{teamId}/announcements/{announcementId}
   clubs: 'clubs', // clubs/{clubId}
   clubMembers: 'members', // clubs/{clubId}/members/{memberId}
+  seasons: 'seasons', // teams/{teamId}/seasons/{seasonId}
 } as const;
 

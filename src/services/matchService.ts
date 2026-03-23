@@ -34,8 +34,9 @@ export async function createMatch(params: {
   format?: string;       // e.g. "7v7" | "9v9" | "11v11"
   formation?: string;    // e.g. "4-3-3"
   halfDuration?: number; // minutes per half, default 45
+  seasonId?: string;     // optional: links match to a specific season
 }) {
-  const { teamId, opponent, dateISO, location = '', format = '', formation = '', halfDuration = 45 } = params;
+  const { teamId, opponent, dateISO, location = '', format = '', formation = '', halfDuration = 45, seasonId } = params;
 
   if (!opponent.trim()) throw new Error('Opponent is required');
   if (!dateISO.trim()) throw new Error('Date is required');
@@ -58,6 +59,8 @@ export async function createMatch(params: {
     // v0.3: cached count (updated via add/remove roster transactions)
     rosterCount: 0,
 
+    ...(seasonId ? { seasonId } : {}),
+
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
@@ -65,13 +68,25 @@ export async function createMatch(params: {
   return matchRef.id;
 }
 
-export function listenMatches(teamId: string, onData: (rows: any[]) => void) {
-  return db
+export function listenMatches(
+  teamId: string,
+  onData: (rows: any[]) => void,
+  options?: { seasonId?: string },
+) {
+  let query: any = db
     .collection(COL.teams)
     .doc(teamId)
-    .collection(COL.matches)
-    .orderBy('createdAt', 'desc')
-    .onSnapshot((snap) => onData(snap.docs.map((d) => ({ id: d.id, ...d.data() }))));
+    .collection(COL.matches);
+
+  if (options?.seasonId) {
+    query = query.where('seasonId', '==', options.seasonId);
+  }
+
+  query = query.orderBy('createdAt', 'desc');
+
+  return query.onSnapshot((snap: any) =>
+    onData(snap.docs.map((d: any) => ({ id: d.id, ...d.data() }))),
+  );
 }
 
 export async function updateMatch(params: {

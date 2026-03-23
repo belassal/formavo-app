@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -36,6 +36,15 @@ import {
   deleteAnnouncement,
   type Announcement,
 } from '../../services/announcementService';
+import {
+  listenSeasons,
+  getOrCreateDefaultSeason,
+  setActiveSeasonId,
+  type Season,
+} from '../../services/seasonService';
+import { db } from '../../services/firebase';
+import SeasonPickerModal from './components/SeasonPickerModal';
+import NewSeasonModal from './components/NewSeasonModal';
 
 type TeamDetailRoute = RouteProp<TeamsStackParamList, 'TeamDetail'>;
 
@@ -126,6 +135,15 @@ export default function TeamDetailScreen() {
   const isParent = route.params.role === 'parent';
   const uid = useMemo(() => auth().currentUser?.uid ?? null, []);
 
+  // Season state
+  const [seasons, setSeasons] = useState<Season[]>([]);
+  const [viewingSeasonId, setViewingSeasonId] = useState<string | null>(null);
+  const [showSeasonPicker, setShowSeasonPicker] = useState(false);
+  const [showNewSeason, setShowNewSeason] = useState(false);
+
+  // Track whether we've already bootstrapped the active season for this team
+  const seasonBootstrappedRef = useRef(false);
+
   // Accordion open/close
   const [rosterOpen, setRosterOpen] = useState(false);
   const [matchesOpen, setMatchesOpen] = useState(false);
@@ -196,19 +214,66 @@ export default function TeamDetailScreen() {
 
   // --- Listeners ---
   useEffect(() => {
-    const unsubRoster = listenTeamMemberships(teamId, (rows) => {
-      const sorted = [...rows].sort((a, b) => (a.playerName || '').localeCompare(b.playerName || ''));
-      setMemberships(sorted);
-      setLoadingRoster(false);
-    });
-    const unsubMatches = listenMatches(teamId, (rows) => {
-      const visible = (rows || []).filter((m: any) => !m.isDeleted);
-      setMatches(visible);
-      setLoadingMatches(false);
-    });
+    const unsubRoster = listenTeamMemberships(
+      teamId,
+      (rows) => {
+        const sorted = [...rows].sort((a, b) => (a.playerName || '').localeCompare(b.playerName || ''));
+        setMemberships(sorted);
+        setLoadingRoster(false);
+      },
+      viewingSeasonId ? { seasonId: viewingSeasonId } : undefined,
+    );
+    const unsubMatches = listenMatches(
+      teamId,
+      (rows) => {
+        const visible = (rows || []).filter((m: any) => !m.isDeleted);
+        setMatches(visible);
+        setLoadingMatches(false);
+      },
+      viewingSeasonId ? { seasonId: viewingSeasonId } : undefined,
+    );
     const unsubMembers = listenTeamMembers(teamId, (rows) => setTeamMembers(rows));
     const unsubAnnouncements = listenAnnouncements(teamId, setAnnouncements);
     return () => { unsubRoster(); unsubMatches(); unsubMembers(); unsubAnnouncements(); };
+  }, [teamId, viewingSeasonId]);
+
+  // --- Season bootstrap: get or create the default season and set activeSeasonId ---
+  useEffect(() => {
+    if (seasonBootstrappedRef.current) return;
+
+    const bootstrap = async () => {
+      try {
+        // Fetch team doc to check activeSeasonId and existing season text
+        const teamSnap = await db.collection('teams').doc(teamId).get();
+        const teamData = teamSnap.data() as any;
+        const existingActiveSeasonId: string | null = teamData?.activeSeasonId ?? null;
+        const existingSeasonText: string = teamData?.season ?? '';
+
+        if (existingActiveSeasonId) {
+          // Team already has an active season
+          setViewingSeasonId(existingActiveSeasonId);
+        } else {
+          // Bootstrap: create default season and set it as active
+          const seasonId = await getOrCreateDefaultSeason({
+            teamId,
+            existingSeasonText,
+          });
+          await setActiveSeasonId({ teamId, seasonId });
+          setViewingSeasonId(seasonId);
+        }
+      } catch (err) {
+        console.log('[TeamDetailScreen] season bootstrap error:', err);
+      }
+    };
+
+    seasonBootstrappedRef.current = true;
+    bootstrap();
+  }, [teamId]);
+
+  // --- Listen to seasons list ---
+  useEffect(() => {
+    const unsub = listenSeasons(teamId, setSeasons);
+    return () => unsub();
   }, [teamId]);
 
   useEffect(() => {
@@ -280,7 +345,16 @@ export default function TeamDetailScreen() {
   const addExisting = async (p: any) => {
     try {
       setSavingPlayer(true);
-      await addPlayerToTeam({ teamId, playerId: p.id, playerName: p.name, number: p.number || '', position: p.position || '', type: 'regular', status: 'active' });
+      await addPlayerToTeam({
+        teamId,
+        playerId: p.id,
+        playerName: p.name,
+        number: p.number || '',
+        position: p.position || '',
+        type: 'regular',
+        status: 'active',
+        ...(viewingSeasonId ? { seasonId: viewingSeasonId } : {}),
+      });
       setShowAddPlayer(false);
     } catch (e: any) {
       Alert.alert('Add Player Failed', e?.message ?? 'Unknown error');
@@ -294,7 +368,16 @@ export default function TeamDetailScreen() {
     try {
       setSavingPlayer(true);
       const playerId = await createGlobalPlayer({ name, number: newNumber, position: newPosition, createdBy: uid });
-      await addPlayerToTeam({ teamId, playerId, playerName: name, number: newNumber.trim(), position: newPosition.trim(), type: 'regular', status: 'active' });
+      await addPlayerToTeam({
+        teamId,
+        playerId,
+        playerName: name,
+        number: newNumber.trim(),
+        position: newPosition.trim(),
+        type: 'regular',
+        status: 'active',
+        ...(viewingSeasonId ? { seasonId: viewingSeasonId } : {}),
+      });
       setShowAddPlayer(false);
     } catch (e: any) {
       Alert.alert('Create Player Failed', e?.message ?? 'Unknown error');
@@ -409,7 +492,16 @@ export default function TeamDetailScreen() {
     if (!dt) { Alert.alert('Missing Date', 'Please select a date and time.'); return; }
     try {
       setCreatingMatch(true);
-      const matchId = await createMatch({ teamId, opponent: opp, dateISO: dt, location: location.trim(), format: pickedFormat, formation: pickedFormation, halfDuration });
+      const matchId = await createMatch({
+        teamId,
+        opponent: opp,
+        dateISO: dt,
+        location: location.trim(),
+        format: pickedFormat,
+        formation: pickedFormation,
+        halfDuration,
+        ...(viewingSeasonId ? { seasonId: viewingSeasonId } : {}),
+      });
       setShowCreateMatch(false);
       navigation.navigate('MatchDetail', { teamId, matchId, title: `${teamName} vs ${opp}`, role: route.params.role });
     } catch (e: any) {
@@ -500,6 +592,30 @@ export default function TeamDetailScreen() {
               {matches.length > 0 && (
                 <Text style={S.sectionCount}>{matches.length} matches</Text>
               )}
+              {/* Season badge pill — coaches only */}
+              {!isParent && seasons.length > 0 && viewingSeasonId && (() => {
+                const currentSeason = seasons.find((s) => s.id === viewingSeasonId);
+                return currentSeason ? (
+                  <TouchableOpacity
+                    onPress={(e) => { e.stopPropagation(); setShowSeasonPicker(true); }}
+                    hitSlop={ICON_HITSLOP}
+                    style={{
+                      backgroundColor: currentSeason.status === 'active' ? '#dcfce7' : '#f3f4f6',
+                      borderRadius: 20,
+                      paddingHorizontal: 10,
+                      paddingVertical: 4,
+                    }}
+                  >
+                    <Text style={{
+                      fontSize: 13,
+                      fontWeight: '600',
+                      color: currentSeason.status === 'active' ? '#15803d' : '#374151',
+                    }}>
+                      {currentSeason.label} ▾
+                    </Text>
+                  </TouchableOpacity>
+                ) : null;
+              })()}
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
               {!isParent && (
@@ -1195,6 +1311,35 @@ export default function TeamDetailScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* ===== SEASON PICKER MODAL ===== */}
+      <SeasonPickerModal
+        visible={showSeasonPicker}
+        onClose={() => setShowSeasonPicker(false)}
+        teamId={teamId}
+        seasons={seasons}
+        currentSeasonId={viewingSeasonId}
+        onSelectSeason={(seasonId) => setViewingSeasonId(seasonId)}
+        onNewSeason={() => setShowNewSeason(true)}
+        isOwner={!isParent}
+      />
+
+      {/* ===== NEW SEASON MODAL ===== */}
+      <NewSeasonModal
+        visible={showNewSeason}
+        onClose={() => setShowNewSeason(false)}
+        teamId={teamId}
+        currentSeasonId={viewingSeasonId}
+        currentRoster={memberships.map((m) => ({
+          id: m.id,
+          playerName: m.playerName || '',
+          number: m.number ? String(m.number) : undefined,
+          position: m.position ? String(m.position) : undefined,
+        }))}
+        onCreated={(newSeasonId) => {
+          setViewingSeasonId(newSeasonId);
+        }}
+      />
     </SafeAreaView>
   );
 }

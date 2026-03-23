@@ -2,7 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
+  TouchableWithoutFeedback,
+  Keyboard,
   SafeAreaView,
   ScrollView,
   Text,
@@ -15,7 +19,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { createTeam, listenMyTeams } from '../services/teamService';
-import { listenMyClubId, listenClub, listenClubMembers } from '../services/clubService';
+import { listenMyClubId, listenClub, listenClubMembers, getOrCreateClubForUser } from '../services/clubService';
 import type { Club, ClubMember } from '../services/clubService';
 import type { TeamsStackParamList } from '../navigation/stacks/TeamsStack';
 
@@ -138,6 +142,18 @@ export default function TeamsScreen() {
     return () => unsub();
   }, [uid]);
 
+  // Auto-create club for existing coach users who don't have one yet
+  useEffect(() => {
+    if (!uid || isParentOnly) return;
+    const user = auth().currentUser;
+    if (!user) return;
+    getOrCreateClubForUser({
+      uid,
+      email: user.email ?? '',
+      displayName: user.displayName ?? user.email ?? 'Coach',
+    }).catch((e) => console.warn('[TeamsScreen] getOrCreateClub error:', e));
+  }, [uid, isParentOnly]);
+
   useEffect(() => {
     if (!clubId) {
       setClub(null);
@@ -190,27 +206,34 @@ export default function TeamsScreen() {
   const teamCount = teams.filter((t) => !isParentOnly || t.role !== 'parent').length;
 
   const createTeamModal = (
-    <Modal visible={showCreate} animationType="slide" transparent onRequestClose={() => setShowCreate(false)}>
-      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' }}>
-        <View style={{ backgroundColor: 'white', padding: 20, borderTopLeftRadius: 20, borderTopRightRadius: 20, gap: 12 }}>
-          <Text style={{ fontSize: 18, fontWeight: '700', color: '#111' }}>Create Team</Text>
-          <TextInput placeholder="Team name (required)" value={name} onChangeText={setName} style={S.input} />
-          <TextInput placeholder="Age group (optional) — e.g., U12" value={ageGroup} onChangeText={setAgeGroup} style={S.input} />
-          <TextInput placeholder="Season (optional) — e.g., 2026 Winter" value={season} onChangeText={setSeason} style={S.input} />
-          <View style={{ flexDirection: 'row', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
-            <TouchableOpacity onPress={() => setShowCreate(false)} disabled={creating}>
-              <Text style={{ padding: 10, color: '#6b7280', fontWeight: '500' }}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={onCreate}
-              disabled={creating}
-              style={{ paddingVertical: 10, paddingHorizontal: 20, backgroundColor: '#111', borderRadius: 12 }}
-            >
-              <Text style={{ fontWeight: '700', color: '#fff' }}>{creating ? 'Creating…' : 'Create'}</Text>
-            </TouchableOpacity>
+    <Modal visible={showCreate} animationType="slide" transparent onRequestClose={() => { Keyboard.dismiss(); setShowCreate(false); }}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' }}>
+            <View style={{ backgroundColor: 'white', padding: 20, borderTopLeftRadius: 20, borderTopRightRadius: 20, gap: 12 }}>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: '#111' }}>Create Team</Text>
+              <TextInput placeholder="Team name (required)" value={name} onChangeText={setName} style={S.input} returnKeyType="next" />
+              <TextInput placeholder="Age group (optional) — e.g., U12" value={ageGroup} onChangeText={setAgeGroup} style={S.input} returnKeyType="next" />
+              <TextInput placeholder="Season (optional) — e.g., 2026 Winter" value={season} onChangeText={setSeason} style={S.input} returnKeyType="done" onSubmitEditing={Keyboard.dismiss} />
+              <View style={{ flexDirection: 'row', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
+                <TouchableOpacity onPress={() => { Keyboard.dismiss(); setShowCreate(false); }} disabled={creating}>
+                  <Text style={{ padding: 10, color: '#6b7280', fontWeight: '500' }}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={onCreate}
+                  disabled={creating}
+                  style={{ paddingVertical: 10, paddingHorizontal: 20, backgroundColor: '#111', borderRadius: 12 }}
+                >
+                  <Text style={{ fontWeight: '700', color: '#fff' }}>{creating ? 'Creating…' : 'Create'}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
-        </View>
-      </View>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
     </Modal>
   );
 
@@ -290,8 +313,8 @@ export default function TeamsScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: '#f2f2f7' }}>
       <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
 
-        {/* Club Section — only for non-parent users */}
-        {!isParentOnly && clubId && club && (
+        {/* Club Section — only when user has multiple teams OR has staff beyond themselves */}
+        {!isParentOnly && clubId && club && (staffCount > 1 || teamCount > 1) && (
           <TouchableOpacity
             onPress={() =>
               navigation.navigate('StaffList', {

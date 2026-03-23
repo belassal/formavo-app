@@ -66,6 +66,7 @@ export async function addPlayerToTeam(params: {
   position?: string;   // optional: only update if provided
   type?: MembershipType;
   status?: MembershipStatus; // defaults to 'active'
+  seasonId?: string;   // optional: links membership to a specific season
 }) {
   const {
     teamId,
@@ -75,6 +76,7 @@ export async function addPlayerToTeam(params: {
     position,
     type = 'regular',
     status = 'active',
+    seasonId,
   } = params;
 
   const memRef = db
@@ -100,6 +102,7 @@ export async function addPlayerToTeam(params: {
         endDate: null,
         createdAt: now,
         updatedAt: now,
+        ...(seasonId !== undefined ? { seasonId } : {}),
       });
       return;
     }
@@ -118,31 +121,43 @@ export async function addPlayerToTeam(params: {
         // Safety: older docs might be missing these
         ...(existing?.createdAt ? {} : { createdAt: now }),
         ...(existing?.startDate ? {} : { startDate: now }),
+
+        ...(seasonId !== undefined ? { seasonId } : {}),
       },
       { merge: true }
     );
   });
 }
 
-export function listenTeamMemberships(teamId: string, onData: (rows: any[]) => void) {
-  return db
+export function listenTeamMemberships(
+  teamId: string,
+  onData: (rows: any[]) => void,
+  options?: { seasonId?: string },
+) {
+  let query: any = db
     .collection(COL.teams)
     .doc(teamId)
     .collection(COL.playerMemberships)
-    .where('status', '==', 'active')
-    .orderBy('createdAt', 'desc')
-    .onSnapshot(
-      (snap) => {
-        console.log('[memberships] teamId=', teamId, 'count=', snap?.size);
-        const rows = (snap?.docs ?? []).map((d) => ({ id: d.id, ...d.data() }));
-        console.log('[memberships] firstRow=', rows[0]);
-        onData(rows);
-      },
-      (err) => {
-        console.log('[memberships] ERROR:', err);
-        onData([]);
-      }
-    );
+    .where('status', '==', 'active');
+
+  if (options?.seasonId) {
+    query = query.where('seasonId', '==', options.seasonId);
+  }
+
+  query = query.orderBy('createdAt', 'desc');
+
+  return query.onSnapshot(
+    (snap: any) => {
+      console.log('[memberships] teamId=', teamId, 'seasonId=', options?.seasonId, 'count=', snap?.size);
+      const rows = (snap?.docs ?? []).map((d: any) => ({ id: d.id, ...d.data() }));
+      console.log('[memberships] firstRow=', rows[0]);
+      onData(rows);
+    },
+    (err: any) => {
+      console.log('[memberships] ERROR:', err);
+      onData([]);
+    },
+  );
 }
 
 export async function updateTeamMembership(params: {
