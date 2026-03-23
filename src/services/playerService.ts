@@ -134,23 +134,20 @@ export function listenTeamMemberships(
   onData: (rows: any[]) => void,
   options?: { seasonId?: string },
 ) {
-  let query: any = db
+  const query: any = db
     .collection(COL.teams)
     .doc(teamId)
     .collection(COL.playerMemberships)
-    .where('status', '==', 'active');
-
-  if (options?.seasonId) {
-    query = query.where('seasonId', '==', options.seasonId);
-  }
-
-  query = query.orderBy('createdAt', 'desc');
+    .where('status', '==', 'active')
+    .orderBy('createdAt', 'desc');
 
   return query.onSnapshot(
     (snap: any) => {
-      console.log('[memberships] teamId=', teamId, 'seasonId=', options?.seasonId, 'count=', snap?.size);
-      const rows = (snap?.docs ?? []).map((d: any) => ({ id: d.id, ...d.data() }));
-      console.log('[memberships] firstRow=', rows[0]);
+      let rows = (snap?.docs ?? []).map((d: any) => ({ id: d.id, ...d.data() }));
+      // Filter by season client-side to avoid composite index and timing issues
+      if (options?.seasonId) {
+        rows = rows.filter((r: any) => r.seasonId === options.seasonId);
+      }
       onData(rows);
     },
     (err: any) => {
