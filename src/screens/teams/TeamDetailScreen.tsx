@@ -746,6 +746,7 @@ export default function TeamDetailScreen() {
                           playerNumber: item.number ? String(item.number) : undefined,
                           playerPosition: item.position ? String(item.position) : undefined,
                           avatarUrl: item.avatarUrl || undefined,
+                          clubId: clubId ?? undefined,
                         })
                       }
                       activeOpacity={0.7}

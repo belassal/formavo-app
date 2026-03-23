@@ -23,6 +23,7 @@ export type TeamsStackParamList = {
     playerNumber?: string;
     playerPosition?: string;
     avatarUrl?: string;
+    clubId?: string;
   };
   ClubSettings: { clubId: string; clubName?: string };
   StaffList: { clubId: string; clubName?: string; viewerRole?: string };
