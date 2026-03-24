@@ -19,7 +19,7 @@ import {
   type Training,
   type TrainingStatus,
 } from '../../services/trainingService';
-import { listenTeamMemberships } from '../../services/playerService';
+import { listenTeamMembers } from '../../services/teamService';
 import DateTimePickerModal, { formatDateISO } from '../../components/DateTimePickerModal';
 import { db } from '../../services/firebase';
 import { COL } from '../../models/collections';
@@ -85,7 +85,8 @@ export default function TrainingDetailScreen() {
 
   const [confirmedIds, setConfirmedIds] = useState<string[]>([]);
   const [declinedIds, setDeclinedIds] = useState<string[]>([]);
-  const [roster, setRoster] = useState<{ id: string; playerName: string }[]>([]);
+  // Parent member docs — each has linkedPlayerId + linkedPlayerName
+  const [parentMembers, setParentMembers] = useState<{ linkedPlayerId: string; linkedPlayerName: string }[]>([]);
 
   useEffect(() => {
     if (!trainingId) return;
@@ -110,8 +111,13 @@ export default function TrainingDetailScreen() {
 
   useEffect(() => {
     if (isNew) return;
-    const unsub = listenTeamMemberships(teamId, (rows) => {
-      setRoster(rows.map((r) => ({ id: r.id, playerName: r.playerName })));
+    // Listen to all team members and extract parent entries (they carry linkedPlayerId + linkedPlayerName)
+    const unsub = listenTeamMembers(teamId, (members) => {
+      setParentMembers(
+        members
+          .filter((m) => m.role === 'parent' && m.status === 'active' && m.linkedPlayerId)
+          .map((m) => ({ linkedPlayerId: m.linkedPlayerId, linkedPlayerName: m.linkedPlayerName || 'Unknown Player' }))
+      );
     });
     return () => unsub();
   }, [teamId, isNew]);
@@ -265,9 +271,9 @@ export default function TrainingDetailScreen() {
 
         {/* Attendance (edit only) */}
         {!isNew && (() => {
-          const confirmedPlayers = roster.filter((r) => confirmedIds.includes(r.id));
-          const declinedPlayers = roster.filter((r) => declinedIds.includes(r.id));
-          const awaitingPlayers = roster.filter((r) => !confirmedIds.includes(r.id) && !declinedIds.includes(r.id));
+          const confirmedPlayers = parentMembers.filter((m) => confirmedIds.includes(m.linkedPlayerId));
+          const declinedPlayers = parentMembers.filter((m) => declinedIds.includes(m.linkedPlayerId));
+          const awaitingPlayers = parentMembers.filter((m) => !confirmedIds.includes(m.linkedPlayerId) && !declinedIds.includes(m.linkedPlayerId));
           const hasAnyResponse = confirmedPlayers.length > 0 || declinedPlayers.length > 0;
 
           return (
@@ -288,8 +294,8 @@ export default function TrainingDetailScreen() {
                           GOING ({confirmedPlayers.length})
                         </Text>
                         {confirmedPlayers.map((p) => (
-                          <Text key={p.id} style={{ fontSize: 14, color: '#111', paddingVertical: 2 }}>
-                            {p.playerName}
+                          <Text key={p.linkedPlayerId} style={{ fontSize: 14, color: '#111', paddingVertical: 2 }}>
+                            {p.linkedPlayerName}
                           </Text>
                         ))}
                       </View>
@@ -300,8 +306,8 @@ export default function TrainingDetailScreen() {
                           NOT GOING ({declinedPlayers.length})
                         </Text>
                         {declinedPlayers.map((p) => (
-                          <Text key={p.id} style={{ fontSize: 14, color: '#111', paddingVertical: 2 }}>
-                            {p.playerName}
+                          <Text key={p.linkedPlayerId} style={{ fontSize: 14, color: '#111', paddingVertical: 2 }}>
+                            {p.linkedPlayerName}
                           </Text>
                         ))}
                       </View>
@@ -312,8 +318,8 @@ export default function TrainingDetailScreen() {
                           AWAITING ({awaitingPlayers.length})
                         </Text>
                         {awaitingPlayers.map((p) => (
-                          <Text key={p.id} style={{ fontSize: 14, color: '#6b7280', paddingVertical: 2 }}>
-                            {p.playerName}
+                          <Text key={p.linkedPlayerId} style={{ fontSize: 14, color: '#6b7280', paddingVertical: 2 }}>
+                            {p.linkedPlayerName}
                           </Text>
                         ))}
                       </View>
