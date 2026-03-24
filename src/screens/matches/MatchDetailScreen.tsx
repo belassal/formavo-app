@@ -40,6 +40,9 @@ import {
 } from '../../services/matchService';
 import { db } from '../../services/firebase';
 import { COL } from '../../models/collections';
+import { setRsvp, type RsvpStatus } from '../../services/rsvpService';
+import { listenTeamMembers } from '../../services/teamService';
+import auth from '@react-native-firebase/auth';
 import DateTimePickerModal, { formatDateISO } from '../../components/DateTimePickerModal';
 import MiniPitchDisplay from '../../components/MiniPitchDisplay';
 
@@ -97,6 +100,11 @@ export default function MatchDetailScreen() {
 
   // match roster
   const [roster, setRoster] = useState<any[]>([]);
+
+  // parent RSVP
+  const [linkedPlayerId, setLinkedPlayerId] = useState<string | null>(null);
+  const [myRsvp, setMyRsvp] = useState<RsvpStatus | null>(null);
+  const [submittingRsvp, setSubmittingRsvp] = useState(false);
 
   // match events
   const [events, setEvents] = useState<MatchEvent[]>([]);
@@ -209,6 +217,46 @@ export default function MatchDetailScreen() {
       setOppScorerName('');
     }
   }, [goalSide]);
+
+  // Parent: get linkedPlayerId from member doc
+  useEffect(() => {
+    if (!isParent) return;
+    const uid = auth().currentUser?.uid;
+    if (!uid) return;
+    const unsub = listenTeamMembers(teamId, (members) => {
+      const me = members.find((m) => m.id === uid);
+      setLinkedPlayerId(me?.linkedPlayerId ?? null);
+    });
+    return () => unsub();
+  }, [teamId, isParent]);
+
+  // Parent: listen to my RSVP for this match
+  useEffect(() => {
+    if (!isParent || !linkedPlayerId) return;
+    const unsub = db
+      .collection(COL.teams).doc(teamId)
+      .collection(COL.matches).doc(matchId)
+      .collection(COL.roster).doc(linkedPlayerId)
+      .onSnapshot((snap) => {
+        if (!snap.exists) { setMyRsvp(null); return; }
+        setMyRsvp((snap.data()?.rsvpStatus as RsvpStatus) ?? null);
+      }, console.warn);
+    return () => unsub();
+  }, [teamId, matchId, isParent, linkedPlayerId]);
+
+  const handleParentRsvp = async (status: 'attending' | 'absent') => {
+    if (!linkedPlayerId) return;
+    const uid = auth().currentUser?.uid;
+    const displayName = auth().currentUser?.displayName || auth().currentUser?.email || 'Parent';
+    try {
+      setSubmittingRsvp(true);
+      await setRsvp({ teamId, matchId, playerId: linkedPlayerId, status, byUid: uid!, confirmedByName: displayName });
+    } catch (e: any) {
+      Alert.alert('Error', e?.message ?? 'Could not save your response.');
+    } finally {
+      setSubmittingRsvp(false);
+    }
+  };
 
   // Sort roster by number (polish)
   const rosterSorted = useMemo(() => {
@@ -778,6 +826,38 @@ const addSelectedToRoster = async () => {
                 )}
               </View>
             </View>
+
+            {/* ===== Parent RSVP ===== */}
+            {isParent && linkedPlayerId && (
+              <View style={SC.container}>
+                <View style={[SC.header, { paddingBottom: 14 }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={SC.title}>Your Availability</Text>
+                    <Text style={{ fontSize: 13, color: '#9ca3af', marginTop: 2 }}>
+                      {myRsvp === 'attending' ? '✅ You confirmed attendance' : myRsvp === 'absent' ? "❌ You can't make it" : 'Let the coach know if you can make it'}
+                    </Text>
+                    {status === 'scheduled' && (
+                      <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+                        <TouchableOpacity
+                          onPress={() => handleParentRsvp('attending')}
+                          disabled={submittingRsvp}
+                          style={{ paddingVertical: 8, paddingHorizontal: 20, borderRadius: 20, backgroundColor: myRsvp === 'attending' ? '#16a34a' : '#f3f4f6' }}
+                        >
+                          <Text style={{ fontSize: 14, fontWeight: '600', color: myRsvp === 'attending' ? '#fff' : '#374151' }}>✓ Going</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => handleParentRsvp('absent')}
+                          disabled={submittingRsvp}
+                          style={{ paddingVertical: 8, paddingHorizontal: 20, borderRadius: 20, backgroundColor: myRsvp === 'absent' ? '#ef4444' : '#f3f4f6' }}
+                        >
+                          <Text style={{ fontSize: 14, fontWeight: '600', color: myRsvp === 'absent' ? '#fff' : '#374151' }}>✗ Can't make it</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              </View>
+            )}
 
             {/* ===== Game Stats ===== */}
             <View style={SC.container}>
