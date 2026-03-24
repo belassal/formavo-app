@@ -47,6 +47,7 @@ import { listenTeamMembers } from '../../services/teamService';
 import auth from '@react-native-firebase/auth';
 import DateTimePickerModal, { formatDateISO } from '../../components/DateTimePickerModal';
 import MiniPitchDisplay from '../../components/MiniPitchDisplay';
+import { listenMatchRatings, setPlayerMatchRating, type PlayerRating } from '../../services/ratingService';
 
 
 
@@ -97,6 +98,13 @@ export default function MatchDetailScreen() {
   const [availabilityOpen, setAvailabilityOpen] = useState(true);
   const [rosterOpen, setRosterOpen] = useState(true);
   const [lineupOpen, setLineupOpen] = useState(true);
+
+  // Player rating modal
+  const [ratings, setRatings] = useState<Record<string, PlayerRating>>({});
+  const [ratingModalPlayer, setRatingModalPlayer] = useState<any | null>(null);
+  const [ratingValue, setRatingValue] = useState(0);
+  const [ratingNote, setRatingNote] = useState('');
+  const [savingRating, setSavingRating] = useState(false);
 
   // match doc
   const [match, setMatch] = useState<any | null>(null);
@@ -233,6 +241,13 @@ export default function MatchDetailScreen() {
     return () => unsub();
   }, [teamId, isParent]);
 
+  // Listen to match ratings
+  useEffect(() => {
+    if (isParent) return;
+    const unsub = listenMatchRatings(teamId, matchId, setRatings);
+    return () => unsub();
+  }, [teamId, matchId, isParent]);
+
   // Parent: listen to my RSVP for this match
   useEffect(() => {
     if (!isParent || !linkedPlayerId) return;
@@ -352,6 +367,40 @@ const addSelectedToRoster = async () => {
       ],
       { cancelable: true }
     );
+  };
+
+  const openRatingModal = (player: any) => {
+    const existing = ratings[player.id];
+    setRatingValue(existing?.rating ?? 0);
+    setRatingNote(existing?.note ?? '');
+    setRatingModalPlayer(player);
+  };
+
+  const saveRating = async () => {
+    if (!ratingModalPlayer) return;
+    const uid = auth().currentUser?.uid;
+    const coachName = auth().currentUser?.displayName || 'Coach';
+    if (!uid) return;
+    try {
+      setSavingRating(true);
+      await setPlayerMatchRating({
+        teamId,
+        matchId,
+        playerId: ratingModalPlayer.id,
+        playerName: ratingModalPlayer.playerName,
+        rating: ratingValue,
+        note: ratingNote,
+        coachId: uid,
+        coachName,
+        opponent: match?.opponent ?? '',
+        matchDateISO: match?.dateISO ?? '',
+      });
+      setRatingModalPlayer(null);
+    } catch (e: any) {
+      Alert.alert('Failed', e?.message ?? 'Could not save rating.');
+    } finally {
+      setSavingRating(false);
+    }
   };
 
   // available team players not already on match roster
@@ -1075,9 +1124,18 @@ const addSelectedToRoster = async () => {
                             <Text style={{ fontSize: 15, fontWeight: '600', color: '#111', flex: 1 }}>
                               {item.playerName}{item.number ? `  #${item.number}` : ''}
                             </Text>
-                            <TouchableOpacity onPress={() => confirmRemoveFromRoster(item.id, item.playerName)} hitSlop={ICON_HITSLOP}>
-                              <Text style={{ fontSize: 18, fontWeight: '700', color: '#ef4444', lineHeight: 22 }}>×</Text>
-                            </TouchableOpacity>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                              <TouchableOpacity onPress={() => openRatingModal(item)} hitSlop={ICON_HITSLOP}>
+                                <Text style={{ fontSize: 15, lineHeight: 22 }}>
+                                  {ratings[item.id]?.rating > 0
+                                    ? '⭐'.repeat(ratings[item.id].rating)
+                                    : '☆ Rate'}
+                                </Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity onPress={() => confirmRemoveFromRoster(item.id, item.playerName)} hitSlop={ICON_HITSLOP}>
+                                <Text style={{ fontSize: 18, fontWeight: '700', color: '#ef4444', lineHeight: 22 }}>×</Text>
+                              </TouchableOpacity>
+                            </View>
                           </View>
                           {/* Role + Attendance chips */}
                           <View style={{ flexDirection: 'row', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
@@ -1612,6 +1670,67 @@ const addSelectedToRoster = async () => {
             onClose={() => setShowEditDatePicker(false)}
           />
         )}
+        </KeyboardAvoidingView>
+      </Modal>
+      {/* ===== PLAYER RATING MODAL ===== */}
+      <Modal visible={!!ratingModalPlayer} animationType="slide" transparent onRequestClose={() => setRatingModalPlayer(null)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' }}>
+            <View style={{ backgroundColor: '#fff', padding: 20, borderTopLeftRadius: 20, borderTopRightRadius: 20, gap: 14 }}>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: '#111' }}>
+                {ratingModalPlayer?.playerName ?? 'Player'}
+              </Text>
+
+              {/* Star picker */}
+              <View>
+                <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 10 }}>Match Rating</Text>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <TouchableOpacity
+                      key={star}
+                      onPress={() => setRatingValue(ratingValue === star ? 0 : star)}
+                      style={{ flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 10, backgroundColor: star <= ratingValue ? '#fbbf24' : '#f3f4f6' }}
+                    >
+                      <Text style={{ fontSize: 22 }}>{star <= ratingValue ? '⭐' : '☆'}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Note */}
+              <TextInput
+                placeholder="Coach's note (e.g. great pressing, needs positioning work)"
+                value={ratingNote}
+                onChangeText={setRatingNote}
+                style={{
+                  borderWidth: 1,
+                  borderColor: '#e5e7eb',
+                  borderRadius: 10,
+                  paddingHorizontal: 14,
+                  paddingVertical: 12,
+                  fontSize: 14,
+                  color: '#111',
+                  minHeight: 80,
+                  textAlignVertical: 'top',
+                }}
+                multiline
+                numberOfLines={3}
+              />
+
+              <View style={{ flexDirection: 'row', gap: 10, justifyContent: 'flex-end' }}>
+                <TouchableOpacity onPress={() => setRatingModalPlayer(null)} disabled={savingRating}>
+                  <Text style={{ padding: 10, color: '#6b7280', fontWeight: '500' }}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={saveRating}
+                  disabled={savingRating}
+                  style={{ paddingVertical: 10, paddingHorizontal: 20, backgroundColor: '#111', borderRadius: 12 }}
+                >
+                  <Text style={{ fontWeight: '700', color: '#fff' }}>{savingRating ? 'Saving…' : 'Save'}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
         </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>

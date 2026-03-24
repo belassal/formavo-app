@@ -14,6 +14,7 @@ import { COL } from '../../models/collections';
 import Avatar from '../../components/Avatar';
 import type { TeamsStackParamList } from '../../navigation/stacks/TeamsStack';
 import { getPlayerCareerStats, getClubPlayer, type CareerSeason, type ClubPlayer } from '../../services/clubPlayerService';
+import { fetchPlayerRatings, type PlayerRating } from '../../services/ratingService';
 
 type PlayerProfileRoute = RouteProp<TeamsStackParamList, 'PlayerProfile'>;
 type Nav = NativeStackNavigationProp<TeamsStackParamList>;
@@ -167,6 +168,8 @@ export default function PlayerProfileScreen() {
   const [fallbackStats, setFallbackStats] = useState<SeasonStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [playerData, setPlayerData] = useState<ClubPlayer | null>(null);
+  const [devLog, setDevLog] = useState<PlayerRating[]>([]);
+  const [loadingLog, setLoadingLog] = useState(true);
 
   // Edit button + live title in header
   useLayoutEffect(() => {
@@ -193,6 +196,13 @@ export default function PlayerProfileScreen() {
       getClubPlayer({ clubId, playerId }).then(setPlayerData).catch(console.warn);
     }, [clubId, playerId]),
   );
+
+  useEffect(() => {
+    fetchPlayerRatings(teamId, playerId)
+      .then(setDevLog)
+      .catch(() => setDevLog([]))
+      .finally(() => setLoadingLog(false));
+  }, [teamId, playerId]);
 
   useEffect(() => {
     if (clubId) {
@@ -333,6 +343,52 @@ export default function PlayerProfileScreen() {
               </View>
             )}
           </>
+        )}
+
+        {/* ── Development Log ── */}
+        {!loadingLog && (
+          <View>
+            <Text style={{ fontSize: 14, fontWeight: '700', color: '#9ca3af', marginBottom: 12, marginLeft: 4 }}>
+              DEVELOPMENT LOG
+            </Text>
+            {devLog.length === 0 ? (
+              <View style={{ backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#e5e7eb', padding: 20, alignItems: 'center' }}>
+                <Text style={{ fontSize: 14, color: '#9ca3af' }}>No match notes yet.</Text>
+              </View>
+            ) : (
+              <View style={{ gap: 10 }}>
+                {devLog.map((entry) => (
+                  <View
+                    key={entry.matchId}
+                    style={{ backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#e5e7eb', padding: 16, gap: 6 }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: '#111' }}>
+                        vs {entry.opponent || 'Unknown'}
+                      </Text>
+                      {entry.matchDateISO ? (
+                        <Text style={{ fontSize: 12, color: '#9ca3af' }}>
+                          {(() => {
+                            const [y, m, d] = (entry.matchDateISO || '').split('-');
+                            if (!y || !m || !d) return entry.matchDateISO;
+                            const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                            return `${months[parseInt(m,10)-1]} ${parseInt(d,10)}, ${y}`;
+                          })()}
+                        </Text>
+                      ) : null}
+                    </View>
+                    {entry.rating > 0 && (
+                      <Text style={{ fontSize: 16 }}>{'⭐'.repeat(entry.rating)}</Text>
+                    )}
+                    {entry.note ? (
+                      <Text style={{ fontSize: 14, color: '#374151', lineHeight: 20 }}>{entry.note}</Text>
+                    ) : null}
+                    <Text style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>— {entry.coachName}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
         )}
       </ScrollView>
     </SafeAreaView>

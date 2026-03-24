@@ -17,5 +17,6 @@ export const COL = {
   trainings: 'trainings', // teams/{teamId}/trainings/{trainingId}
   messages: 'messages',   // teams/{teamId}/messages/{messageId}
   photos: 'photos',       // teams/{teamId}/photos/{photoId}
+  ratings: 'ratings',     // teams/{teamId}/matches/{matchId}/ratings/{playerId}
 } as const;
 
