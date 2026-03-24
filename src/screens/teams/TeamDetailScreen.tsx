@@ -908,15 +908,7 @@ export default function TeamDetailScreen() {
                     {!isParent && (
                       <View style={{ flexDirection: 'row', gap: 2 }}>
                         <TouchableOpacity
-                          onPress={() => navigation.navigate('PlayerProfile', {
-                            teamId,
-                            playerId: item.id,
-                            playerName: item.playerName || item.id,
-                            playerNumber: item.number || undefined,
-                            playerPosition: item.position || undefined,
-                            avatarUrl: item.avatarUrl || undefined,
-                            clubId: clubId ?? undefined,
-                          })}
+                          onPress={() => openEditPlayer(item)}
                           style={ICON_BTN}
                           hitSlop={ICON_HITSLOP}
                         >
