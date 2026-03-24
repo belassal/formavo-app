@@ -93,6 +93,7 @@ export default function MatchDetailScreen() {
   // section collapse state (open by default)
   const [statsOpen, setStatsOpen] = useState(true);
   const [availabilityOpen, setAvailabilityOpen] = useState(true);
+  const [rosterOpen, setRosterOpen] = useState(true);
   const [lineupOpen, setLineupOpen] = useState(true);
 
   // match doc
@@ -1038,24 +1039,27 @@ const addSelectedToRoster = async () => {
             {/* ===== Match Roster ===== */}
             {!isParent && (
               <View style={SC.container}>
-                <View style={SC.header}>
+                <TouchableOpacity style={SC.header} onPress={() => setRosterOpen((v) => !v)} activeOpacity={0.7}>
                   <View style={SC.titleRow}>
                     <Text style={SC.title}>Match Roster</Text>
                     {rosterSorted.length > 0 && <Text style={SC.count}>{rosterSorted.length} players</Text>}
                   </View>
-                  <TouchableOpacity onPress={() => { setQ(''); setSelectedToAdd([]); setShowAdd(true); }} style={SC.addBtn}>
-                    <Text style={SC.addBtnText}>+ Add</Text>
-                  </TouchableOpacity>
-                </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <TouchableOpacity onPress={(e) => { e.stopPropagation(); setQ(''); setSelectedToAdd([]); setShowAdd(true); }} style={SC.addBtn}>
+                      <Text style={SC.addBtnText}>+ Add</Text>
+                    </TouchableOpacity>
+                    <Text style={{ fontSize: 18, color: '#c7c7cc', transform: [{ rotate: rosterOpen ? '-90deg' : '90deg' }] }}>›</Text>
+                  </View>
+                </TouchableOpacity>
 
-                {rosterSorted.length === 0 ? (
+                {rosterOpen && rosterSorted.length === 0 ? (
                   <>
                     <View style={SC.divider} />
                     <View style={SC.emptyRow}>
                       <Text style={SC.emptyText}>No one on the roster yet.</Text>
                     </View>
                   </>
-                ) : (
+                ) : rosterOpen ? (
                   rosterSorted.map((item) => {
                     const role: MatchRole = (item.role || 'bench') as MatchRole;
                     const att: AttendanceStatus = (item.attendance || 'present') as AttendanceStatus;
@@ -1086,7 +1090,7 @@ const addSelectedToRoster = async () => {
                       </View>
                     );
                   })
-                )}
+                ) : null}
               </View>
             )}
 
