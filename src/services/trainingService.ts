@@ -142,6 +142,8 @@ export async function fetchPlayerTrainingStats(
   teamId: string,
   playerId: string,
 ): Promise<{ attended: number; total: number }> {
+  if (!teamId) return { attended: 0, total: 0 };
+
   const snap = await db
     .collection(COL.teams)
     .doc(teamId)
@@ -155,7 +157,6 @@ export async function fetchPlayerTrainingStats(
     const data = d.data() as any;
     if (data.isDeleted) return;
     const checkedIn: string[] = data.attendedPlayerIds ?? [];
-    // Only count sessions where at least one player was checked in (coach used the feature)
     if (checkedIn.length > 0) {
       total += 1;
       if (checkedIn.includes(playerId)) attended += 1;
