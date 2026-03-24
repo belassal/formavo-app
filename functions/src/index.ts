@@ -198,7 +198,40 @@ export const onTrainingCreated = functions.firestore
     );
   });
 
-// ─── 5. Training attendance confirmed → notify coaches ────────────────────────
+// ─── 5. New chat message → notify all team members ───────────────────────────
+export const onMessageSent = functions.firestore
+  .document('teams/{teamId}/messages/{messageId}')
+  .onCreate(async (snap, context) => {
+    const { teamId } = context.params;
+    const data = snap.data();
+    if (!data) return;
+
+    const teamDoc = await db.collection('teams').doc(teamId).get();
+    const teamName = teamDoc.data()?.name || 'Your team';
+
+    const senderName: string = data.senderName || 'Someone';
+    const text: string = data.text || '';
+    const body = text.length > 100 ? text.substring(0, 97) + '…' : text;
+
+    const uids = await getTeamMemberUids(teamId);
+    // Don't notify the sender
+    const targets = uids.filter((uid) => uid !== data.senderId);
+
+    await Promise.all(
+      targets.map((uid) =>
+        sendToUser(
+          uid,
+          {
+            title: `${senderName} (${teamName})`,
+            body,
+          },
+          { type: 'team_message', teamId, messageId: context.params.messageId }
+        )
+      )
+    );
+  });
+
+// ─── 6. Training attendance confirmed → notify coaches ────────────────────────
 export const onTrainingAttendanceUpdated = functions.firestore
   .document('teams/{teamId}/trainings/{trainingId}/attendance/{playerId}')
   .onWrite(async (change, context) => {

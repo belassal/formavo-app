@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -139,6 +139,42 @@ export default function TeamDetailScreen() {
   const teamName = route.params.teamName || 'Team';
   const isParent = route.params.role === 'parent';
   const uid = useMemo(() => auth().currentUser?.uid ?? null, []);
+
+  // Header buttons: Schedule + Chat
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <View style={{ flexDirection: 'row', gap: 4 }}>
+          <TouchableOpacity
+            onPress={() =>
+              navigation.navigate('TeamSchedule', {
+                teamId,
+                teamName,
+                role: route.params.role,
+              })
+            }
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            style={{ paddingHorizontal: 8, paddingVertical: 4 }}
+          >
+            <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151' }}>Schedule</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() =>
+              navigation.navigate('TeamChat', {
+                teamId,
+                teamName,
+                role: route.params.role,
+              })
+            }
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            style={{ paddingHorizontal: 8, paddingVertical: 4 }}
+          >
+            <Text style={{ fontSize: 13, fontWeight: '700', color: '#111' }}>Chat</Text>
+          </TouchableOpacity>
+        </View>
+      ),
+    });
+  }, [navigation, teamId, teamName, route.params.role]);
 
   // Club state
   const [clubId, setClubId] = useState<string | null>(null);
