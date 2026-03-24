@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onRsvpUpdated = exports.onMatchCreated = exports.onAnnouncementCreated = void 0;
+exports.onTrainingAttendanceUpdated = exports.onTrainingCreated = exports.onRsvpUpdated = exports.onMatchCreated = exports.onAnnouncementCreated = void 0;
 const admin = require("firebase-admin");
 const functions = require("firebase-functions");
 admin.initializeApp();
@@ -110,5 +110,68 @@ exports.onRsvpUpdated = functions.firestore
         title: `${playerName} is ${statusLabel}${confirmedBy}`,
         body: `vs ${opponent}`,
     }, { type: 'rsvp_updated', teamId, matchId })));
+});
+// ─── 4. New training session → notify all team members ───────────────────────
+exports.onTrainingCreated = functions.firestore
+    .document('teams/{teamId}/trainings/{trainingId}')
+    .onCreate(async (snap, context) => {
+    var _a, _b;
+    const { teamId, trainingId } = context.params;
+    const data = snap.data();
+    if (!data || data.isDeleted)
+        return;
+    const teamDoc = await db.collection('teams').doc(teamId).get();
+    const teamName = ((_a = teamDoc.data()) === null || _a === void 0 ? void 0 : _a.name) || 'Your team';
+    const title = data.title || 'Training Session';
+    const startISO = data.startISO || '';
+    const location = data.location || '';
+    // Format date label from 'YYYY-MM-DD HH:mm'
+    let dateLabel = '';
+    if (startISO) {
+        const [datePart, timePart] = startISO.split(' ');
+        if (datePart) {
+            const [, m, d] = datePart.split('-');
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const monthStr = (_b = months[parseInt(m, 10) - 1]) !== null && _b !== void 0 ? _b : m;
+            dateLabel = `${monthStr} ${parseInt(d, 10)}`;
+            if (timePart) {
+                const [hh, mm] = timePart.split(':');
+                const hour = parseInt(hh, 10);
+                const ampm = hour >= 12 ? 'PM' : 'AM';
+                const h12 = hour % 12 || 12;
+                dateLabel += ` · ${h12}:${mm} ${ampm}`;
+            }
+        }
+    }
+    const bodyParts = [title, dateLabel, location].filter(Boolean);
+    const body = bodyParts.join(' · ');
+    const uids = await getTeamMemberUids(teamId);
+    const targets = uids.filter((uid) => uid !== data.createdBy);
+    await Promise.all(targets.map((uid) => sendToUser(uid, { title: `🏃 ${teamName} — New training session`, body }, { type: 'training_created', teamId, trainingId })));
+});
+// ─── 5. Training attendance confirmed → notify coaches ────────────────────────
+exports.onTrainingAttendanceUpdated = functions.firestore
+    .document('teams/{teamId}/trainings/{trainingId}/attendance/{playerId}')
+    .onWrite(async (change, context) => {
+    var _a;
+    const { teamId, trainingId } = context.params;
+    const before = change.before.data();
+    const after = change.after.data();
+    if ((before === null || before === void 0 ? void 0 : before.status) === (after === null || after === void 0 ? void 0 : after.status))
+        return;
+    if (!(after === null || after === void 0 ? void 0 : after.status))
+        return;
+    const playerName = after.playerName || 'A player';
+    const statusLabel = after.status === 'confirmed' ? '✅ confirmed' : '❌ declined';
+    const trainingDoc = await db
+        .collection('teams').doc(teamId)
+        .collection('trainings').doc(trainingId)
+        .get();
+    const trainingTitle = ((_a = trainingDoc.data()) === null || _a === void 0 ? void 0 : _a.title) || 'training session';
+    const coachUids = await getTeamCoachUids(teamId);
+    await Promise.all(coachUids.map((uid) => sendToUser(uid, {
+        title: `${playerName} ${statusLabel} attendance`,
+        body: trainingTitle,
+    }, { type: 'training_attendance', teamId, trainingId })));
 });
 //# sourceMappingURL=index.js.map
