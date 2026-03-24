@@ -19,7 +19,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { createTeam, listenMyTeams } from '../services/teamService';
-import { listenMyClubId, listenClub, listenClubMembers, getOrCreateClubForUser } from '../services/clubService';
+import { listenMyClubId, listenClub, listenClubMembers, getOrCreateClubForUser, tagUserTeamsWithClubId } from '../services/clubService';
 import type { Club, ClubMember } from '../services/clubService';
 import type { TeamsStackParamList } from '../navigation/stacks/TeamsStack';
 
@@ -153,6 +153,12 @@ export default function TeamsScreen() {
       displayName: user.displayName ?? user.email ?? 'Coach',
     }).catch((e) => console.warn('[TeamsScreen] getOrCreateClub error:', e));
   }, [uid, isParentOnly]);
+
+  // Tag existing teams (created before club feature) with their clubId
+  useEffect(() => {
+    if (!uid || !clubId) return;
+    tagUserTeamsWithClubId({ uid, clubId }).catch(console.warn);
+  }, [uid, clubId]);
 
   useEffect(() => {
     if (!clubId) {

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   SafeAreaView,
@@ -8,16 +8,79 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { TeamsStackParamList } from '../../navigation/stacks/TeamsStack';
-import { listenClubPlayers, type ClubPlayer } from '../../services/clubPlayerService';
+import { migrateTeamPlayersToClub, type ClubPlayer } from '../../services/clubPlayerService';
 import { db } from '../../services/firebase';
 import { COL } from '../../models/collections';
 import Avatar from '../../components/Avatar';
 
 type Route = RouteProp<TeamsStackParamList, 'ClubPlayers'>;
 type Nav = NativeStackNavigationProp<TeamsStackParamList>;
+
+// Loads players from all team memberships across all teams in the club.
+// Also returns a map of playerId → teamName.
+async function loadAllClubPlayers(clubId: string): Promise<{
+  players: ClubPlayer[];
+  teamMap: Record<string, string>;
+}> {
+  // Get all teams that belong to this club
+  const teamsSnap = await db
+    .collection(COL.teams)
+    .where('clubId', '==', clubId)
+    .get();
+
+  const playerMap: Record<string, ClubPlayer> = {};
+  const teamMap: Record<string, string> = {};
+
+  await Promise.all(
+    teamsSnap.docs.map(async (teamDoc) => {
+      const teamId = teamDoc.id;
+      const teamName = teamDoc.data().name || 'Unknown Team';
+
+      // Trigger migration in background so future loads use club registry
+      migrateTeamPlayersToClub({ teamId, clubId }).catch(() => {});
+
+      const membSnap = await db
+        .collection(COL.teams)
+        .doc(teamId)
+        .collection(COL.playerMemberships)
+        .where('status', '==', 'active')
+        .get();
+
+      membSnap.docs.forEach((m) => {
+        const data = m.data() as any;
+        const playerId = m.id;
+
+        // Track which team this player is on (first found wins)
+        if (!teamMap[playerId]) teamMap[playerId] = teamName;
+
+        // Build ClubPlayer from membership data if not seen yet
+        if (!playerMap[playerId]) {
+          playerMap[playerId] = {
+            id: playerId,
+            name: data.playerName || 'Unknown',
+            nameLower: (data.playerName || 'unknown').toLowerCase(),
+            number: data.number || '',
+            position: data.position || '',
+            avatarUrl: data.avatarUrl || null,
+            createdBy: '',
+            createdAt: data.createdAt,
+            updatedAt: data.updatedAt,
+          };
+        }
+      });
+    }),
+  );
+
+  // Sort alphabetically
+  const players = Object.values(playerMap).sort((a, b) =>
+    a.nameLower.localeCompare(b.nameLower),
+  );
+
+  return { players, teamMap };
+}
 
 export default function ClubPlayersScreen() {
   const route = useRoute<Route>();
@@ -29,46 +92,18 @@ export default function ClubPlayersScreen() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
 
-  // Load all club players
-  useEffect(() => {
-    const unsub = listenClubPlayers(clubId, (rows) => {
-      setPlayers(rows);
-      setLoading(false);
-    });
-    return () => unsub();
-  }, [clubId]);
-
-  // Build playerId → teamName map from all team memberships
-  useEffect(() => {
-    const buildTeamMap = async () => {
-      const teamsSnap = await db
-        .collection(COL.teams)
-        .where('clubId', '==', clubId)
-        .get();
-
-      const map: Record<string, string> = {};
-
-      await Promise.all(
-        teamsSnap.docs.map(async (teamDoc) => {
-          const teamName = teamDoc.data().name || 'Unknown Team';
-          const membSnap = await db
-            .collection(COL.teams)
-            .doc(teamDoc.id)
-            .collection(COL.playerMemberships)
-            .where('status', '==', 'active')
-            .get();
-
-          membSnap.docs.forEach((m) => {
-            if (!map[m.id]) map[m.id] = teamName;
-          });
-        }),
-      );
-
-      setTeamMap(map);
-    };
-
-    buildTeamMap().catch(console.warn);
-  }, [clubId]);
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(true);
+      loadAllClubPlayers(clubId)
+        .then(({ players: p, teamMap: m }) => {
+          setPlayers(p);
+          setTeamMap(m);
+        })
+        .catch(console.warn)
+        .finally(() => setLoading(false));
+    }, [clubId]),
+  );
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -130,14 +165,12 @@ export default function ClubPlayersScreen() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={{ padding: 16, gap: 8 }}>
-          {/* Player count */}
           <Text style={{ fontSize: 13, fontWeight: '600', color: '#9ca3af', marginBottom: 4 }}>
             {filtered.length} {filtered.length === 1 ? 'player' : 'players'}
           </Text>
 
           {grouped.map((group) => (
             <View key={group.letter}>
-              {/* Letter header */}
               <Text style={{
                 fontSize: 13, fontWeight: '700', color: '#9ca3af',
                 marginTop: 8, marginBottom: 6, marginLeft: 4,

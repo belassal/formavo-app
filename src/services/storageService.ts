@@ -52,3 +52,17 @@ export async function uploadPlayerAvatar(
   const url: string = await ref.getDownloadURL();
   return url;
 }
+
+/**
+ * Upload a user/staff profile photo and return the download URL.
+ * Path: users/{uid}/avatar.jpg
+ */
+export async function uploadUserAvatar(
+  uid: string,
+  localUri: string
+): Promise<string> {
+  const ref = storage().ref(`users/${uid}/avatar.jpg`);
+  await ref.putFile(localUri);
+  const url: string = await ref.getDownloadURL();
+  return url;
+}

@@ -20,6 +20,7 @@ import {
 import type { ClubMember, ClubRole } from '../../services/clubService';
 import Avatar from '../../components/Avatar';
 import { listenMyTeams } from '../../services/teamService';
+import { getUserProfile, type UserProfile } from '../../services/userService';
 import auth from '@react-native-firebase/auth';
 
 type Props = NativeStackScreenProps<TeamsStackParamList, 'StaffProfile'>;
@@ -39,6 +40,19 @@ const ROLE_COLORS: Record<ClubRole, string> = {
 };
 
 const ROLE_OPTIONS: ClubRole[] = ['owner', 'head_coach', 'asst_coach', 'staff'];
+
+function InfoRow({ icon, value, multiline }: { icon: string; value: string; multiline?: boolean }) {
+  return (
+    <View style={{
+      flexDirection: 'row', alignItems: multiline ? 'flex-start' : 'center',
+      paddingHorizontal: 16, paddingVertical: 12,
+      borderTopWidth: 1, borderTopColor: '#f3f4f6', gap: 12,
+    }}>
+      <Text style={{ fontSize: 16, width: 24, textAlign: 'center' }}>{icon}</Text>
+      <Text style={{ flex: 1, fontSize: 14, color: '#374151', lineHeight: 20 }}>{value}</Text>
+    </View>
+  );
+}
 
 function RoleBadge({ role }: { role: ClubRole }) {
   return (
@@ -66,6 +80,7 @@ export default function StaffProfileScreen({ route }: Props) {
   const isOwner = viewerRole === 'owner';
 
   const [member, setMember] = useState<ClubMember | null>(null);
+  const [extProfile, setExtProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -80,6 +95,11 @@ export default function StaffProfileScreen({ route }: Props) {
     });
     return () => unsub();
   }, [clubId, memberId]);
+
+  // Load extended profile from users/{memberId} if available
+  useEffect(() => {
+    getUserProfile(memberId).then(setExtProfile).catch(console.warn);
+  }, [memberId]);
 
   useEffect(() => {
     if (!uid) return;
@@ -167,35 +187,44 @@ export default function StaffProfileScreen({ route }: Props) {
 
         {/* Profile Header Card */}
         <View style={cardStyle}>
-          <View style={{ alignItems: 'center', padding: 24, gap: 12 }}>
+          <View style={{ alignItems: 'center', paddingTop: 28, paddingBottom: 20, paddingHorizontal: 20, gap: 12 }}>
             <Avatar
               name={member.displayName || member.email || '?'}
-              avatarUrl={member.photoUrl}
-              size={72}
+              avatarUrl={extProfile?.photoUrl ?? member.photoUrl}
+              size={80}
             />
             <View style={{ alignItems: 'center', gap: 6 }}>
-              <Text style={{ fontSize: 20, fontWeight: '800', color: '#111' }}>
+              <Text style={{ fontSize: 22, fontWeight: '800', color: '#111' }}>
                 {member.displayName || member.email}
               </Text>
               {member.email && member.displayName !== member.email && (
                 <Text style={{ fontSize: 14, color: '#6b7280' }}>{member.email}</Text>
               )}
-              <RoleBadge role={member.role} />
-              {member.status === 'invited' && (
-                <View
-                  style={{
-                    backgroundColor: '#f59e0b',
-                    borderRadius: 20,
-                    paddingHorizontal: 10,
-                    paddingVertical: 3,
-                    alignSelf: 'flex-start',
-                  }}
-                >
-                  <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>Pending Invite</Text>
-                </View>
-              )}
+              <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
+                <RoleBadge role={member.role} />
+                {member.status === 'invited' && (
+                  <View style={{ backgroundColor: '#f59e0b', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3 }}>
+                    <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>Pending Invite</Text>
+                  </View>
+                )}
+              </View>
             </View>
           </View>
+
+          {/* Extra info rows */}
+          {(extProfile?.phone || extProfile?.bio || member.email) && (
+            <>
+              {member.email ? (
+                <InfoRow icon="✉" value={member.email} />
+              ) : null}
+              {extProfile?.phone ? (
+                <InfoRow icon="📞" value={extProfile.phone} />
+              ) : null}
+              {extProfile?.bio ? (
+                <InfoRow icon="💬" value={extProfile.bio} multiline />
+              ) : null}
+            </>
+          )}
         </View>
 
         {/* Role Picker (owner only) */}

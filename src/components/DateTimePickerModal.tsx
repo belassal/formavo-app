@@ -32,10 +32,19 @@ function daysInMonth(year: number, month1: number) {
 
 function parseISO(iso: string): Date {
   if (!iso) return new Date();
-  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})$/);
-  if (!m) return new Date();
-  const d = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]);
-  return isNaN(d.getTime()) ? new Date() : d;
+  // Full datetime: "YYYY-MM-DD HH:mm"
+  const mFull = iso.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})$/);
+  if (mFull) {
+    const d = new Date(+mFull[1], +mFull[2] - 1, +mFull[3], +mFull[4], +mFull[5]);
+    return isNaN(d.getTime()) ? new Date() : d;
+  }
+  // Date only: "YYYY-MM-DD"
+  const mDate = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (mDate) {
+    const d = new Date(+mDate[1], +mDate[2] - 1, +mDate[3]);
+    return isNaN(d.getTime()) ? new Date() : d;
+  }
+  return new Date();
 }
 
 function toISO(d: Date) {
@@ -147,6 +156,7 @@ type Props = {
   onClose: () => void;
   minYear?: number;
   maxYear?: number;
+  dateOnly?: boolean; // when true, hides the time wheels
 };
 
 export default function DateTimePickerModal({
@@ -156,6 +166,7 @@ export default function DateTimePickerModal({
   onClose,
   minYear = 2020,
   maxYear = 2035,
+  dateOnly = false,
 }: Props) {
 
   // ── CRITICAL: render nothing when not visible ──────────────────────────
@@ -170,6 +181,7 @@ export default function DateTimePickerModal({
       onClose={onClose}
       minYear={minYear}
       maxYear={maxYear}
+      dateOnly={dateOnly}
     />
   );
 }
@@ -177,7 +189,7 @@ export default function DateTimePickerModal({
 // Inner component — only mounted when visible=true so hooks always run
 type InnerProps = Omit<Props, 'visible'>;
 
-function DateTimePickerInner({ value, onConfirm, onClose, minYear = 2020, maxYear = 2035 }: InnerProps) {
+function DateTimePickerInner({ value, onConfirm, onClose, minYear = 2020, maxYear = 2035, dateOnly = false }: InnerProps) {
   const years   = Array.from({ length: maxYear - minYear + 1 }, (_, i) => String(minYear + i));
   const hours   = Array.from({ length: 24 }, (_, i) => pad2(i));
   const minutes = Array.from({ length: 12 }, (_, i) => pad2(i * 5));
@@ -199,7 +211,13 @@ function DateTimePickerInner({ value, onConfirm, onClose, minYear = 2020, maxYea
   }, [numDays]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const previewDate = new Date(year, monthIdx, Math.min(dayIdx + 1, numDays), hourIdx, minuteIdx * 5);
-  const handleDone = () => onConfirm(toISO(previewDate));
+  const handleDone = () => {
+    if (dateOnly) {
+      onConfirm(`${year}-${pad2(monthIdx + 1)}-${pad2(Math.min(dayIdx + 1, numDays))}`);
+    } else {
+      onConfirm(toISO(previewDate));
+    }
+  };
 
   return (
     <Modal
@@ -220,7 +238,7 @@ function DateTimePickerInner({ value, onConfirm, onClose, minYear = 2020, maxYea
               <TouchableOpacity onPress={onClose} hitSlop={{ top: 16, bottom: 16, left: 20, right: 20 }}>
                 <Text style={styles.btnCancel}>Cancel</Text>
               </TouchableOpacity>
-              <Text style={styles.title}>Date &amp; Time</Text>
+              <Text style={styles.title}>{dateOnly ? 'Date' : 'Date & Time'}</Text>
               <TouchableOpacity onPress={handleDone} hitSlop={{ top: 16, bottom: 16, left: 20, right: 20 }}>
                 <Text style={styles.btnDone}>Done</Text>
               </TouchableOpacity>
@@ -229,7 +247,9 @@ function DateTimePickerInner({ value, onConfirm, onClose, minYear = 2020, maxYea
             {/* Live preview */}
             <View style={styles.preview}>
               <Text style={styles.previewText}>
-                {formatDateISO(toISO(previewDate))}
+                {dateOnly
+                  ? `${MONTHS[monthIdx]} ${Math.min(dayIdx + 1, days.length)}, ${year}`
+                  : formatDateISO(toISO(previewDate))}
               </Text>
             </View>
 
@@ -238,10 +258,14 @@ function DateTimePickerInner({ value, onConfirm, onClose, minYear = 2020, maxYea
               <DrumColumn items={MONTHS} selectedIndex={monthIdx}                           onChange={setMonthIdx}  width={62} />
               <DrumColumn items={days}   selectedIndex={Math.min(dayIdx, days.length - 1)}  onChange={setDayIdx}    width={50} />
               <DrumColumn items={years}  selectedIndex={yearIdx}                             onChange={setYearIdx}   width={66} />
-              <View style={styles.divider} />
-              <DrumColumn items={hours}   selectedIndex={hourIdx}   onChange={setHourIdx}   width={50} />
-              <View style={styles.colon}><Text style={styles.colonText}>:</Text></View>
-              <DrumColumn items={minutes} selectedIndex={minuteIdx} onChange={setMinuteIdx} width={50} />
+              {!dateOnly && (
+                <>
+                  <View style={styles.divider} />
+                  <DrumColumn items={hours}   selectedIndex={hourIdx}   onChange={setHourIdx}   width={50} />
+                  <View style={styles.colon}><Text style={styles.colonText}>:</Text></View>
+                  <DrumColumn items={minutes} selectedIndex={minuteIdx} onChange={setMinuteIdx} width={50} />
+                </>
+              )}
             </View>
 
             {/* Labels */}
@@ -249,10 +273,14 @@ function DateTimePickerInner({ value, onConfirm, onClose, minYear = 2020, maxYea
               <Text style={[styles.lbl, { width: 62 }]}>MONTH</Text>
               <Text style={[styles.lbl, { width: 50 }]}>DAY</Text>
               <Text style={[styles.lbl, { width: 66 }]}>YEAR</Text>
-              <View style={{ width: 24 }} />
-              <Text style={[styles.lbl, { width: 50 }]}>HOUR</Text>
-              <View style={{ width: 14 }} />
-              <Text style={[styles.lbl, { width: 50 }]}>MIN</Text>
+              {!dateOnly && (
+                <>
+                  <View style={{ width: 24 }} />
+                  <Text style={[styles.lbl, { width: 50 }]}>HOUR</Text>
+                  <View style={{ width: 14 }} />
+                  <Text style={[styles.lbl, { width: 50 }]}>MIN</Text>
+                </>
+              )}
             </View>
 
           </View>

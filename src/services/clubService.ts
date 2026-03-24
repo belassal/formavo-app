@@ -99,6 +99,42 @@ export async function getOrCreateClubForUser(params: {
 }
 
 /**
+ * Tags all teams owned by a user with their clubId.
+ * Safe to call multiple times — skips teams already tagged.
+ */
+export async function tagUserTeamsWithClubId(params: {
+  uid: string;
+  clubId: string;
+}): Promise<void> {
+  const { uid, clubId } = params;
+
+  const teamRefsSnap = await db
+    .collection(COL.users)
+    .doc(uid)
+    .collection(COL.teamRefs)
+    .get();
+
+  const batch = db.batch();
+
+  await Promise.all(
+    teamRefsSnap.docs.map(async (refDoc) => {
+      const teamId = refDoc.id;
+      const role = refDoc.data()?.role;
+      // Only tag teams where user is a coach/owner, not parent
+      if (role === 'parent') return;
+
+      const teamDoc = await db.collection(COL.teams).doc(teamId).get();
+      if (!teamDoc.exists) return;
+      if (teamDoc.data()?.clubId) return; // already tagged
+
+      batch.set(db.collection(COL.teams).doc(teamId), { clubId }, { merge: true });
+    }),
+  );
+
+  await batch.commit();
+}
+
+/**
  * Listens to a single club doc.
  */
 export function listenClub(

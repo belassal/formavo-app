@@ -1,3 +1,4 @@
+import firestore from '@react-native-firebase/firestore';
 import { db, serverTimestamp } from './firebase';
 import { COL } from '../models/collections';
 
@@ -5,10 +6,19 @@ export type ClubPlayer = {
   id: string;
   name: string;
   nameLower: string;
+  firstName?: string;
+  lastName?: string;
   number?: string;
-  position?: string;
+  positions?: string[];  // multi-position array (source of truth)
+  position?: string;     // joined display string kept in sync for roster views
   avatarUrl?: string;
-  dob?: string;
+  dob?: string;           // ISO date string e.g. "2012-04-15"
+  phone?: string;
+  email?: string;
+  guardianName?: string;
+  guardianPhone?: string;
+  guardianEmail?: string;
+  notes?: string;
   createdBy: string;
   createdAt: any;
   updatedAt: any;
@@ -82,17 +92,32 @@ export function listenClubPlayerSearch(
 export async function updateClubPlayer(params: {
   clubId: string;
   playerId: string;
-  name?: string;
+  firstName?: string;
+  lastName?: string;
   number?: string;
-  position?: string;
+  positions?: string[];
   avatarUrl?: string;
   dob?: string;
+  phone?: string;
+  email?: string;
+  guardianName?: string;
+  guardianPhone?: string;
+  guardianEmail?: string;
+  notes?: string;
 }): Promise<void> {
-  const { clubId, playerId, name, ...rest } = params;
+  const { clubId, playerId, firstName, lastName, positions, ...rest } = params;
   const patch: any = { updatedAt: serverTimestamp(), ...rest };
-  if (name !== undefined) {
-    patch.name = name.trim();
-    patch.nameLower = name.trim().toLowerCase();
+  if (firstName !== undefined) patch.firstName = firstName.trim();
+  if (lastName !== undefined) patch.lastName = lastName.trim();
+  if (firstName !== undefined || lastName !== undefined) {
+    const f = (firstName ?? '').trim();
+    const l = (lastName ?? '').trim();
+    patch.name = [f, l].filter(Boolean).join(' ') || 'Unknown';
+    patch.nameLower = patch.name.toLowerCase();
+  }
+  if (positions !== undefined) {
+    patch.positions = positions;
+    patch.position = positions.join(' · '); // joined string for roster display
   }
   await db
     .collection(COL.clubs)
@@ -100,6 +125,88 @@ export async function updateClubPlayer(params: {
     .collection(COL.clubPlayers)
     .doc(playerId)
     .set(patch, { merge: true });
+}
+
+export async function getClubPlayer(params: {
+  clubId: string;
+  playerId: string;
+}): Promise<ClubPlayer | null> {
+  const snap = await db
+    .collection(COL.clubs)
+    .doc(params.clubId)
+    .collection(COL.clubPlayers)
+    .doc(params.playerId)
+    .get();
+  if (!snap.exists) return null;
+  return { id: snap.id, ...(snap.data() as any) } as ClubPlayer;
+}
+
+/**
+ * Propagates name/number/position/avatarUrl from the club player registry
+ * back into every team's playerMemberships doc for this player.
+ *
+ * Strategy (two passes to handle teams not yet tagged with clubId):
+ * 1. Query teams by clubId field (works for newly created teams)
+ * 2. Also check teamIds stored on the club player doc itself
+ */
+export async function syncClubPlayerToMemberships(params: {
+  clubId: string;
+  playerId: string;
+  name: string;
+  number: string;
+  positions: string[];
+  avatarUrl?: string | null;
+}): Promise<void> {
+  const { clubId, playerId, name, number, positions, avatarUrl } = params;
+
+  const patch: any = {
+    playerName: name,
+    number,
+    position: positions.join(' · '), // joined for display in roster views
+    updatedAt: serverTimestamp(),
+  };
+  if (avatarUrl !== undefined) patch.avatarUrl = avatarUrl ?? null;
+
+  // Collect all team IDs to update (deduplicated)
+  const teamIds = new Set<string>();
+
+  // Pass 1: teams tagged with clubId in Firestore
+  const teamsSnap = await db
+    .collection(COL.teams)
+    .where('clubId', '==', clubId)
+    .get();
+  teamsSnap.docs.forEach((d) => teamIds.add(d.id));
+
+  // Pass 2: teamIds stored on the club player doc (populated during migration)
+  const playerSnap = await db
+    .collection(COL.clubs)
+    .doc(clubId)
+    .collection(COL.clubPlayers)
+    .doc(playerId)
+    .get();
+  const storedTeamIds: string[] = (playerSnap.data() as any)?.teamIds ?? [];
+  storedTeamIds.forEach((id) => teamIds.add(id));
+
+  if (teamIds.size === 0) return;
+
+  const batch = db.batch();
+
+  await Promise.all(
+    Array.from(teamIds).map(async (teamId) => {
+      const memRef = db
+        .collection(COL.teams)
+        .doc(teamId)
+        .collection(COL.playerMemberships)
+        .doc(playerId);
+
+      const memSnap = await memRef.get();
+      if (!memSnap.exists) return;
+
+      batch.set(memRef, patch, { merge: true });
+    }),
+  );
+
+  await batch.commit();
 }
 
 // ── Career stats ──────────────────────────────────────────────────────────────
@@ -244,9 +351,12 @@ export async function migrateTeamPlayersToClub(params: {
         .collection(COL.clubPlayers)
         .doc(playerId);
 
-      // Skip if already migrated
+      // If already migrated, just ensure teamId is recorded
       const existing = await clubPlayerRef.get();
-      if (existing.exists) return;
+      if (existing.exists) {
+        batch.set(clubPlayerRef, { teamIds: firestore.FieldValue.arrayUnion(teamId) }, { merge: true });
+        return;
+      }
 
       // Try to get from global players collection
       const globalPlayerDoc = await db.collection(COL.players).doc(playerId).get();
@@ -263,6 +373,7 @@ export async function migrateTeamPlayersToClub(params: {
           createdBy: gd.createdBy || '',
           createdAt: gd.createdAt || serverTimestamp(),
           updatedAt: serverTimestamp(),
+          teamIds: firestore.FieldValue.arrayUnion(teamId),
         });
       } else {
         // No global player doc — build from membership data
@@ -275,6 +386,7 @@ export async function migrateTeamPlayersToClub(params: {
           createdBy: '',
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
+          teamIds: firestore.FieldValue.arrayUnion(teamId),
         });
       }
     }),

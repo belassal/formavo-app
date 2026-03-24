@@ -1,19 +1,22 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import {
   ActivityIndicator,
   SafeAreaView,
   ScrollView,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native';
-import { useRoute, RouteProp } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { db } from '../../services/firebase';
 import { COL } from '../../models/collections';
 import Avatar from '../../components/Avatar';
 import type { TeamsStackParamList } from '../../navigation/stacks/TeamsStack';
-import { getPlayerCareerStats, type CareerSeason } from '../../services/clubPlayerService';
+import { getPlayerCareerStats, getClubPlayer, type CareerSeason, type ClubPlayer } from '../../services/clubPlayerService';
 
 type PlayerProfileRoute = RouteProp<TeamsStackParamList, 'PlayerProfile'>;
+type Nav = NativeStackNavigationProp<TeamsStackParamList>;
 
 type SeasonStats = {
   appearances: number;
@@ -62,6 +65,27 @@ async function fetchTeamStats(teamId: string, playerId: string): Promise<SeasonS
   );
 
   return stats;
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={{ flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: 1, borderTopColor: '#f3f4f6', gap: 12 }}>
+      <Text style={{ width: 110, fontSize: 13, fontWeight: '500', color: '#9ca3af' }}>{label}</Text>
+      <Text style={{ flex: 1, fontSize: 14, color: '#111' }}>{value}</Text>
+    </View>
+  );
+}
+
+function formatDobProfile(iso: string): string {
+  const [y, m, d] = iso.split('-');
+  if (!y || !m || !d) return iso;
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  // Calculate age
+  const birth = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  if (today < new Date(today.getFullYear(), birth.getMonth(), birth.getDate())) age--;
+  return `${months[parseInt(m, 10) - 1]} ${parseInt(d, 10)}, ${y}  (Age ${age})`;
 }
 
 function StatBox({ value, label, color = '#111', bg = '#fff' }: {
@@ -136,11 +160,39 @@ function SeasonRow({ season }: { season: CareerSeason }) {
 
 export default function PlayerProfileScreen() {
   const route = useRoute<PlayerProfileRoute>();
+  const navigation = useNavigation<Nav>();
   const { teamId, playerId, playerName, playerNumber, playerPosition, avatarUrl, clubId } = route.params;
 
   const [careerSeasons, setCareerSeasons] = useState<CareerSeason[]>([]);
   const [fallbackStats, setFallbackStats] = useState<SeasonStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [playerData, setPlayerData] = useState<ClubPlayer | null>(null);
+
+  // Edit button + live title in header
+  useLayoutEffect(() => {
+    const liveName = playerData?.name ?? playerName;
+    if (!clubId) return;
+    navigation.setOptions({
+      title: liveName,
+      headerRight: () => (
+        <TouchableOpacity
+          onPress={() => navigation.navigate('PlayerEdit', { clubId, playerId, playerName: liveName })}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Text style={{ fontSize: 15, fontWeight: '600', color: '#007AFF' }}>Edit</Text>
+        </TouchableOpacity>
+      ),
+    });
+  }, [clubId, playerId, playerName, playerData, navigation]);
+
+  // Reload player data every time this screen comes into focus
+  // (covers returning from PlayerEditScreen)
+  useFocusEffect(
+    useCallback(() => {
+      if (!clubId) return;
+      getClubPlayer({ clubId, playerId }).then(setPlayerData).catch(console.warn);
+    }, [clubId, playerId]),
+  );
 
   useEffect(() => {
     if (clubId) {
@@ -178,28 +230,61 @@ export default function PlayerProfileScreen() {
       <ScrollView contentContainerStyle={{ padding: 20, gap: 20 }}>
 
         {/* ── Player header ── */}
-        <View style={{
-          backgroundColor: '#fff', borderRadius: 16,
-          borderWidth: 1, borderColor: '#e5e7eb',
-          alignItems: 'center', paddingVertical: 28, paddingHorizontal: 20, gap: 12,
-        }}>
-          <Avatar name={playerName} avatarUrl={avatarUrl ?? null} size={80} />
-          <View style={{ alignItems: 'center', gap: 4 }}>
-            <Text style={{ fontSize: 22, fontWeight: '800', color: '#111' }}>{playerName}</Text>
-            <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
-              {playerNumber ? (
-                <View style={{ paddingVertical: 3, paddingHorizontal: 10, backgroundColor: '#111', borderRadius: 999 }}>
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#fff' }}>#{playerNumber}</Text>
+        {(() => {
+          const liveAvatar = playerData?.avatarUrl ?? avatarUrl ?? null;
+          const liveName = playerData?.name ?? playerName;
+          const liveNumber = playerData?.number ?? playerNumber;
+          const livePositions: string[] =
+            playerData?.positions && playerData.positions.length > 0
+              ? playerData.positions
+              : playerData?.position
+              ? [playerData.position]
+              : playerPosition
+              ? [playerPosition]
+              : [];
+          return (
+            <View style={{
+              backgroundColor: '#fff', borderRadius: 16,
+              borderWidth: 1, borderColor: '#e5e7eb',
+              alignItems: 'center', paddingVertical: 28, paddingHorizontal: 20, gap: 12,
+            }}>
+              <Avatar name={liveName} avatarUrl={liveAvatar} size={80} />
+              <View style={{ alignItems: 'center', gap: 4 }}>
+                <Text style={{ fontSize: 22, fontWeight: '800', color: '#111' }}>{liveName}</Text>
+                <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+                  {liveNumber ? (
+                    <View style={{ paddingVertical: 3, paddingHorizontal: 10, backgroundColor: '#111', borderRadius: 999 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#fff' }}>#{liveNumber}</Text>
+                    </View>
+                  ) : null}
+                  {livePositions.map((pos) => (
+                    <View key={pos} style={{ paddingVertical: 3, paddingHorizontal: 10, backgroundColor: '#f3f4f6', borderRadius: 999, borderWidth: 1, borderColor: '#e5e7eb' }}>
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: '#374151' }}>{pos}</Text>
+                    </View>
+                  ))}
                 </View>
+              </View>
+            </View>
+          );
+        })()}
+
+        {/* ── Personal details (club context only) ── */}
+        {playerData && (playerData.dob || playerData.phone || playerData.email || playerData.guardianName) && (
+          <View>
+            <Text style={{ fontSize: 12, fontWeight: '700', color: '#9ca3af', marginBottom: 8, marginLeft: 4 }}>DETAILS</Text>
+            <View style={{ backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#e5e7eb', overflow: 'hidden' }}>
+              {playerData.dob ? (
+                <InfoRow label="Date of Birth" value={formatDobProfile(playerData.dob)} />
               ) : null}
-              {playerPosition ? (
-                <View style={{ paddingVertical: 3, paddingHorizontal: 10, backgroundColor: '#f3f4f6', borderRadius: 999, borderWidth: 1, borderColor: '#e5e7eb' }}>
-                  <Text style={{ fontSize: 12, fontWeight: '600', color: '#374151' }}>{playerPosition}</Text>
-                </View>
-              ) : null}
+              {playerData.email ? <InfoRow label="Email" value={playerData.email} /> : null}
+              {playerData.phone ? <InfoRow label="Phone" value={playerData.phone} /> : null}
+              {playerData.guardianName ? <InfoRow label="Guardian" value={playerData.guardianName} /> : null}
+              {playerData.guardianPhone ? <InfoRow label="Guardian Phone" value={playerData.guardianPhone} /> : null}
+              {playerData.guardianEmail ? <InfoRow label="Guardian Email" value={playerData.guardianEmail} /> : null}
+              {playerData.notes ? <InfoRow label="Notes" value={playerData.notes} /> : null}
             </View>
           </View>
-        </View>
+        )}
 
         {loading ? (
           <View style={{ backgroundColor: '#fff', borderRadius: 16, borderWidth: 1, borderColor: '#e5e7eb', padding: 40, alignItems: 'center' }}>

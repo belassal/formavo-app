@@ -44,6 +44,7 @@ import {
 } from '../../services/seasonService';
 import { db } from '../../services/firebase';
 import { migrateTeamPlayersToClub } from '../../services/clubPlayerService';
+import { listenTrainings, setTrainingAttendance, type Training } from '../../services/trainingService';
 import SeasonPickerModal from './components/SeasonPickerModal';
 import NewSeasonModal from './components/NewSeasonModal';
 
@@ -154,6 +155,8 @@ export default function TeamDetailScreen() {
   const [coachesOpen, setCoachesOpen] = useState(false);
   const [parentsOpen, setParentsOpen] = useState(false);
   const [announcementsOpen, setAnnouncementsOpen] = useState(true);
+  const [trainingsOpen, setTrainingsOpen] = useState(false);
+  const [trainings, setTrainings] = useState<Training[]>([]);
 
   // Announcements
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -163,6 +166,11 @@ export default function TeamDetailScreen() {
 
   // Coaches / members
   const [teamMembers, setTeamMembers] = useState<any[]>([]);
+
+  const linkedPlayerId = useMemo(() => {
+    if (!isParent || !uid) return null;
+    return teamMembers.find((m) => m.id === uid)?.linkedPlayerId ?? null;
+  }, [isParent, uid, teamMembers]);
 
   // Invite Parent modal
   const [showInviteParent, setShowInviteParent] = useState(false);
@@ -238,7 +246,8 @@ export default function TeamDetailScreen() {
     );
     const unsubMembers = listenTeamMembers(teamId, (rows) => setTeamMembers(rows));
     const unsubAnnouncements = listenAnnouncements(teamId, setAnnouncements);
-    return () => { unsubRoster(); unsubMatches(); unsubMembers(); unsubAnnouncements(); };
+    const unsubTrainings = listenTrainings(teamId, setTrainings);
+    return () => { unsubRoster(); unsubMatches(); unsubMembers(); unsubAnnouncements(); unsubTrainings(); };
   }, [teamId, viewingSeasonId]);
 
   // --- Season bootstrap: get or create the default season and set activeSeasonId ---
@@ -545,6 +554,31 @@ export default function TeamDetailScreen() {
     ]);
   };
 
+  const handleRSVP = async (trainingId: string, status: 'confirmed' | 'declined') => {
+    if (!linkedPlayerId) return;
+    try {
+      await setTrainingAttendance({ teamId, trainingId, playerId: linkedPlayerId, status });
+    } catch (e: any) {
+      Alert.alert('Error', e?.message ?? 'Could not save your response.');
+    }
+  };
+
+  function formatTrainingDate(dateISO: string): string {
+    if (!dateISO) return '';
+    const [datePart, timePart] = dateISO.split(' ');
+    if (!datePart) return dateISO;
+    const [, m, d] = datePart.split('-');
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const monthStr = months[parseInt(m, 10) - 1] ?? m;
+    const base = `${monthStr} ${parseInt(d, 10)}`;
+    if (!timePart) return base;
+    const [hh, mm] = timePart.split(':');
+    const hour = parseInt(hh, 10);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const h12 = hour % 12 || 12;
+    return `${base} · ${h12}:${mm} ${ampm}`;
+  }
+
   function formatAnnouncementTime(ts: any): string {
     if (!ts?.toDate) return '';
     const date: Date = ts.toDate();
@@ -761,9 +795,17 @@ export default function TeamDetailScreen() {
 
                     {/* Name + meta */}
                     <TouchableOpacity
-                      onPress={() => !isParent && openEditPlayer(item)}
+                      onPress={() => navigation.navigate('PlayerProfile', {
+                        teamId,
+                        playerId: item.id,
+                        playerName: item.playerName || item.id,
+                        playerNumber: item.number || undefined,
+                        playerPosition: item.position || undefined,
+                        avatarUrl: item.avatarUrl || undefined,
+                        clubId: clubId ?? undefined,
+                      })}
                       style={{ flex: 1 }}
-                      activeOpacity={isParent ? 1 : 0.6}
+                      activeOpacity={0.6}
                     >
                       <Text style={{ fontSize: 15, fontWeight: '600', color: '#111' }} numberOfLines={1}>
                         {item.playerName}{item.number ? `  #${item.number}` : ''}
@@ -775,7 +817,19 @@ export default function TeamDetailScreen() {
 
                     {!isParent && (
                       <View style={{ flexDirection: 'row', gap: 2 }}>
-                        <TouchableOpacity onPress={() => openEditPlayer(item)} style={ICON_BTN} hitSlop={ICON_HITSLOP}>
+                        <TouchableOpacity
+                          onPress={() => navigation.navigate('PlayerProfile', {
+                            teamId,
+                            playerId: item.id,
+                            playerName: item.playerName || item.id,
+                            playerNumber: item.number || undefined,
+                            playerPosition: item.position || undefined,
+                            avatarUrl: item.avatarUrl || undefined,
+                            clubId: clubId ?? undefined,
+                          })}
+                          style={ICON_BTN}
+                          hitSlop={ICON_HITSLOP}
+                        >
                           <Text style={ICON_EDIT_TEXT}>✎</Text>
                         </TouchableOpacity>
                         <TouchableOpacity onPress={() => confirmRemovePlayer(item)} style={ICON_BTN} hitSlop={ICON_HITSLOP}>
@@ -786,6 +840,115 @@ export default function TeamDetailScreen() {
                   </View>
                 </View>
               ))
+            )
+          )}
+        </View>
+
+        {/* ===== TRAININGS ACCORDION ===== */}
+        <View style={S.sectionContainer}>
+          <TouchableOpacity
+            style={S.sectionHeader}
+            onPress={() => setTrainingsOpen((v) => !v)}
+            activeOpacity={0.7}
+          >
+            <View style={S.sectionTitleRow}>
+              <Text style={S.sectionTitle}>Training Sessions</Text>
+              {trainings.length > 0 && <Text style={S.sectionCount}>{trainings.length} sessions</Text>}
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              {!isParent && (
+                <TouchableOpacity
+                  onPress={(e) => { e.stopPropagation(); navigation.navigate('TrainingDetail', { teamId }); }}
+                  style={S.addBtn}
+                  hitSlop={ICON_HITSLOP}
+                >
+                  <Text style={S.addBtnText}>+ Session</Text>
+                </TouchableOpacity>
+              )}
+              <Text style={[S.chevron, { transform: [{ rotate: trainingsOpen ? '-90deg' : '90deg' }] }]}>›</Text>
+            </View>
+          </TouchableOpacity>
+
+          {trainingsOpen && (
+            trainings.length === 0 ? (
+              <>
+                <View style={S.divider} />
+                <View style={S.emptyRow}>
+                  <Text style={S.emptyText}>
+                    {isParent ? 'No training sessions scheduled yet.' : 'No training sessions yet. Tap "+ Session" to create one.'}
+                  </Text>
+                </View>
+              </>
+            ) : (
+              trainings.map((item) => {
+                const statusColor = item.status === 'completed' ? '#16a34a' : item.status === 'cancelled' ? '#ef4444' : '#6b7280';
+                const statusLabel = item.status === 'completed' ? 'Done' : item.status === 'cancelled' ? 'Cancelled' : 'Scheduled';
+                const confirmedCount = item.confirmedPlayerIds?.length ?? 0;
+                const myStatus = linkedPlayerId
+                  ? (item.confirmedPlayerIds ?? []).includes(linkedPlayerId)
+                    ? 'confirmed'
+                    : (item.declinedPlayerIds ?? []).includes(linkedPlayerId)
+                      ? 'declined'
+                      : null
+                  : null;
+                const subtitleText = [
+                  item.startISO ? formatTrainingDate(item.startISO) : '',
+                  item.endISO ? `– ${item.endISO.split(' ')[1] ?? ''}` : '',
+                  item.location ? `· ${item.location}` : '',
+                ].filter(Boolean).join(' ');
+
+                return (
+                  <View key={item.id}>
+                    <View style={S.divider} />
+                    {isParent ? (
+                      <View style={{ paddingHorizontal: 16, paddingVertical: 13 }}>
+                        <Text style={{ fontSize: 15, fontWeight: '600', color: item.status === 'cancelled' ? '#9ca3af' : '#111' }} numberOfLines={1}>
+                          {item.title}
+                        </Text>
+                        <Text style={{ marginTop: 2, fontSize: 13, color: '#9ca3af' }}>{subtitleText}</Text>
+                        {item.status === 'scheduled' && linkedPlayerId ? (
+                          <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+                            <TouchableOpacity
+                              onPress={() => handleRSVP(item.id, 'confirmed')}
+                              style={{ paddingVertical: 7, paddingHorizontal: 18, borderRadius: 20, backgroundColor: myStatus === 'confirmed' ? '#16a34a' : '#f3f4f6' }}
+                            >
+                              <Text style={{ fontSize: 13, fontWeight: '600', color: myStatus === 'confirmed' ? '#fff' : '#374151' }}>✓ Going</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              onPress={() => handleRSVP(item.id, 'declined')}
+                              style={{ paddingVertical: 7, paddingHorizontal: 18, borderRadius: 20, backgroundColor: myStatus === 'declined' ? '#ef4444' : '#f3f4f6' }}
+                            >
+                              <Text style={{ fontSize: 13, fontWeight: '600', color: myStatus === 'declined' ? '#fff' : '#374151' }}>✗ Can't make it</Text>
+                            </TouchableOpacity>
+                          </View>
+                        ) : (
+                          <Text style={{ marginTop: 6, fontSize: 12, fontWeight: '700', color: statusColor }}>{statusLabel}</Text>
+                        )}
+                      </View>
+                    ) : (
+                      <TouchableOpacity
+                        onPress={() => navigation.navigate('TrainingDetail', { teamId, trainingId: item.id })}
+                        style={S.row}
+                        activeOpacity={0.6}
+                      >
+                        <View style={{ flex: 1, marginRight: 12 }}>
+                          <Text style={{ fontSize: 15, fontWeight: '600', color: '#111' }} numberOfLines={1}>
+                            {item.title}
+                          </Text>
+                          <Text style={{ marginTop: 2, fontSize: 13, color: '#9ca3af' }}>{subtitleText}</Text>
+                        </View>
+                        <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                          <Text style={{ fontSize: 12, fontWeight: '700', color: statusColor }}>{statusLabel}</Text>
+                          {confirmedCount > 0 && (
+                            <Text style={{ fontSize: 12, color: '#16a34a', fontWeight: '600' }}>{confirmedCount} confirmed</Text>
+                          )}
+                          <Text style={{ fontSize: 18, color: '#c7c7cc' }}>›</Text>
+                        </View>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                );
+              })
             )
           )}
         </View>

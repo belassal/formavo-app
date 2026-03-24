@@ -10,6 +10,8 @@ import ClubSettingsScreen from '../../screens/club/ClubSettingsScreen';
 import StaffListScreen from '../../screens/club/StaffListScreen';
 import StaffProfileScreen from '../../screens/club/StaffProfileScreen';
 import ClubPlayersScreen from '../../screens/club/ClubPlayersScreen';
+import PlayerEditScreen from '../../screens/teams/PlayerEditScreen';
+import TrainingDetailScreen from '../../screens/teams/TrainingDetailScreen';
 
 export type TeamsStackParamList = {
   TeamsHome: undefined;
@@ -30,6 +32,8 @@ export type TeamsStackParamList = {
   StaffList: { clubId: string; clubName?: string; viewerRole?: string };
   StaffProfile: { clubId: string; memberId: string; memberName?: string; viewerRole?: string };
   ClubPlayers: { clubId: string; clubName?: string };
+  PlayerEdit: { clubId: string; playerId: string; playerName?: string };
+  TrainingDetail: { teamId: string; trainingId?: string };
 };
 
 const Stack = createNativeStackNavigator<TeamsStackParamList>();
@@ -82,6 +86,16 @@ export default function TeamsStack() {
         name="ClubPlayers"
         component={ClubPlayersScreen}
         options={({ route }) => ({ title: `${route.params.clubName || 'Club'} Players` })}
+      />
+      <Stack.Screen
+        name="PlayerEdit"
+        component={PlayerEditScreen}
+        options={({ route }) => ({ title: route.params.playerName ? `Edit ${route.params.playerName}` : 'Edit Player' })}
+      />
+      <Stack.Screen
+        name="TrainingDetail"
+        component={TrainingDetailScreen}
+        options={({ route }) => ({ title: route.params.trainingId ? 'Edit Session' : 'New Session' })}
       />
     </Stack.Navigator>
   );
