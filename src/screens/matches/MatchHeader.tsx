@@ -121,19 +121,23 @@ export default function MatchHeader({
 
       <View style={styles.quickRow}>
         <Pressable style={styles.quickBtn} onPress={() => onQuickEvent({ type: 'goal', side: 'home' })}>
-          <Text style={styles.quickText}>⚽ Home Goal</Text>
+          <Text style={styles.quickEmoji}>⚽</Text>
+          <Text style={styles.quickText}>Home Goal</Text>
         </Pressable>
 
         <Pressable style={styles.quickBtn} onPress={() => onQuickEvent({ type: 'goal', side: 'away' })}>
-          <Text style={styles.quickText}>⚽ Away Goal</Text>
+          <Text style={styles.quickEmoji}>⚽</Text>
+          <Text style={styles.quickText}>Away Goal</Text>
         </Pressable>
 
         <Pressable style={styles.quickBtn} onPress={() => onQuickEvent({ type: 'card' })}>
-          <Text style={styles.quickText}>🟨 Card</Text>
+          <Text style={styles.quickEmoji}>🟨</Text>
+          <Text style={styles.quickText}>Card</Text>
         </Pressable>
 
         <Pressable style={styles.quickBtn} onPress={() => onQuickEvent({ type: 'sub' })}>
-          <Text style={styles.quickText}>↕ Sub</Text>
+          <Text style={styles.quickEmoji}>↕</Text>
+          <Text style={styles.quickText}>Sub</Text>
         </Pressable>
       </View>
     </View>
@@ -192,16 +196,24 @@ quickRow: {
 
 quickBtn: {
   flex: 1,
-  paddingVertical: 10,
+  paddingVertical: 8,
   borderRadius: 12,
   backgroundColor: 'rgba(255,255,255,0.10)',
   alignItems: 'center',
+  justifyContent: 'center',
+  gap: 2,
+},
+
+quickEmoji: {
+  fontSize: 16,
+  lineHeight: 20,
 },
 
 quickText: {
   color: 'white',
-  fontWeight: '900',
-  fontSize: 12,
+  fontWeight: '700',
+  fontSize: 10,
+  textAlign: 'center',
 },
   actions: { flexDirection: 'row', gap: 8 },
   actionBtn: {

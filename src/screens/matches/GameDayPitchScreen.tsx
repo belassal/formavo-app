@@ -8,7 +8,9 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   FlatList,
   ScrollView,
   TouchableOpacity,
@@ -946,6 +948,7 @@ const onEnd = async () => {
 
       {/* ===== Save Lineup Modal ===== */}
       <Modal visible={showSaveLineup} animationType="slide" transparent onRequestClose={() => setShowSaveLineup(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalSheet}>
             <Text style={styles.modalTitle}>Save Lineup</Text>
@@ -977,6 +980,7 @@ const onEnd = async () => {
             </View>
           </View>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* ===== Load Lineup Modal ===== */}
