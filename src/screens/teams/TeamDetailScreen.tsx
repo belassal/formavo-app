@@ -1150,6 +1150,7 @@ export default function TeamDetailScreen() {
 
       {/* ===== INVITE COACH MODAL ===== */}
       <Modal visible={showInvite} animationType="slide" transparent onRequestClose={() => setShowInvite(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' }}>
           <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, gap: 14 }}>
             <Text style={{ fontSize: 17, fontWeight: '700', color: '#111' }}>Invite Coach</Text>
@@ -1192,10 +1193,12 @@ export default function TeamDetailScreen() {
             </View>
           </View>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* ===== INVITE PARENT MODAL ===== */}
       <Modal visible={showInviteParent} animationType="slide" transparent onRequestClose={() => setShowInviteParent(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' }}>
           <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, gap: 14, maxHeight: '80%' }}>
             <Text style={{ fontSize: 17, fontWeight: '700', color: '#111' }}>Invite Parent</Text>
@@ -1258,10 +1261,12 @@ export default function TeamDetailScreen() {
             </View>
           </View>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* ===== ADD PLAYER MODAL ===== */}
       <Modal visible={showAddPlayer} animationType="slide" transparent onRequestClose={() => setShowAddPlayer(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' }}>
           <View style={{ backgroundColor: 'white', padding: 20, borderTopLeftRadius: 20, borderTopRightRadius: 20, gap: 12 }}>
             <Text style={{ fontSize: 18, fontWeight: '700', color: '#111' }}>Add Player</Text>
@@ -1312,10 +1317,12 @@ export default function TeamDetailScreen() {
             </View>
           </View>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* ===== EDIT PLAYER MODAL ===== */}
       <Modal visible={showEditPlayer} animationType="slide" transparent onRequestClose={closeEditPlayer}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' }}>
           <View style={{ backgroundColor: 'white', padding: 20, borderTopLeftRadius: 20, borderTopRightRadius: 20, gap: 12 }}>
             <Text style={{ fontSize: 18, fontWeight: '700', color: '#111' }}>Edit Player</Text>
@@ -1356,6 +1363,7 @@ export default function TeamDetailScreen() {
             </View>
           </View>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* ===== FORMATION PICKER MODAL ===== */}
