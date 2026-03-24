@@ -519,11 +519,9 @@ export default function TeamDetailScreen() {
 
   const onSaveEditPlayer = async () => {
     if (!editingMember) return;
-    const name = editName.trim();
-    if (!name) { Alert.alert('Missing name', 'Player name is required.'); return; }
     try {
       setSavingEdit(true);
-      await updateTeamMembership({ teamId, membershipId: editingMember.id, playerName: name, number: editNumber.trim(), position: editPosition.trim(), avatarUrl: editAvatarUrl });
+      await updateTeamMembership({ teamId, membershipId: editingMember.id, playerName: editingMember.playerName, number: editNumber.trim(), position: editPosition.trim(), avatarUrl: editAvatarUrl });
       await updatePlayerAvailability({ teamId, playerId: editingMember.id, availability: editAvailability, note: editAvailabilityNote });
       closeEditPlayer();
     } catch (e: any) {
@@ -1435,7 +1433,9 @@ export default function TeamDetailScreen() {
               </View>
             </TouchableOpacity>
 
-            <TextInput placeholder="Player name (required)" value={editName} onChangeText={setEditName} style={S.input} />
+            <View style={[S.input, { justifyContent: 'center' }]}>
+              <Text style={{ fontSize: 15, fontWeight: '600', color: '#374151' }}>{editName}</Text>
+            </View>
             <TextInput placeholder="Number (optional)" value={editNumber} onChangeText={setEditNumber} style={S.input} keyboardType="numeric" />
             <TextInput placeholder="Position (optional)" value={editPosition} onChangeText={setEditPosition} style={S.input} />
 
