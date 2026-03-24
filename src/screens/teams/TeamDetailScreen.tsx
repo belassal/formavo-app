@@ -35,6 +35,7 @@ import DateTimePickerModal, { formatDateISO } from '../../components/DateTimePic
 import {
   listenAnnouncements,
   postAnnouncement,
+  editAnnouncement,
   deleteAnnouncement,
   type Announcement,
 } from '../../services/announcementService';
@@ -165,6 +166,9 @@ export default function TeamDetailScreen() {
   const [showPostAnnouncement, setShowPostAnnouncement] = useState(false);
   const [announcementText, setAnnouncementText] = useState('');
   const [postingAnnouncement, setPostingAnnouncement] = useState(false);
+  const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
+  const [editAnnouncementText, setEditAnnouncementText] = useState('');
+  const [savingEditAnnouncement, setSavingEditAnnouncement] = useState(false);
 
   // Coaches / members
   const [teamMembers, setTeamMembers] = useState<any[]>([]);
@@ -546,6 +550,26 @@ export default function TeamDetailScreen() {
       Alert.alert('Failed', e?.message ?? 'Could not post announcement');
     } finally {
       setPostingAnnouncement(false);
+    }
+  };
+
+  const onEditAnnouncement = (item: Announcement) => {
+    setEditingAnnouncement(item);
+    setEditAnnouncementText(item.text);
+  };
+
+  const onSaveEditAnnouncement = async () => {
+    if (!editingAnnouncement) return;
+    const trimmed = editAnnouncementText.trim();
+    if (!trimmed) { Alert.alert('Empty', 'Announcement cannot be empty.'); return; }
+    try {
+      setSavingEditAnnouncement(true);
+      await editAnnouncement(teamId, editingAnnouncement.id, trimmed);
+      setEditingAnnouncement(null);
+    } catch (e: any) {
+      Alert.alert('Failed', e?.message ?? 'Could not update announcement.');
+    } finally {
+      setSavingEditAnnouncement(false);
     }
   };
 
@@ -996,13 +1020,18 @@ export default function TeamDetailScreen() {
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: 14, fontWeight: '600', color: '#111', lineHeight: 20 }}>{item.text}</Text>
                       <Text style={{ fontSize: 12, color: '#9ca3af', marginTop: 3 }}>
-                        {item.createdByName}{item.createdAt ? `  ·  ${formatAnnouncementTime(item.createdAt)}` : ''}
+                        {item.createdByName}{item.createdAt ? `  ·  ${formatAnnouncementTime(item.createdAt)}` : ''}{item.isEdited ? '  ·  edited' : ''}
                       </Text>
                     </View>
                     {!isParent && (
-                      <TouchableOpacity onPress={() => onDeleteAnnouncement(item.id)} hitSlop={ICON_HITSLOP}>
-                        <Text style={ICON_X_TEXT}>×</Text>
-                      </TouchableOpacity>
+                      <View style={{ flexDirection: 'row', gap: 4 }}>
+                        <TouchableOpacity onPress={() => onEditAnnouncement(item)} hitSlop={ICON_HITSLOP}>
+                          <Text style={ICON_EDIT_TEXT}>✎</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => onDeleteAnnouncement(item.id)} hitSlop={ICON_HITSLOP}>
+                          <Text style={ICON_X_TEXT}>×</Text>
+                        </TouchableOpacity>
+                      </View>
                     )}
                   </View>
                 </View>
@@ -1497,6 +1526,38 @@ export default function TeamDetailScreen() {
               </TouchableOpacity>
             </View>
           </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* ===== EDIT ANNOUNCEMENT MODAL ===== */}
+      <Modal visible={!!editingAnnouncement} animationType="slide" transparent onRequestClose={() => setEditingAnnouncement(null)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' }}>
+            <View style={{ backgroundColor: 'white', padding: 20, borderTopLeftRadius: 20, borderTopRightRadius: 20, gap: 12 }}>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: '#111' }}>Edit Announcement</Text>
+              <TextInput
+                value={editAnnouncementText}
+                onChangeText={setEditAnnouncementText}
+                multiline
+                placeholder="Announcement text…"
+                placeholderTextColor="#9ca3af"
+                style={[S.input, { minHeight: 100, textAlignVertical: 'top' }]}
+                autoFocus
+              />
+              <View style={{ flexDirection: 'row', gap: 10, justifyContent: 'flex-end' }}>
+                <TouchableOpacity onPress={() => setEditingAnnouncement(null)} disabled={savingEditAnnouncement}>
+                  <Text style={{ padding: 10, color: '#6b7280', fontWeight: '500' }}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={onSaveEditAnnouncement}
+                  disabled={savingEditAnnouncement}
+                  style={{ paddingVertical: 10, paddingHorizontal: 20, backgroundColor: '#111', borderRadius: 12 }}
+                >
+                  <Text style={{ fontWeight: '700', color: '#fff' }}>{savingEditAnnouncement ? 'Saving…' : 'Save'}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
         </KeyboardAvoidingView>
       </Modal>

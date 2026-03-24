@@ -7,6 +7,8 @@ export type Announcement = {
   createdBy: string;
   createdByName: string;
   createdAt: any;
+  updatedAt?: any;
+  isEdited?: boolean;
 };
 
 export function listenAnnouncements(
@@ -44,6 +46,23 @@ export async function postAnnouncement(params: {
       createdBy,
       createdByName,
       createdAt: firestore.FieldValue.serverTimestamp(),
+    });
+}
+
+export async function editAnnouncement(
+  teamId: string,
+  announcementId: string,
+  newText: string,
+): Promise<void> {
+  await firestore()
+    .collection(COL.teams)
+    .doc(teamId)
+    .collection(COL.announcements)
+    .doc(announcementId)
+    .update({
+      text: newText.trim(),
+      isEdited: true,
+      updatedAt: firestore.FieldValue.serverTimestamp(),
     });
 }
 
