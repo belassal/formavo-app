@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -14,6 +15,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { B } from '../constants/brand';
 import auth from '@react-native-firebase/auth';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -29,13 +31,17 @@ type TeamRow = {
   role?: string;
 };
 
+// Try to load the logo — falls back gracefully if not saved yet
+let logoSrc: any = null;
+try { logoSrc = require('../assets/logo.png'); } catch { logoSrc = null; }
+
 const S = {
   sectionContainer: {
-    backgroundColor: '#fff',
+    backgroundColor: B.card,
     borderRadius: 14,
     overflow: 'hidden' as const,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: B.border,
   },
   sectionHeader: {
     flexDirection: 'row' as const,
@@ -43,26 +49,30 @@ const S = {
     justifyContent: 'space-between' as const,
     paddingHorizontal: 16,
     paddingVertical: 13,
+    borderLeftWidth: 3,
+    borderLeftColor: B.green,
   },
   sectionTitle: {
     fontSize: 17,
     fontWeight: '700' as const,
-    color: '#111',
+    color: B.ink,
   },
   addBtn: {
     paddingVertical: 6,
     paddingHorizontal: 14,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: B.greenSurface,
     borderRadius: 20,
+    borderWidth: 1,
+    borderColor: B.greenBorder,
   },
   addBtnText: {
     fontSize: 14,
     fontWeight: '600' as const,
-    color: '#111',
+    color: B.greenGlow,
   },
   divider: {
     height: 1,
-    backgroundColor: '#e5e7eb',
+    backgroundColor: B.border,
   },
   row: {
     flexDirection: 'row' as const,
@@ -75,16 +85,16 @@ const S = {
     paddingVertical: 20,
   },
   emptyText: {
-    color: '#9ca3af',
+    color: B.inkFaint,
     fontSize: 14,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: B.border,
     padding: 12,
     borderRadius: 12,
     fontSize: 15,
-    color: '#111',
+    color: B.ink,
   },
 };
 
@@ -262,48 +272,43 @@ export default function TeamsScreen() {
   // Empty state — shown when user has no teams at all
   if (teams.length === 0) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#f2f2f7' }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: B.surface }}>
+        {/* Logo banner */}
+        <View style={{ backgroundColor: B.navy, paddingVertical: 32, alignItems: 'center', gap: 6 }}>
+          {logoSrc ? (
+            <Image source={logoSrc} style={{ width: 100, height: 100, resizeMode: 'contain' }} />
+          ) : (
+            <Text style={{ fontSize: 32, fontWeight: '900', color: B.green, letterSpacing: 4,
+              textShadowColor: B.green, textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 10 }}>
+              FORMAVO
+            </Text>
+          )}
+        </View>
+
         <View style={{ flex: 1, padding: 24, justifyContent: 'center', gap: 16 }}>
-          {/* Welcome header */}
           <View style={{ alignItems: 'center', marginBottom: 8 }}>
-            <Text style={{ fontSize: 28, fontWeight: '800', color: '#111' }}>Welcome to Formavo</Text>
-            <Text style={{ fontSize: 15, color: '#9ca3af', marginTop: 6, textAlign: 'center', lineHeight: 22 }}>
+            <Text style={{ fontSize: 24, fontWeight: '800', color: B.ink }}>Welcome to Formavo</Text>
+            <Text style={{ fontSize: 15, color: B.inkFaint, marginTop: 6, textAlign: 'center', lineHeight: 22 }}>
               You're not part of any team yet.{'\n'}What would you like to do?
             </Text>
           </View>
 
-          {/* Option 1 — Create a team (coaches) */}
           <TouchableOpacity
             onPress={openCreate}
             activeOpacity={0.85}
-            style={{
-              backgroundColor: '#111',
-              borderRadius: 14,
-              padding: 20,
-              gap: 4,
-            }}
+            style={{ backgroundColor: B.navy, borderRadius: 14, padding: 20, gap: 4 }}
           >
-            <Text style={{ fontSize: 17, fontWeight: '800', color: '#fff' }}>Create a Team</Text>
-            <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>
+            <Text style={{ fontSize: 17, fontWeight: '800', color: B.green }}>⚽  Create a Team</Text>
+            <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.55)', marginTop: 2 }}>
               For coaches — set up your roster, matches and lineups
             </Text>
           </TouchableOpacity>
 
-          {/* Option 2 — Waiting for invite (parents / new members) */}
-          <View
-            style={{
-              backgroundColor: '#fff',
-              borderRadius: 14,
-              borderWidth: 1,
-              borderColor: '#e5e7eb',
-              padding: 20,
-              gap: 4,
-            }}
-          >
-            <Text style={{ fontSize: 17, fontWeight: '700', color: '#111' }}>Waiting for an invite?</Text>
-            <Text style={{ fontSize: 13, color: '#6b7280', marginTop: 4, lineHeight: 20 }}>
+          <View style={{ backgroundColor: B.card, borderRadius: 14, borderWidth: 1, borderColor: B.border, padding: 20, gap: 4 }}>
+            <Text style={{ fontSize: 17, fontWeight: '700', color: B.ink }}>Waiting for an invite?</Text>
+            <Text style={{ fontSize: 13, color: B.inkMid, marginTop: 4, lineHeight: 20 }}>
               If a coach invited you as a parent or staff member, make sure you signed up using the{' '}
-              <Text style={{ fontWeight: '700', color: '#111' }}>same email address</Text> that the invite was sent to.
+              <Text style={{ fontWeight: '700', color: B.ink }}>same email address</Text> that the invite was sent to.
               {'\n\n'}
               Your team will appear here automatically once the invite is accepted.
             </Text>
@@ -316,12 +321,53 @@ export default function TeamsScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#f2f2f7' }}>
-      <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: B.surface }}>
+      <ScrollView contentContainerStyle={{ gap: 16, paddingBottom: 24 }}>
+
+        {/* ===== LOGO HERO BANNER ===== */}
+        <View style={{
+          backgroundColor: B.navy,
+          paddingHorizontal: 20,
+          paddingTop: 20,
+          paddingBottom: 24,
+          alignItems: 'center',
+          gap: 10,
+        }}>
+          {logoSrc ? (
+            <Image
+              source={logoSrc}
+              style={{ width: 120, height: 120, resizeMode: 'contain' }}
+            />
+          ) : (
+            /* Styled wordmark fallback until logo.png is saved */
+            <View style={{ alignItems: 'center', gap: 4 }}>
+              <Text style={{
+                fontSize: 36,
+                fontWeight: '900',
+                color: B.green,
+                letterSpacing: 4,
+                textShadowColor: B.green,
+                textShadowOffset: { width: 0, height: 0 },
+                textShadowRadius: 12,
+              }}>
+                FORMAVO
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+                <View style={{ height: 1, width: 30, backgroundColor: B.navyBorder }} />
+                <Text style={{ fontSize: 11, color: B.greenBright, fontWeight: '600', letterSpacing: 2 }}>
+                  TEAM MANAGEMENT
+                </Text>
+                <View style={{ height: 1, width: 30, backgroundColor: B.navyBorder }} />
+              </View>
+            </View>
+          )}
+        </View>
+
+        <View style={{ paddingHorizontal: 16, gap: 16 }}>
 
         {/* Club Section — only when user has multiple teams OR has staff beyond themselves */}
         {!isParentOnly && clubId && club && (staffCount > 1 || teamCount > 1) && (
-          <View style={{ backgroundColor: '#111', borderRadius: 14, overflow: 'hidden' }}>
+          <View style={{ backgroundColor: B.navyLight, borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: B.navyBorder }}>
             {/* Club name + subtitle */}
             <View style={{ padding: 16, paddingBottom: 12 }}>
               <Text style={{ fontSize: 17, fontWeight: '800', color: '#fff' }}>{club.name}</Text>
@@ -387,22 +433,34 @@ export default function TeamsScreen() {
               <TouchableOpacity
                 onPress={() => navigation.navigate('TeamDetail', { teamId: item.id, teamName: item.teamName, role: item.role })}
                 style={S.row}
-                activeOpacity={0.6}
+                activeOpacity={0.7}
               >
+                {/* Colored team avatar initial */}
+                <View style={{
+                  width: 40, height: 40, borderRadius: 10,
+                  backgroundColor: B.navy,
+                  alignItems: 'center', justifyContent: 'center',
+                  marginRight: 12,
+                }}>
+                  <Text style={{ fontSize: 16, fontWeight: '800', color: B.green }}>
+                    {(item.teamName || '?').charAt(0).toUpperCase()}
+                  </Text>
+                </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 15, fontWeight: '600', color: '#111' }}>
+                  <Text style={{ fontSize: 15, fontWeight: '600', color: B.ink }}>
                     {item.teamName || item.id}
                   </Text>
-                  <Text style={{ marginTop: 2, fontSize: 13, color: '#9ca3af' }}>
+                  <Text style={{ marginTop: 2, fontSize: 12, color: B.inkFaint, textTransform: 'capitalize' }}>
                     {item.role || 'member'}
                   </Text>
                 </View>
-                <Text style={{ fontSize: 18, color: '#c7c7cc' }}>›</Text>
+                <Text style={{ fontSize: 20, color: B.greenBright, fontWeight: '300' }}>›</Text>
               </TouchableOpacity>
             </View>
           ))}
         </View>
 
+        </View>{/* end paddingHorizontal wrapper */}
       </ScrollView>
 
       {createTeamModal}
