@@ -1502,6 +1502,7 @@ const addSelectedToRoster = async () => {
             </View>
           </View>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* ===== Goal Location Modal ===== */}
@@ -1530,7 +1531,6 @@ const addSelectedToRoster = async () => {
             </View>
           </View>
         </View>
-        </KeyboardAvoidingView>
       </Modal>
 
       {/* ===== Edit Match Modal ===== */}
