@@ -171,7 +171,7 @@ export default function PlayerProfileScreen() {
   const [playerData, setPlayerData] = useState<ClubPlayer | null>(null);
   const [devLog, setDevLog] = useState<PlayerRating[]>([]);
   const [loadingLog, setLoadingLog] = useState(true);
-  const [trainingStats, setTrainingStats] = useState<{ attended: number; total: number } | null>(null);
+  const [trainingStats, setTrainingStats] = useState<{ attended: number; total: number }>({ attended: 0, total: 0 });
 
   // Edit button + live title in header
   useLayoutEffect(() => {
@@ -334,24 +334,24 @@ export default function PlayerProfileScreen() {
                   <StatBox value={displayStats?.yellowCards ?? 0} label="Yellow Cards" color="#ca8a04" bg="#fefce8" />
                   <StatBox value={displayStats?.redCards ?? 0} label="Red Cards" color="#dc2626" bg="#fef2f2" />
                 </View>
-                {trainingStats && trainingStats.total > 0 && (
-                  <View style={{
-                    backgroundColor: '#fff', borderRadius: 14,
-                    paddingVertical: 16, paddingHorizontal: 20,
-                    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-                    borderWidth: 1, borderColor: '#e5e7eb',
-                  }}>
-                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#374151' }}>Training Attendance</Text>
-                    <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={{ fontSize: 24, fontWeight: '800', color: '#111' }}>
-                        {trainingStats.attended}/{trainingStats.total}
-                      </Text>
+                <View style={{
+                  backgroundColor: '#fff', borderRadius: 14,
+                  paddingVertical: 16, paddingHorizontal: 20,
+                  flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                  borderWidth: 1, borderColor: '#e5e7eb',
+                }}>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#374151' }}>Training Attendance</Text>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={{ fontSize: 24, fontWeight: '800', color: '#111' }}>
+                      {trainingStats.attended}/{trainingStats.total}
+                    </Text>
+                    {trainingStats.total > 0 && (
                       <Text style={{ fontSize: 12, fontWeight: '600', color: '#9ca3af' }}>
                         {Math.round((trainingStats.attended / trainingStats.total) * 100)}%
                       </Text>
-                    </View>
+                    )}
                   </View>
-                )}
+                </View>
               </View>
             </View>
 
