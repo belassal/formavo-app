@@ -114,6 +114,7 @@ export default function GameDayPitchScreen() {
 
   // Player avatar URLs: playerId → avatarUrl
   const [avatarUrls, setAvatarUrls] = useState<Record<string, string>>({});
+  const [memberAvailability, setMemberAvailability] = useState<Record<string, { availability: string; note: string }>>({});
 
   // 1) Match doc
   useEffect(() => {
@@ -176,7 +177,7 @@ export default function GameDayPitchScreen() {
     return listenLineups(teamId, setLineups);
   }, [teamId]);
 
-  // 5) Avatar URLs from team memberships
+  // 5) Avatar URLs + availability from team memberships
   useEffect(() => {
     const unsub = db
       .collection(COL.teams)
@@ -184,11 +185,16 @@ export default function GameDayPitchScreen() {
       .collection(COL.playerMemberships)
       .onSnapshot((snap) => {
         const urls: Record<string, string> = {};
+        const avail: Record<string, { availability: string; note: string }> = {};
         snap.docs.forEach((d) => {
           const data = d.data() as any;
           if (data.avatarUrl) urls[d.id] = data.avatarUrl;
+          if (data.availability && data.availability !== 'fit') {
+            avail[d.id] = { availability: data.availability, note: data.availabilityNote || '' };
+          }
         });
         setAvatarUrls(urls);
+        setMemberAvailability(avail);
       }, () => {});
     return () => unsub();
   }, [teamId]);
@@ -752,19 +758,27 @@ const onEnd = async () => {
                 const current = playerToSlotKey[item.id] || '';
                 const isInThisSlot = !!assignSlotKey && current === assignSlotKey;
 
+                const playerAvail = memberAvailability[item.id];
                 return (
                   <TouchableOpacity
                     onPress={() => assignPlayerToSlot(item.id)}
                     disabled={savingAssign}
                     style={[styles.pickRow, isInThisSlot ? styles.pickRowActive : null]}
                   >
-                    <Text style={[styles.pickName, isInThisSlot ? { color: 'white' } : null]}>
-                      {item.name}
-                      {item.number ? `  #${item.number}` : ''}
-                    </Text>
-
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={[styles.pickName, isInThisSlot ? { color: 'white' } : null]}>
+                        {item.name}
+                        {item.number ? `  #${item.number}` : ''}
+                      </Text>
+                      {playerAvail && (
+                        <Text style={{ fontSize: 12, color: playerAvail.availability === 'injured' ? '#dc2626' : '#d97706', fontWeight: '700' }}>
+                          {playerAvail.availability === 'injured' ? '🤕' : '⚠️'}
+                        </Text>
+                      )}
+                    </View>
                     <Text style={[styles.pickMeta, isInThisSlot ? { color: 'white' } : null]}>
                       {current ? `Currently: ${current}` : 'Unassigned'}
+                      {playerAvail ? `  · ${playerAvail.availability}${playerAvail.note ? ` (${playerAvail.note})` : ''}` : ''}
                     </Text>
                   </TouchableOpacity>
                 );

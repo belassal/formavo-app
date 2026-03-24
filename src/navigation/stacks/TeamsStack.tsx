@@ -14,6 +14,7 @@ import PlayerEditScreen from '../../screens/teams/PlayerEditScreen';
 import TrainingDetailScreen from '../../screens/teams/TrainingDetailScreen';
 import TeamChatScreen from '../../screens/teams/TeamChatScreen';
 import TeamScheduleScreen from '../../screens/teams/TeamScheduleScreen';
+import TeamPhotosScreen from '../../screens/teams/TeamPhotosScreen';
 
 export type TeamsStackParamList = {
   TeamsHome: undefined;
@@ -38,6 +39,7 @@ export type TeamsStackParamList = {
   TrainingDetail: { teamId: string; trainingId?: string };
   TeamChat: { teamId: string; teamName?: string; role?: string };
   TeamSchedule: { teamId: string; teamName?: string; role?: string };
+  TeamPhotos: { teamId: string; teamName?: string; role?: string };
 };
 
 const Stack = createNativeStackNavigator<TeamsStackParamList>();
@@ -110,6 +112,11 @@ export default function TeamsStack() {
         name="TeamSchedule"
         component={TeamScheduleScreen}
         options={({ route }) => ({ title: `${route.params.teamName || 'Team'} Schedule` })}
+      />
+      <Stack.Screen
+        name="TeamPhotos"
+        component={TeamPhotosScreen}
+        options={({ route }) => ({ title: `${route.params.teamName || 'Team'} Photos` })}
       />
     </Stack.Navigator>
   );

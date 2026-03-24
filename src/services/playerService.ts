@@ -293,3 +293,27 @@ export async function restorePlayerToTeam(params: {
     { merge: true }
   );
 }
+
+export type PlayerAvailability = 'fit' | 'injured' | 'unavailable';
+
+export async function updatePlayerAvailability(params: {
+  teamId: string;
+  playerId: string;
+  availability: PlayerAvailability;
+  note?: string;
+}): Promise<void> {
+  const { teamId, playerId, availability, note } = params;
+  const ref = db
+    .collection(COL.teams)
+    .doc(teamId)
+    .collection(COL.playerMemberships)
+    .doc(playerId);
+  await ref.set(
+    {
+      availability,
+      availabilityNote: note?.trim() ?? '',
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true },
+  );
+}

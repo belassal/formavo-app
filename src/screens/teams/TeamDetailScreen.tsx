@@ -26,6 +26,8 @@ import {
   listenPlayerSearch,
   listenTeamMemberships,
   updateTeamMembership,
+  updatePlayerAvailability,
+  type PlayerAvailability,
 } from '../../services/playerService';
 import { createMatch, listenMatches } from '../../services/matchService';
 import { inviteCoach, inviteParent, resendParentInvite, listenTeamMembers } from '../../services/teamService';
@@ -140,7 +142,7 @@ export default function TeamDetailScreen() {
   const isParent = route.params.role === 'parent';
   const uid = useMemo(() => auth().currentUser?.uid ?? null, []);
 
-  // Header buttons: Schedule + Chat
+  // Header buttons: Schedule + Chat + Photos
   useLayoutEffect(() => {
     navigation.setOptions({
       headerRight: () => (
@@ -157,6 +159,19 @@ export default function TeamDetailScreen() {
             style={{ paddingHorizontal: 8, paddingVertical: 4 }}
           >
             <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151' }}>Schedule</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() =>
+              navigation.navigate('TeamPhotos', {
+                teamId,
+                teamName,
+                role: route.params.role,
+              })
+            }
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            style={{ paddingHorizontal: 8, paddingVertical: 4 }}
+          >
+            <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151' }}>📷</Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() =>
@@ -253,6 +268,8 @@ export default function TeamDetailScreen() {
   const [editAvatarUrl, setEditAvatarUrl] = useState<string | undefined>(undefined);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [editAvailability, setEditAvailability] = useState<PlayerAvailability>('fit');
+  const [editAvailabilityNote, setEditAvailabilityNote] = useState('');
 
   // Create Match modal
   const [showCreateMatch, setShowCreateMatch] = useState(false);
@@ -465,6 +482,8 @@ export default function TeamDetailScreen() {
     setEditNumber(String(m.number || ''));
     setEditPosition(String(m.position || ''));
     setEditAvatarUrl(m.avatarUrl || undefined);
+    setEditAvailability((m.availability as PlayerAvailability) || 'fit');
+    setEditAvailabilityNote(m.availabilityNote || '');
     setShowEditPlayer(true);
   };
 
@@ -472,6 +491,8 @@ export default function TeamDetailScreen() {
     setShowEditPlayer(false); setEditingMember(null);
     setEditName(''); setEditNumber(''); setEditPosition('');
     setEditAvatarUrl(undefined);
+    setEditAvailability('fit');
+    setEditAvailabilityNote('');
   };
 
   const onPickPhoto = async () => {
@@ -503,6 +524,7 @@ export default function TeamDetailScreen() {
     try {
       setSavingEdit(true);
       await updateTeamMembership({ teamId, membershipId: editingMember.id, playerName: name, number: editNumber.trim(), position: editPosition.trim(), avatarUrl: editAvatarUrl });
+      await updatePlayerAvailability({ teamId, playerId: editingMember.id, availability: editAvailability, note: editAvailabilityNote });
       closeEditPlayer();
     } catch (e: any) {
       Alert.alert('Update Failed', e?.message ?? 'Unknown error');
@@ -873,7 +895,13 @@ export default function TeamDetailScreen() {
                         {item.playerName}{item.number ? `  #${item.number}` : ''}
                       </Text>
                       <Text style={{ marginTop: 2, fontSize: 13, color: '#9ca3af' }}>
-                        {item.position ? `${item.position} · ` : ''}{item.type || 'regular'} · {item.status || 'active'}
+                        {item.position ? `${item.position} · ` : ''}{item.type || 'regular'}
+                        {item.availability && item.availability !== 'fit'
+                          ? <Text style={{ color: item.availability === 'injured' ? '#dc2626' : '#d97706', fontWeight: '700' }}>
+                              {item.availability === 'injured' ? '  · 🤕 Injured' : '  · ⚠️ Unavailable'}
+                              {item.availabilityNote ? ` (${item.availabilityNote})` : ''}
+                            </Text>
+                          : null}
                       </Text>
                     </TouchableOpacity>
 
@@ -1418,6 +1446,33 @@ export default function TeamDetailScreen() {
             <TextInput placeholder="Player name (required)" value={editName} onChangeText={setEditName} style={S.input} />
             <TextInput placeholder="Number (optional)" value={editNumber} onChangeText={setEditNumber} style={S.input} keyboardType="numeric" />
             <TextInput placeholder="Position (optional)" value={editPosition} onChangeText={setEditPosition} style={S.input} />
+
+            <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151' }}>Availability</Text>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {(['fit', 'injured', 'unavailable'] as const).map((v) => {
+                const isSelected = editAvailability === v;
+                const bg = isSelected ? (v === 'fit' ? '#16a34a' : v === 'injured' ? '#dc2626' : '#d97706') : '#f3f4f6';
+                const label = v === 'fit' ? '✓ Fit' : v === 'injured' ? '🤕 Injured' : '⚠️ Unavailable';
+                return (
+                  <TouchableOpacity
+                    key={v}
+                    onPress={() => setEditAvailability(v)}
+                    style={{ flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center', backgroundColor: bg }}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: isSelected ? '#fff' : '#374151' }}>{label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            {editAvailability !== 'fit' && (
+              <TextInput
+                placeholder="Reason (optional, e.g. hamstring)"
+                value={editAvailabilityNote}
+                onChangeText={setEditAvailabilityNote}
+                style={S.input}
+              />
+            )}
+
             <View style={{ flexDirection: 'row', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
               <TouchableOpacity onPress={closeEditPlayer} disabled={savingEdit}>
                 <Text style={{ padding: 10, color: '#6b7280', fontWeight: '500' }}>Cancel</Text>

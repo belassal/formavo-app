@@ -66,3 +66,49 @@ export async function uploadUserAvatar(
   const url: string = await ref.getDownloadURL();
   return url;
 }
+
+/**
+ * Open the native photo library for general use (team/match photos).
+ * Returns null if the user cancels.
+ */
+export function pickPhoto(): Promise<string | null> {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { launchImageLibrary } = require('react-native-image-picker');
+  return new Promise((resolve) => {
+    try {
+      launchImageLibrary(
+        { mediaType: 'photo', quality: 0.85, maxWidth: 1200, maxHeight: 1200, includeBase64: false },
+        (response: any) => {
+          if (response?.didCancel || response?.errorCode) { resolve(null); return; }
+          const uri = response?.assets?.[0]?.uri ?? null;
+          resolve(uri);
+        }
+      );
+    } catch (e) {
+      console.warn('[storageService] pickPhoto error', e);
+      resolve(null);
+    }
+  });
+}
+
+/**
+ * Upload a team photo to Firebase Storage.
+ * Path: teams/{teamId}/photos/{filename}
+ */
+export async function uploadTeamPhoto(teamId: string, localUri: string, filename: string): Promise<string> {
+  const ref = storage().ref(`teams/${teamId}/photos/${filename}`);
+  await ref.putFile(localUri);
+  const url: string = await ref.getDownloadURL();
+  return url;
+}
+
+/**
+ * Delete a team photo from Firebase Storage by its full storage path.
+ */
+export async function deleteTeamPhotoFromStorage(storagePath: string): Promise<void> {
+  try {
+    await storage().ref(storagePath).delete();
+  } catch (e) {
+    console.warn('[storageService] deleteTeamPhotoFromStorage:', e);
+  }
+}
