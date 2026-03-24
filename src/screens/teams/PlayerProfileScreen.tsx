@@ -208,10 +208,10 @@ export default function PlayerProfileScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      fetchPlayerTrainingStats(teamId, playerId)
+      fetchPlayerTrainingStats(playerId, { teamId: teamId || undefined, clubId: clubId || undefined })
         .then(setTrainingStats)
         .catch(() => setTrainingStats({ attended: 0, total: 0 }));
-    }, [teamId, playerId]),
+    }, [teamId, playerId, clubId]),
   );
 
   useEffect(() => {

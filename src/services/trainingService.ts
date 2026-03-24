@@ -139,29 +139,47 @@ export async function markTrainingAttended(params: {
  * Returns { attended, total } where total = sessions that have had check-in started.
  */
 export async function fetchPlayerTrainingStats(
-  teamId: string,
   playerId: string,
+  options: { teamId?: string; clubId?: string },
 ): Promise<{ attended: number; total: number }> {
-  if (!teamId) return { attended: 0, total: 0 };
+  const { teamId, clubId } = options;
 
-  const snap = await db
-    .collection(COL.teams)
-    .doc(teamId)
-    .collection(COL.trainings)
-    .get();
+  // Resolve which team IDs to aggregate
+  let teamIds: string[] = [];
+  if (teamId) {
+    teamIds = [teamId];
+  } else if (clubId) {
+    const teamsSnap = await db
+      .collection(COL.teams)
+      .where('clubId', '==', clubId)
+      .get();
+    teamIds = teamsSnap.docs.map((d) => d.id);
+  } else {
+    return { attended: 0, total: 0 };
+  }
 
   let attended = 0;
   let total = 0;
 
-  snap.docs.forEach((d) => {
-    const data = d.data() as any;
-    if (data.isDeleted) return;
-    const checkedIn: string[] = data.attendedPlayerIds ?? [];
-    if (checkedIn.length > 0) {
-      total += 1;
-      if (checkedIn.includes(playerId)) attended += 1;
-    }
-  });
+  await Promise.all(
+    teamIds.map(async (tid) => {
+      const snap = await db
+        .collection(COL.teams)
+        .doc(tid)
+        .collection(COL.trainings)
+        .get();
+
+      snap.docs.forEach((d) => {
+        const data = d.data() as any;
+        if (data.isDeleted) return;
+        const checkedIn: string[] = data.attendedPlayerIds ?? [];
+        if (checkedIn.length > 0) {
+          total += 1;
+          if (checkedIn.includes(playerId)) attended += 1;
+        }
+      });
+    }),
+  );
 
   return { attended, total };
 }
