@@ -357,49 +357,50 @@ export default function TeamsScreen() {
 
         {/* Club Section — only when user has multiple teams OR has staff beyond themselves */}
         {!isParentOnly && clubId && club && (staffCount > 1 || teamCount > 1) && (
-          <View style={{ backgroundColor: B.navy, borderRadius: 16, overflow: 'hidden' }}>
+          <View style={{ backgroundColor: '#fff', borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: B.border }}>
             {/* Club name + subtitle */}
-            <View style={{ padding: 16, paddingBottom: 12 }}>
-              <Text style={{ fontSize: 17, fontWeight: '800', color: '#fff' }}>{club.name}</Text>
-              <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>
-                {staffCount} staff · {teamCount} {teamCount === 1 ? 'team' : 'teams'}
-              </Text>
+            <View style={{ padding: 16, paddingBottom: 12, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <View style={{
+                width: 40, height: 40, borderRadius: 10,
+                backgroundColor: B.navy,
+                alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Text style={{ color: B.green, fontSize: 15, fontWeight: '900' }}>
+                  {club.name.charAt(0).toUpperCase()}
+                </Text>
+              </View>
+              <View>
+                <Text style={{ fontSize: 16, fontWeight: '800', color: B.ink }}>{club.name}</Text>
+                <Text style={{ fontSize: 12, color: B.inkFaint, marginTop: 1 }}>
+                  {staffCount} staff · {teamCount} {teamCount === 1 ? 'team' : 'teams'}
+                </Text>
+              </View>
             </View>
 
             {/* Action buttons */}
-            <View style={{
-              flexDirection: 'row',
-              borderTopWidth: 1,
-              borderTopColor: 'rgba(255,255,255,0.1)',
-            }}>
+            <View style={{ flexDirection: 'row', borderTopWidth: 1, borderTopColor: B.border }}>
               <TouchableOpacity
                 onPress={() => navigation.navigate('ClubPlayers', { clubId, clubName: club.name })}
                 activeOpacity={0.7}
-                style={{
-                  flex: 1, paddingVertical: 12, alignItems: 'center',
-                  borderRightWidth: 1, borderRightColor: 'rgba(255,255,255,0.1)',
-                }}
+                style={{ flex: 1, paddingVertical: 13, alignItems: 'center', borderRightWidth: 1, borderRightColor: B.border }}
               >
-                <Text style={{ fontSize: 13, fontWeight: '700', color: 'rgba(255,255,255,0.85)' }}>👤 Players</Text>
+                <Text style={{ fontSize: 13, fontWeight: '600', color: B.inkMid }}>👤 Players</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 onPress={() => navigation.navigate('StaffList', { clubId, clubName: club.name, viewerRole: viewerClubRole })}
                 activeOpacity={0.7}
-                style={{ flex: 1, paddingVertical: 12, alignItems: 'center' }}
+                style={{ flex: 1, paddingVertical: 13, alignItems: 'center', borderRightWidth: 1, borderRightColor: B.border }}
               >
-                <Text style={{ fontSize: 13, fontWeight: '700', color: 'rgba(255,255,255,0.85)' }}>🪪 Staff</Text>
+                <Text style={{ fontSize: 13, fontWeight: '600', color: B.inkMid }}>🪪 Staff</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 onPress={() => navigation.navigate('ClubSettings', { clubId, clubName: club.name })}
                 activeOpacity={0.7}
-                style={{
-                  flex: 1, paddingVertical: 12, alignItems: 'center',
-                  borderLeftWidth: 1, borderLeftColor: 'rgba(255,255,255,0.1)',
-                }}
+                style={{ flex: 1, paddingVertical: 13, alignItems: 'center' }}
               >
-                <Text style={{ fontSize: 13, fontWeight: '700', color: 'rgba(255,255,255,0.85)' }}>⚙️ Settings</Text>
+                <Text style={{ fontSize: 13, fontWeight: '600', color: B.inkMid }}>⚙️ Settings</Text>
               </TouchableOpacity>
             </View>
           </View>

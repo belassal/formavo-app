@@ -15,6 +15,7 @@ import {
   View,
 } from 'react-native';
 import Avatar from '../../components/Avatar';
+import { B } from '../../constants/brand';
 import auth from '@react-native-firebase/auth';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -692,19 +693,31 @@ export default function TeamDetailScreen() {
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
-            backgroundColor: '#111',
+            backgroundColor: '#fff',
             borderRadius: 14,
+            borderWidth: 1,
+            borderColor: B.border,
             paddingHorizontal: 18,
             paddingVertical: 14,
           }}
         >
-          <View>
-            <Text style={{ fontSize: 16, fontWeight: '800', color: '#fff' }}>📊 Season Stats</Text>
-            <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', marginTop: 2 }}>
-              Team record · Player leaders · Form
-            </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <View style={{
+              width: 40, height: 40, borderRadius: 10,
+              backgroundColor: B.greenSurface,
+              borderWidth: 1, borderColor: B.greenBorder,
+              alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Text style={{ fontSize: 18 }}>📊</Text>
+            </View>
+            <View>
+              <Text style={{ fontSize: 15, fontWeight: '700', color: B.ink }}>Season Stats</Text>
+              <Text style={{ fontSize: 12, color: B.inkFaint, marginTop: 1 }}>
+                Team record · Player leaders · Form
+              </Text>
+            </View>
           </View>
-          <Text style={{ fontSize: 20, color: 'rgba(255,255,255,0.4)' }}>›</Text>
+          <Text style={{ fontSize: 20, color: '#c7c7cc' }}>›</Text>
         </TouchableOpacity>
 
         {/* ===== MATCHES ACCORDION ===== */}
