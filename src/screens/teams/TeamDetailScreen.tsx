@@ -1367,6 +1367,7 @@ export default function TeamDetailScreen() {
 
       {/* ===== CREATE MATCH MODAL ===== */}
       <Modal visible={showCreateMatch} animationType="slide" transparent onRequestClose={() => setShowCreateMatch(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' }}>
           <View style={{ backgroundColor: 'white', padding: 20, borderTopLeftRadius: 20, borderTopRightRadius: 20, gap: 12 }}>
             <Text style={{ fontSize: 18, fontWeight: '700', color: '#111' }}>Create Match</Text>
@@ -1433,6 +1434,7 @@ export default function TeamDetailScreen() {
             </View>
           </View>
         </View>
+        </KeyboardAvoidingView>
         {showDatePicker && (
           <DateTimePickerModal
             visible={showDatePicker}
