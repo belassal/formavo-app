@@ -15,6 +15,7 @@ import Avatar from '../../components/Avatar';
 import type { TeamsStackParamList } from '../../navigation/stacks/TeamsStack';
 import { getPlayerCareerStats, getClubPlayer, type CareerSeason, type ClubPlayer } from '../../services/clubPlayerService';
 import { fetchPlayerRatings, type PlayerRating } from '../../services/ratingService';
+import { fetchPlayerTrainingStats } from '../../services/trainingService';
 
 type PlayerProfileRoute = RouteProp<TeamsStackParamList, 'PlayerProfile'>;
 type Nav = NativeStackNavigationProp<TeamsStackParamList>;
@@ -170,6 +171,7 @@ export default function PlayerProfileScreen() {
   const [playerData, setPlayerData] = useState<ClubPlayer | null>(null);
   const [devLog, setDevLog] = useState<PlayerRating[]>([]);
   const [loadingLog, setLoadingLog] = useState(true);
+  const [trainingStats, setTrainingStats] = useState<{ attended: number; total: number } | null>(null);
 
   // Edit button + live title in header
   useLayoutEffect(() => {
@@ -202,6 +204,12 @@ export default function PlayerProfileScreen() {
       .then(setDevLog)
       .catch(() => setDevLog([]))
       .finally(() => setLoadingLog(false));
+  }, [teamId, playerId]);
+
+  useEffect(() => {
+    fetchPlayerTrainingStats(teamId, playerId)
+      .then(setTrainingStats)
+      .catch(() => setTrainingStats(null));
   }, [teamId, playerId]);
 
   useEffect(() => {
@@ -326,6 +334,24 @@ export default function PlayerProfileScreen() {
                   <StatBox value={displayStats?.yellowCards ?? 0} label="Yellow Cards" color="#ca8a04" bg="#fefce8" />
                   <StatBox value={displayStats?.redCards ?? 0} label="Red Cards" color="#dc2626" bg="#fef2f2" />
                 </View>
+                {trainingStats && trainingStats.total > 0 && (
+                  <View style={{
+                    backgroundColor: '#fff', borderRadius: 14,
+                    paddingVertical: 16, paddingHorizontal: 20,
+                    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                    borderWidth: 1, borderColor: '#e5e7eb',
+                  }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#374151' }}>Training Attendance</Text>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={{ fontSize: 24, fontWeight: '800', color: '#111' }}>
+                        {trainingStats.attended}/{trainingStats.total}
+                      </Text>
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: '#9ca3af' }}>
+                        {Math.round((trainingStats.attended / trainingStats.total) * 100)}%
+                      </Text>
+                    </View>
+                  </View>
+                )}
               </View>
             </View>
 

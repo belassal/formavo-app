@@ -15,6 +15,7 @@ export type Training = {
   isDeleted?: boolean;
   confirmedPlayerIds?: string[];
   declinedPlayerIds?: string[];
+  attendedPlayerIds?: string[];  // actual check-in by coach
   createdAt?: any;
   updatedAt?: any;
 };
@@ -110,6 +111,58 @@ export async function softDeleteTraining(params: {
     .collection(COL.trainings)
     .doc(trainingId)
     .update({ isDeleted: true, updatedAt: serverTimestamp() });
+}
+
+/** Toggle a player's actual attendance (present/absent) for a training session. */
+export async function markTrainingAttended(params: {
+  teamId: string;
+  trainingId: string;
+  playerId: string;
+  attended: boolean;
+}): Promise<void> {
+  const { teamId, trainingId, playerId, attended } = params;
+  await db
+    .collection(COL.teams)
+    .doc(teamId)
+    .collection(COL.trainings)
+    .doc(trainingId)
+    .update({
+      attendedPlayerIds: attended
+        ? firestore.FieldValue.arrayUnion(playerId)
+        : firestore.FieldValue.arrayRemove(playerId),
+      updatedAt: serverTimestamp(),
+    });
+}
+
+/**
+ * One-time fetch of training attendance stats for a player in a team.
+ * Returns { attended, total } where total = sessions that have had check-in started.
+ */
+export async function fetchPlayerTrainingStats(
+  teamId: string,
+  playerId: string,
+): Promise<{ attended: number; total: number }> {
+  const snap = await db
+    .collection(COL.teams)
+    .doc(teamId)
+    .collection(COL.trainings)
+    .get();
+
+  let attended = 0;
+  let total = 0;
+
+  snap.docs.forEach((d) => {
+    const data = d.data() as any;
+    if (data.isDeleted) return;
+    const checkedIn: string[] = data.attendedPlayerIds ?? [];
+    // Only count sessions where at least one player was checked in (coach used the feature)
+    if (checkedIn.length > 0) {
+      total += 1;
+      if (checkedIn.includes(playerId)) attended += 1;
+    }
+  });
+
+  return { attended, total };
 }
 
 export async function setTrainingAttendance(params: {

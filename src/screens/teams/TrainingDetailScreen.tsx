@@ -16,12 +16,14 @@ import {
   createTraining,
   updateTraining,
   softDeleteTraining,
+  markTrainingAttended,
   type Training,
   type TrainingStatus,
 } from '../../services/trainingService';
 import { listenTeamMembers } from '../../services/teamService';
 import { listenTeamMemberships } from '../../services/playerService';
 import DateTimePickerModal, { formatDateISO } from '../../components/DateTimePickerModal';
+import auth from '@react-native-firebase/auth';
 import { db } from '../../services/firebase';
 import { COL } from '../../models/collections';
 
@@ -86,6 +88,8 @@ export default function TrainingDetailScreen() {
 
   const [confirmedIds, setConfirmedIds] = useState<string[]>([]);
   const [declinedIds, setDeclinedIds] = useState<string[]>([]);
+  const [attendedIds, setAttendedIds] = useState<string[]>([]);
+  const [togglingAttendance, setTogglingAttendance] = useState<string | null>(null);
   // Full player roster for attendance breakdown
   const [roster, setRoster] = useState<{ id: string; playerName: string }[]>([]);
   // Parent member docs — used to resolve player names for confirmed/declined IDs
@@ -108,6 +112,7 @@ export default function TrainingDetailScreen() {
         setStatus(data.status ?? 'scheduled');
         setConfirmedIds(data.confirmedPlayerIds ?? []);
         setDeclinedIds(data.declinedPlayerIds ?? []);
+        setAttendedIds(data.attendedPlayerIds ?? []);
       }, console.warn);
     return () => unsub();
   }, [teamId, trainingId]);
@@ -128,6 +133,21 @@ export default function TrainingDetailScreen() {
     });
     return () => { unsubRoster(); unsubMembers(); };
   }, [teamId, isNew]);
+
+  const isCoach = !!(auth().currentUser);
+
+  const toggleAttendance = async (playerId: string) => {
+    if (!trainingId) return;
+    const nowAttended = attendedIds.includes(playerId);
+    setTogglingAttendance(playerId);
+    try {
+      await markTrainingAttended({ teamId, trainingId, playerId, attended: !nowAttended });
+    } catch (e: any) {
+      Alert.alert('Error', e?.message ?? 'Could not update attendance.');
+    } finally {
+      setTogglingAttendance(null);
+    }
+  };
 
   const handleSave = async () => {
     if (!title.trim()) {
@@ -343,6 +363,54 @@ export default function TrainingDetailScreen() {
             </View>
           );
         })()}
+
+        {/* Check-In (coach only, existing sessions only) */}
+        {!isNew && roster.length > 0 && (
+          <View>
+            <Text style={{ fontSize: 12, fontWeight: '700', color: '#9ca3af', marginBottom: 8, marginLeft: 4, letterSpacing: 0.5 }}>
+              CHECK-IN  ·  {attendedIds.length} / {roster.length} present
+            </Text>
+            <View style={{ backgroundColor: '#fff', borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: '#e5e7eb' }}>
+              {roster.map((player, index) => {
+                const present = attendedIds.includes(player.id);
+                const toggling = togglingAttendance === player.id;
+                return (
+                  <View
+                    key={player.id}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingHorizontal: 16,
+                      paddingVertical: 12,
+                      borderTopWidth: index === 0 ? 0 : 1,
+                      borderTopColor: '#f3f4f6',
+                    }}
+                  >
+                    <Text style={{ flex: 1, fontSize: 15, fontWeight: '500', color: '#111' }}>{player.playerName}</Text>
+                    <View style={{ flexDirection: 'row', gap: 6 }}>
+                      <TouchableOpacity
+                        onPress={() => toggleAttendance(player.id)}
+                        disabled={!!toggling}
+                        style={{
+                          paddingVertical: 6,
+                          paddingHorizontal: 14,
+                          borderRadius: 20,
+                          backgroundColor: present ? '#dcfce7' : '#f3f4f6',
+                          borderWidth: 1,
+                          borderColor: present ? '#16a34a' : '#e5e7eb',
+                        }}
+                      >
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: present ? '#16a34a' : '#9ca3af' }}>
+                          {toggling ? '…' : present ? '✓ Present' : 'Absent'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        )}
 
         {/* Save */}
         <TouchableOpacity
