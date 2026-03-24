@@ -4,7 +4,9 @@ import {
   Alert,
   FlatList,
   Image,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   SafeAreaView,
   ScrollView,
   Text,
@@ -1443,7 +1445,8 @@ export default function TeamDetailScreen() {
 
       {/* ===== POST ANNOUNCEMENT MODAL ===== */}
       <Modal visible={showPostAnnouncement} animationType="slide" transparent onRequestClose={() => setShowPostAnnouncement(false)}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' }}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' }}>
           <View style={{ backgroundColor: 'white', padding: 20, borderTopLeftRadius: 20, borderTopRightRadius: 20, gap: 12 }}>
             <Text style={{ fontSize: 18, fontWeight: '700', color: '#111' }}>Post Announcement</Text>
             <TextInput
@@ -1484,7 +1487,8 @@ export default function TeamDetailScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* ===== SEASON PICKER MODAL ===== */}
