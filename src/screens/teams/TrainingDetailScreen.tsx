@@ -20,6 +20,7 @@ import {
   type TrainingStatus,
 } from '../../services/trainingService';
 import { listenTeamMembers } from '../../services/teamService';
+import { listenTeamMemberships } from '../../services/playerService';
 import DateTimePickerModal, { formatDateISO } from '../../components/DateTimePickerModal';
 import { db } from '../../services/firebase';
 import { COL } from '../../models/collections';
@@ -85,7 +86,9 @@ export default function TrainingDetailScreen() {
 
   const [confirmedIds, setConfirmedIds] = useState<string[]>([]);
   const [declinedIds, setDeclinedIds] = useState<string[]>([]);
-  // Parent member docs — each has linkedPlayerId + linkedPlayerName
+  // Full player roster for attendance breakdown
+  const [roster, setRoster] = useState<{ id: string; playerName: string }[]>([]);
+  // Parent member docs — used to resolve player names for confirmed/declined IDs
   const [parentMembers, setParentMembers] = useState<{ linkedPlayerId: string; linkedPlayerName: string }[]>([]);
 
   useEffect(() => {
@@ -111,15 +114,19 @@ export default function TrainingDetailScreen() {
 
   useEffect(() => {
     if (isNew) return;
-    // Listen to all team members and extract parent entries (they carry linkedPlayerId + linkedPlayerName)
-    const unsub = listenTeamMembers(teamId, (members) => {
+    // Full player roster for attendance buckets
+    const unsubRoster = listenTeamMemberships(teamId, (rows) => {
+      setRoster(rows.map((r) => ({ id: r.id, playerName: r.playerName })));
+    });
+    // Parent member docs to resolve player names from confirmed/declined IDs
+    const unsubMembers = listenTeamMembers(teamId, (members) => {
       setParentMembers(
         members
           .filter((m) => m.role === 'parent' && m.status === 'active' && m.linkedPlayerId)
           .map((m) => ({ linkedPlayerId: m.linkedPlayerId, linkedPlayerName: m.linkedPlayerName || 'Unknown Player' }))
       );
     });
-    return () => unsub();
+    return () => { unsubRoster(); unsubMembers(); };
   }, [teamId, isNew]);
 
   const handleSave = async () => {
@@ -271,10 +278,19 @@ export default function TrainingDetailScreen() {
 
         {/* Attendance (edit only) */}
         {!isNew && (() => {
-          const confirmedPlayers = parentMembers.filter((m) => confirmedIds.includes(m.linkedPlayerId));
-          const declinedPlayers = parentMembers.filter((m) => declinedIds.includes(m.linkedPlayerId));
-          const awaitingPlayers = parentMembers.filter((m) => !confirmedIds.includes(m.linkedPlayerId) && !declinedIds.includes(m.linkedPlayerId));
-          const hasAnyResponse = confirmedPlayers.length > 0 || declinedPlayers.length > 0;
+          // Resolve player name: prefer roster (has full active list), fall back to parentMembers
+          const resolveName = (id: string): string => {
+            const fromRoster = roster.find((r) => r.id === id);
+            if (fromRoster) return fromRoster.playerName;
+            const fromParent = parentMembers.find((m) => m.linkedPlayerId === id);
+            return fromParent?.linkedPlayerName ?? 'Unknown Player';
+          };
+
+          const goingPlayers = confirmedIds.map((id) => ({ id, name: resolveName(id) }));
+          const cantMakeItPlayers = declinedIds.map((id) => ({ id, name: resolveName(id) }));
+          const noResponsePlayers = roster.filter(
+            (r) => !confirmedIds.includes(r.id) && !declinedIds.includes(r.id)
+          );
 
           return (
             <View>
@@ -282,50 +298,47 @@ export default function TrainingDetailScreen() {
                 ATTENDANCE
               </Text>
               <View style={cardStyle}>
-                {confirmedPlayers.length === 0 && declinedPlayers.length === 0 ? (
-                  <View style={{ paddingHorizontal: 16, paddingVertical: 14 }}>
-                    <Text style={{ fontSize: 14, color: '#9ca3af' }}>No responses yet.</Text>
-                  </View>
-                ) : (
-                  <>
-                    {confirmedPlayers.length > 0 && (
-                      <View style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
-                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#16a34a', marginBottom: 6, letterSpacing: 0.4 }}>
-                          GOING ({confirmedPlayers.length})
-                        </Text>
-                        {confirmedPlayers.map((p) => (
-                          <Text key={p.linkedPlayerId} style={{ fontSize: 14, color: '#111', paddingVertical: 2 }}>
-                            {p.linkedPlayerName}
-                          </Text>
-                        ))}
-                      </View>
-                    )}
-                    {declinedPlayers.length > 0 && (
-                      <View style={{ borderTopWidth: confirmedPlayers.length > 0 ? 1 : 0, borderTopColor: '#f3f4f6', paddingHorizontal: 16, paddingVertical: 12 }}>
-                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#ef4444', marginBottom: 6, letterSpacing: 0.4 }}>
-                          NOT GOING ({declinedPlayers.length})
-                        </Text>
-                        {declinedPlayers.map((p) => (
-                          <Text key={p.linkedPlayerId} style={{ fontSize: 14, color: '#111', paddingVertical: 2 }}>
-                            {p.linkedPlayerName}
-                          </Text>
-                        ))}
-                      </View>
-                    )}
-                    {hasAnyResponse && awaitingPlayers.length > 0 && (
-                      <View style={{ borderTopWidth: 1, borderTopColor: '#f3f4f6', paddingHorizontal: 16, paddingVertical: 12 }}>
-                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#9ca3af', marginBottom: 6, letterSpacing: 0.4 }}>
-                          AWAITING ({awaitingPlayers.length})
-                        </Text>
-                        {awaitingPlayers.map((p) => (
-                          <Text key={p.linkedPlayerId} style={{ fontSize: 14, color: '#6b7280', paddingVertical: 2 }}>
-                            {p.linkedPlayerName}
-                          </Text>
-                        ))}
-                      </View>
-                    )}
-                  </>
-                )}
+                {/* Going */}
+                <View style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#16a34a', marginBottom: 6, letterSpacing: 0.4 }}>
+                    GOING ({goingPlayers.length})
+                  </Text>
+                  {goingPlayers.length === 0 ? (
+                    <Text style={{ fontSize: 14, color: '#9ca3af' }}>—</Text>
+                  ) : (
+                    goingPlayers.map((p) => (
+                      <Text key={p.id} style={{ fontSize: 14, color: '#111', paddingVertical: 2 }}>{p.name}</Text>
+                    ))
+                  )}
+                </View>
+
+                {/* Can't Make It */}
+                <View style={{ borderTopWidth: 1, borderTopColor: '#f3f4f6', paddingHorizontal: 16, paddingVertical: 12 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#ef4444', marginBottom: 6, letterSpacing: 0.4 }}>
+                    CAN'T MAKE IT ({cantMakeItPlayers.length})
+                  </Text>
+                  {cantMakeItPlayers.length === 0 ? (
+                    <Text style={{ fontSize: 14, color: '#9ca3af' }}>—</Text>
+                  ) : (
+                    cantMakeItPlayers.map((p) => (
+                      <Text key={p.id} style={{ fontSize: 14, color: '#111', paddingVertical: 2 }}>{p.name}</Text>
+                    ))
+                  )}
+                </View>
+
+                {/* No Response */}
+                <View style={{ borderTopWidth: 1, borderTopColor: '#f3f4f6', paddingHorizontal: 16, paddingVertical: 12 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#9ca3af', marginBottom: 6, letterSpacing: 0.4 }}>
+                    NO RESPONSE ({noResponsePlayers.length})
+                  </Text>
+                  {noResponsePlayers.length === 0 ? (
+                    <Text style={{ fontSize: 14, color: '#9ca3af' }}>—</Text>
+                  ) : (
+                    noResponsePlayers.map((p) => (
+                      <Text key={p.id} style={{ fontSize: 14, color: '#6b7280', paddingVertical: 2 }}>{p.playerName}</Text>
+                    ))
+                  )}
+                </View>
               </View>
             </View>
           );
