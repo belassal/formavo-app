@@ -38,7 +38,7 @@ try { logoSrc = require('../assets/logo.png'); } catch { logoSrc = null; }
 const S = {
   sectionContainer: {
     backgroundColor: B.card,
-    borderRadius: 14,
+    borderRadius: 16,
     overflow: 'hidden' as const,
     borderWidth: 1,
     borderColor: B.border,
@@ -48,37 +48,35 @@ const S = {
     alignItems: 'center' as const,
     justifyContent: 'space-between' as const,
     paddingHorizontal: 16,
-    paddingVertical: 13,
-    borderLeftWidth: 3,
-    borderLeftColor: B.green,
+    paddingVertical: 14,
   },
   sectionTitle: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '700' as const,
     color: B.ink,
+    letterSpacing: 0.2,
   },
   addBtn: {
-    paddingVertical: 6,
+    paddingVertical: 7,
     paddingHorizontal: 14,
-    backgroundColor: B.greenSurface,
+    backgroundColor: B.green,
     borderRadius: 20,
-    borderWidth: 1,
-    borderColor: B.greenBorder,
   },
   addBtnText: {
-    fontSize: 14,
-    fontWeight: '600' as const,
-    color: B.greenGlow,
+    fontSize: 13,
+    fontWeight: '700' as const,
+    color: '#fff',
   },
   divider: {
     height: 1,
     backgroundColor: B.border,
+    marginLeft: 68,
   },
   row: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 13,
   },
   emptyRow: {
     paddingHorizontal: 16,
@@ -272,20 +270,23 @@ export default function TeamsScreen() {
   // Empty state — shown when user has no teams at all
   if (teams.length === 0) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: B.surface }}>
-        {/* Logo banner */}
-        <View style={{ backgroundColor: B.navy, paddingVertical: 32, alignItems: 'center', gap: 6 }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#f8fafc' }}>
+        {/* Compact wordmark header */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10,
+          paddingHorizontal: 20, paddingTop: 18, paddingBottom: 16,
+          backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: B.border }}>
           {logoSrc ? (
-            <Image source={logoSrc} style={{ width: 100, height: 100, resizeMode: 'contain' }} />
+            <Image source={logoSrc} style={{ width: 36, height: 36, resizeMode: 'contain' }} />
           ) : (
-            <Text style={{ fontSize: 32, fontWeight: '900', color: B.green, letterSpacing: 4,
-              textShadowColor: B.green, textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 10 }}>
-              FORMAVO
-            </Text>
+            <View style={{ width: 36, height: 36, borderRadius: 9, backgroundColor: B.navy,
+              alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ color: B.green, fontSize: 15, fontWeight: '900' }}>F</Text>
+            </View>
           )}
+          <Text style={{ fontSize: 20, fontWeight: '900', color: B.navy, letterSpacing: 1 }}>FORMAVO</Text>
         </View>
 
-        <View style={{ flex: 1, padding: 24, justifyContent: 'center', gap: 16 }}>
+        <View style={{ flex: 1, padding: 24, justifyContent: 'center', gap: 14 }}>
           <View style={{ alignItems: 'center', marginBottom: 8 }}>
             <Text style={{ fontSize: 24, fontWeight: '800', color: B.ink }}>Welcome to Formavo</Text>
             <Text style={{ fontSize: 15, color: B.inkFaint, marginTop: 6, textAlign: 'center', lineHeight: 22 }}>
@@ -296,15 +297,15 @@ export default function TeamsScreen() {
           <TouchableOpacity
             onPress={openCreate}
             activeOpacity={0.85}
-            style={{ backgroundColor: B.navy, borderRadius: 14, padding: 20, gap: 4 }}
+            style={{ backgroundColor: B.green, borderRadius: 14, padding: 20, gap: 4 }}
           >
-            <Text style={{ fontSize: 17, fontWeight: '800', color: B.green }}>⚽  Create a Team</Text>
-            <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.55)', marginTop: 2 }}>
+            <Text style={{ fontSize: 17, fontWeight: '800', color: '#fff' }}>⚽  Create a Team</Text>
+            <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.75)', marginTop: 2 }}>
               For coaches — set up your roster, matches and lineups
             </Text>
           </TouchableOpacity>
 
-          <View style={{ backgroundColor: B.card, borderRadius: 14, borderWidth: 1, borderColor: B.border, padding: 20, gap: 4 }}>
+          <View style={{ backgroundColor: B.card, borderRadius: 14, borderWidth: 1, borderColor: B.border, padding: 20 }}>
             <Text style={{ fontSize: 17, fontWeight: '700', color: B.ink }}>Waiting for an invite?</Text>
             <Text style={{ fontSize: 13, color: B.inkMid, marginTop: 4, lineHeight: 20 }}>
               If a coach invited you as a parent or staff member, make sure you signed up using the{' '}
@@ -321,53 +322,42 @@ export default function TeamsScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: B.surface }}>
-      <ScrollView contentContainerStyle={{ gap: 16, paddingBottom: 24 }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#f8fafc' }}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
 
-        {/* ===== LOGO HERO BANNER ===== */}
+        {/* ===== COMPACT WORDMARK HEADER ===== */}
         <View style={{
-          backgroundColor: B.navy,
-          paddingHorizontal: 20,
-          paddingTop: 20,
-          paddingBottom: 24,
-          alignItems: 'center',
-          gap: 10,
+          flexDirection: 'row', alignItems: 'center', gap: 10,
+          paddingHorizontal: 20, paddingTop: 18, paddingBottom: 16,
+          backgroundColor: '#fff',
+          borderBottomWidth: 1, borderBottomColor: B.border,
         }}>
           {logoSrc ? (
-            <Image
-              source={logoSrc}
-              style={{ width: 120, height: 120, resizeMode: 'contain' }}
-            />
+            <Image source={logoSrc} style={{ width: 36, height: 36, resizeMode: 'contain' }} />
           ) : (
-            /* Styled wordmark fallback until logo.png is saved */
-            <View style={{ alignItems: 'center', gap: 4 }}>
-              <Text style={{
-                fontSize: 36,
-                fontWeight: '900',
-                color: B.green,
-                letterSpacing: 4,
-                textShadowColor: B.green,
-                textShadowOffset: { width: 0, height: 0 },
-                textShadowRadius: 12,
-              }}>
-                FORMAVO
-              </Text>
-              <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
-                <View style={{ height: 1, width: 30, backgroundColor: B.navyBorder }} />
-                <Text style={{ fontSize: 11, color: B.greenBright, fontWeight: '600', letterSpacing: 2 }}>
-                  TEAM MANAGEMENT
-                </Text>
-                <View style={{ height: 1, width: 30, backgroundColor: B.navyBorder }} />
-              </View>
+            <View style={{
+              width: 36, height: 36, borderRadius: 9,
+              backgroundColor: B.navy,
+              alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Text style={{ color: B.green, fontSize: 15, fontWeight: '900' }}>F</Text>
             </View>
           )}
+          <View>
+            <Text style={{ fontSize: 20, fontWeight: '900', color: B.navy, letterSpacing: 1 }}>
+              FORMAVO
+            </Text>
+            <Text style={{ fontSize: 11, color: B.inkFaint, fontWeight: '500', letterSpacing: 0.5, marginTop: 1 }}>
+              Team Management
+            </Text>
+          </View>
         </View>
 
-        <View style={{ paddingHorizontal: 16, gap: 16 }}>
+        <View style={{ paddingHorizontal: 16, paddingTop: 20, gap: 14 }}>
 
         {/* Club Section — only when user has multiple teams OR has staff beyond themselves */}
         {!isParentOnly && clubId && club && (staffCount > 1 || teamCount > 1) && (
-          <View style={{ backgroundColor: B.navyLight, borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: B.navyBorder }}>
+          <View style={{ backgroundColor: B.navy, borderRadius: 16, overflow: 'hidden' }}>
             {/* Club name + subtitle */}
             <View style={{ padding: 16, paddingBottom: 12 }}>
               <Text style={{ fontSize: 17, fontWeight: '800', color: '#fff' }}>{club.name}</Text>
@@ -427,22 +417,23 @@ export default function TeamsScreen() {
             )}
           </View>
 
-          {teams.map((item) => (
+          {teams.map((item, index) => (
             <View key={item.id}>
-              <View style={S.divider} />
+              {index > 0 && <View style={S.divider} />}
               <TouchableOpacity
                 onPress={() => navigation.navigate('TeamDetail', { teamId: item.id, teamName: item.teamName, role: item.role })}
                 style={S.row}
                 activeOpacity={0.7}
               >
-                {/* Colored team avatar initial */}
+                {/* Team initial avatar — light green surface */}
                 <View style={{
-                  width: 40, height: 40, borderRadius: 10,
-                  backgroundColor: B.navy,
+                  width: 44, height: 44, borderRadius: 12,
+                  backgroundColor: B.greenSurface,
+                  borderWidth: 1, borderColor: B.greenBorder,
                   alignItems: 'center', justifyContent: 'center',
                   marginRight: 12,
                 }}>
-                  <Text style={{ fontSize: 16, fontWeight: '800', color: B.green }}>
+                  <Text style={{ fontSize: 17, fontWeight: '800', color: B.greenGlow }}>
                     {(item.teamName || '?').charAt(0).toUpperCase()}
                   </Text>
                 </View>
@@ -454,7 +445,7 @@ export default function TeamsScreen() {
                     {item.role || 'member'}
                   </Text>
                 </View>
-                <Text style={{ fontSize: 20, color: B.greenBright, fontWeight: '300' }}>›</Text>
+                <Text style={{ fontSize: 20, color: '#c7c7cc' }}>›</Text>
               </TouchableOpacity>
             </View>
           ))}

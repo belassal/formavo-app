@@ -51,22 +51,22 @@ export default function AppTabs() {
         tabBarActiveTintColor: B.green,
         tabBarInactiveTintColor: B.inkFaint,
         tabBarStyle: {
-          backgroundColor: B.navy,
-          borderTopColor: B.navyBorder,
+          backgroundColor: '#fff',
+          borderTopColor: '#f1f5f9',
           borderTopWidth: 1,
           height: 80,
           paddingBottom: 12,
           paddingTop: 8,
         },
-        headerStyle: { backgroundColor: B.navy },
-        headerTintColor: '#fff',
-        headerTitleStyle: { fontWeight: '700' },
+        headerStyle: { backgroundColor: '#fff' },
+        headerTintColor: B.ink,
+        headerTitleStyle: { fontWeight: '700', color: B.ink },
       })}
     >
       <Tab.Screen name="Teams"   component={TeamsStack}    options={{ headerShown: false }} />
-      <Tab.Screen name="Matches" component={MatchesScreen} options={{ headerStyle: { backgroundColor: B.navy }, headerTintColor: '#fff' }} />
+      <Tab.Screen name="Matches" component={MatchesScreen} />
       <Tab.Screen name="Stats"   component={StatsStack}    options={{ headerShown: false }} />
-      <Tab.Screen name="Profile" component={ProfileScreen} options={{ headerStyle: { backgroundColor: B.navy }, headerTintColor: '#fff', headerTitleStyle: { fontWeight: '700' } }} />
+      <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );
 }
