@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   SafeAreaView,
   ScrollView,
   Text,
@@ -13,6 +14,8 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { TeamsStackParamList } from '../../navigation/stacks/TeamsStack';
 import { listenClub, listenClubMembers, updateClub } from '../../services/clubService';
 import type { Club, ClubMember } from '../../services/clubService';
+import { pickPhoto, uploadClubLogo } from '../../services/storageService';
+import { B } from '../../constants/brand';
 
 type Props = NativeStackScreenProps<TeamsStackParamList, 'ClubSettings'>;
 
@@ -25,6 +28,7 @@ export default function ClubSettingsScreen({ route }: Props) {
 
   const [nameInput, setNameInput] = useState('');
   const [saving, setSaving] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
 
   useEffect(() => {
     const unsubClub = listenClub(clubId, (c) => {
@@ -43,6 +47,20 @@ export default function ClubSettingsScreen({ route }: Props) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clubId]);
+
+  const handleLogoUpload = async () => {
+    const uri = await pickPhoto();
+    if (!uri) return;
+    try {
+      setUploadingLogo(true);
+      const url = await uploadClubLogo(clubId, uri);
+      await updateClub({ clubId, logoUrl: url });
+    } catch (e: any) {
+      Alert.alert('Upload failed', e?.message ?? 'Could not upload logo.');
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
 
   const handleSave = async () => {
     const trimmed = nameInput.trim();
@@ -137,9 +155,44 @@ export default function ClubSettingsScreen({ route }: Props) {
             <Text style={valueStyle}>{members.length}</Text>
           </View>
           <View style={{ height: 1, backgroundColor: '#e5e7eb' }} />
-          <View style={rowStyle}>
-            <Text style={labelStyle}>Logo</Text>
-            <Text style={{ fontSize: 14, color: '#9ca3af' }}>Coming soon</Text>
+          <View style={[rowStyle, { gap: 12 }]}>
+            {/* Current logo or placeholder */}
+            {club?.logoUrl ? (
+              <Image
+                source={{ uri: club.logoUrl }}
+                style={{ width: 52, height: 52, borderRadius: 12, backgroundColor: '#f3f4f6' }}
+                resizeMode="cover"
+              />
+            ) : (
+              <View style={{
+                width: 52, height: 52, borderRadius: 12,
+                backgroundColor: B.navy,
+                alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Text style={{ color: B.green, fontSize: 20, fontWeight: '900' }}>
+                  {(club?.name ?? '?').charAt(0).toUpperCase()}
+                </Text>
+              </View>
+            )}
+            <View style={{ flex: 1 }}>
+              <Text style={labelStyle}>Club Logo</Text>
+              <Text style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>
+                Shown on the Teams home screen
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={handleLogoUpload}
+              disabled={uploadingLogo}
+              style={{
+                paddingVertical: 8, paddingHorizontal: 14,
+                backgroundColor: B.green, borderRadius: 20,
+                opacity: uploadingLogo ? 0.6 : 1,
+              }}
+            >
+              <Text style={{ fontSize: 13, fontWeight: '700', color: '#fff' }}>
+                {uploadingLogo ? 'Uploading…' : club?.logoUrl ? 'Change' : 'Upload'}
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
 

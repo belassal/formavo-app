@@ -360,15 +360,23 @@ export default function TeamsScreen() {
           <View style={{ backgroundColor: '#fff', borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: B.border }}>
             {/* Club name + subtitle */}
             <View style={{ padding: 16, paddingBottom: 12, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <View style={{
-                width: 40, height: 40, borderRadius: 10,
-                backgroundColor: B.navy,
-                alignItems: 'center', justifyContent: 'center',
-              }}>
-                <Text style={{ color: B.green, fontSize: 15, fontWeight: '900' }}>
-                  {club.name.charAt(0).toUpperCase()}
-                </Text>
-              </View>
+              {club.logoUrl ? (
+                <Image
+                  source={{ uri: club.logoUrl }}
+                  style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: '#f3f4f6' }}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View style={{
+                  width: 44, height: 44, borderRadius: 10,
+                  backgroundColor: B.navy,
+                  alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <Text style={{ color: B.green, fontSize: 17, fontWeight: '900' }}>
+                    {club.name.charAt(0).toUpperCase()}
+                  </Text>
+                </View>
+              )}
               <View>
                 <Text style={{ fontSize: 16, fontWeight: '800', color: B.ink }}>{club.name}</Text>
                 <Text style={{ fontSize: 12, color: B.inkFaint, marginTop: 1 }}>

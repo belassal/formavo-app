@@ -103,6 +103,17 @@ export async function uploadTeamPhoto(teamId: string, localUri: string, filename
 }
 
 /**
+ * Upload a club logo and return the download URL.
+ * Path: clubs/{clubId}/logo.jpg
+ */
+export async function uploadClubLogo(clubId: string, localUri: string): Promise<string> {
+  const ref = storage().ref(`clubs/${clubId}/logo.jpg`);
+  await ref.putFile(localUri);
+  const url: string = await ref.getDownloadURL();
+  return url;
+}
+
+/**
  * Delete a team photo from Firebase Storage by its full storage path.
  */
 export async function deleteTeamPhotoFromStorage(storagePath: string): Promise<void> {
