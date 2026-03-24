@@ -287,23 +287,23 @@ export async function getPlayerCareerStats(params: {
                 if (r.role === 'starter') appearances += 1;
               }
 
-              // Get events for this player
+              // Get all events for this match and filter by player
               const eventsSnap = await db
                 .collection(COL.teams)
                 .doc(teamId)
                 .collection(COL.matches)
                 .doc(matchId)
                 .collection(COL.events)
-                .where('playerId', '==', playerId)
                 .get();
 
               eventsSnap.docs.forEach((ev) => {
                 const e = ev.data() as any;
-                if (e.type === 'goal') goals += 1;
-                if (e.type === 'goal' && e.assistPlayerId) assists += 0; // counted separately
-                if (e.type === 'assist') assists += 1;
-                if (e.type === 'yellow_card') yellowCards += 1;
-                if (e.type === 'red_card') redCards += 1;
+                if (e.type === 'goal' && e.scorerId === playerId) goals += 1;
+                if (e.type === 'goal' && e.assistId === playerId) assists += 1;
+                if (e.type === 'card' && e.playerId === playerId) {
+                  if (e.cardColor === 'yellow') yellowCards += 1;
+                  if (e.cardColor === 'red') redCards += 1;
+                }
               });
             }),
           );

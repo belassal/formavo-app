@@ -206,11 +206,13 @@ export default function PlayerProfileScreen() {
       .finally(() => setLoadingLog(false));
   }, [teamId, playerId]);
 
-  useEffect(() => {
-    fetchPlayerTrainingStats(teamId, playerId)
-      .then(setTrainingStats)
-      .catch(() => setTrainingStats(null));
-  }, [teamId, playerId]);
+  useFocusEffect(
+    useCallback(() => {
+      fetchPlayerTrainingStats(teamId, playerId)
+        .then(setTrainingStats)
+        .catch(() => setTrainingStats({ attended: 0, total: 0 }));
+    }, [teamId, playerId]),
+  );
 
   useEffect(() => {
     if (clubId) {
