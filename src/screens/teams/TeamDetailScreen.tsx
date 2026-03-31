@@ -1,5 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActionSheetIOS,
   ActivityIndicator,
   Alert,
   FlatList,
@@ -145,7 +146,48 @@ export default function TeamDetailScreen() {
 
   // Header buttons: Schedule + Chat + Photos
   useLayoutEffect(() => {
+    const parentTeams = route.params.parentTeams;
+    const showSwitcher = isParent && parentTeams && parentTeams.length > 1;
+
+    const openTeamSwitcher = () => {
+      if (!parentTeams) return;
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          title: 'Switch Team',
+          options: [...parentTeams.map((t) => t.teamName), 'Cancel'],
+          cancelButtonIndex: parentTeams.length,
+        },
+        (idx) => {
+          if (idx === parentTeams.length) return; // Cancel
+          const picked = parentTeams[idx];
+          if (picked.id === teamId) return;
+          navigation.replace('TeamDetail', {
+            teamId: picked.id,
+            teamName: picked.teamName,
+            role: 'parent',
+            parentTeams,
+          });
+        },
+      );
+    };
+
     navigation.setOptions({
+      // Hide back button for parents (they have no Teams list to go back to)
+      headerBackVisible: !isParent,
+      headerLeft: showSwitcher
+        ? () => (
+            <TouchableOpacity
+              onPress={openTeamSwitcher}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 4 }}
+            >
+              <Text style={{ fontSize: 16, fontWeight: '700', color: '#111' }} numberOfLines={1}>
+                {teamName}
+              </Text>
+              <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 1 }}>▾</Text>
+            </TouchableOpacity>
+          )
+        : undefined,
       headerRight: () => (
         <View style={{ flexDirection: 'row', gap: 4 }}>
           <TouchableOpacity
@@ -190,7 +232,7 @@ export default function TeamDetailScreen() {
         </View>
       ),
     });
-  }, [navigation, teamId, teamName, route.params.role]);
+  }, [navigation, teamId, teamName, route.params.role, isParent, route.params.parentTeams]);
 
   // Club state
   const [clubId, setClubId] = useState<string | null>(null);
@@ -1020,7 +1062,7 @@ export default function TeamDetailScreen() {
                       </View>
                     ) : (
                       <TouchableOpacity
-                        onPress={() => navigation.navigate('TrainingDetail', { teamId, trainingId: item.id })}
+                        onPress={() => navigation.navigate('TrainingDetail', { teamId, trainingId: item.id, role: route.params.role })}
                         style={S.row}
                         activeOpacity={0.6}
                       >

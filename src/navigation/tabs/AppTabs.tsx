@@ -1,26 +1,26 @@
 import React from 'react';
 import { Text, View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import MatchesScreen from '../../screens/matches/MatchesScreen';
-import ProfileScreen from '../../screens/profile/ProfileScreen';
+import HomeStack from '../stacks/HomeStack';
 import TeamsStack from '../stacks/TeamsStack';
 import StatsStack from '../stacks/StatsStack';
+import SettingsStack from '../stacks/SettingsStack';
 import { B } from '../../constants/brand';
 
 export type AppTabsParamList = {
+  Home: undefined;
   Teams: undefined;
-  Matches: undefined;
   Stats: undefined;
-  Profile: undefined;
+  Settings: undefined;
 };
 
 const Tab = createBottomTabNavigator<AppTabsParamList>();
 
 const TAB_ICONS: Record<string, string> = {
-  Teams:   '⚽',
-  Matches: '📅',
-  Stats:   '📊',
-  Profile: '👤',
+  Home:     '📋',
+  Teams:    '⚽',
+  Stats:    '📊',
+  Settings: '⚙️',
 };
 
 export default function AppTabs() {
@@ -38,7 +38,7 @@ export default function AppTabs() {
             )}
           </View>
         ),
-        tabBarLabel: ({ focused, color }) => (
+        tabBarLabel: ({ focused }) => (
           <Text style={{
             fontSize: 10,
             fontWeight: focused ? '700' : '500',
@@ -63,10 +63,10 @@ export default function AppTabs() {
         headerTitleStyle: { fontWeight: '700', color: B.ink },
       })}
     >
+      <Tab.Screen name="Home"    component={HomeStack}     options={{ headerShown: false }} />
       <Tab.Screen name="Teams"   component={TeamsStack}    options={{ headerShown: false }} />
-      <Tab.Screen name="Matches" component={MatchesScreen} />
       <Tab.Screen name="Stats"   component={StatsStack}    options={{ headerShown: false }} />
-      <Tab.Screen name="Profile" component={ProfileScreen} />
+      <Tab.Screen name="Settings" component={SettingsStack} options={{ headerShown: false }} />
     </Tab.Navigator>
   );
 }

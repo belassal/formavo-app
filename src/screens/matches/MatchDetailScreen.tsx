@@ -48,6 +48,9 @@ import auth from '@react-native-firebase/auth';
 import DateTimePickerModal, { formatDateISO } from '../../components/DateTimePickerModal';
 import MiniPitchDisplay from '../../components/MiniPitchDisplay';
 import { listenMatchRatings, setPlayerMatchRating, type PlayerRating } from '../../services/ratingService';
+import { openMaps } from '../../utils/openMaps';
+import LocationMapPreview from '../../components/LocationMapPreview';
+import { listenLocations, type SavedLocation } from '../../services/locationService';
 
 
 
@@ -106,6 +109,10 @@ export default function MatchDetailScreen() {
   const [ratingNote, setRatingNote] = useState('');
   const [savingRating, setSavingRating] = useState(false);
 
+  // saved locations
+  const [savedLocations, setSavedLocations] = useState<SavedLocation[]>([]);
+  const [locQuery, setLocQuery] = useState('');
+
   // match doc
   const [match, setMatch] = useState<any | null>(null);
 
@@ -134,7 +141,10 @@ export default function MatchDetailScreen() {
   const [editOpponent, setEditOpponent] = useState('');
   const [editDateISO, setEditDateISO] = useState('');
   const [editLocation, setEditLocation] = useState('');
+  const [editLocationName, setEditLocationName] = useState('');
+  const [editFieldName, setEditFieldName] = useState('');
   const [showEditDatePicker, setShowEditDatePicker] = useState(false);
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
 
   // delete confirm inside edit modal
   const [confirmDeleteText, setConfirmDeleteText] = useState('');
@@ -182,6 +192,12 @@ export default function MatchDetailScreen() {
   const [editCardColor, setEditCardColor] = useState<CardColor>('yellow');
 
   // --- listeners ---
+  useEffect(() => {
+    const uid = auth().currentUser?.uid;
+    if (!uid) return;
+    return listenLocations(uid, setSavedLocations);
+  }, []);
+
   useEffect(() => {
     const unsubMatch = db
       .collection(COL.teams)
@@ -436,6 +452,8 @@ const addSelectedToRoster = async () => {
     setEditOpponent(String(match?.opponent || ''));
     setEditDateISO(String(match?.dateISO || ''));
     setEditLocation(String(match?.location || ''));
+    setEditLocationName('');
+    setEditFieldName(String(match?.fieldName || ''));
     setConfirmDeleteText('');
     setShowEdit(true);
   };
@@ -455,6 +473,7 @@ const addSelectedToRoster = async () => {
         opponent: opp,
         dateISO: dt,
         location: norm(editLocation),
+        fieldName: norm(editFieldName),
       });
       setShowEdit(false);
     } catch (e: any) {
@@ -818,7 +837,7 @@ const addSelectedToRoster = async () => {
 
   // ── Shared styles (same design language as Teams screens) ──────────────
   const SC = {
-    container: { backgroundColor: '#fff', borderRadius: 14, overflow: 'hidden' as const, borderWidth: 1, borderColor: '#e5e7eb' },
+    container: { backgroundColor: '#fff', borderRadius: 14, overflow: 'hidden' as const, borderWidth: 1, borderColor: '#e5e7eb', marginBottom: 12 },
     header: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, paddingHorizontal: 16, paddingVertical: 14 },
     titleRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 },
     title: { fontSize: 17, fontWeight: '700' as const, color: '#111' },
@@ -844,9 +863,9 @@ const addSelectedToRoster = async () => {
               <View style={[SC.header, { paddingBottom: 12 }]}>
                 <View style={{ flex: 1, paddingRight: 36 }}>
                   <Text style={{ fontSize: 18, fontWeight: '800', color: '#111' }}>vs {match?.opponent || 'Opponent'}</Text>
-                  <Text style={{ marginTop: 3, color: '#9ca3af', fontSize: 13 }}>
+                  <Text style={{ color: '#9ca3af', fontSize: 13, marginTop: 3 }}>
                     {match?.dateISO ? formatDateISO(match.dateISO) : ''}
-                    {match?.location ? ` · ${match.location}` : ''}
+                    {!match?.location && match?.fieldName ? ` · ${match.fieldName}` : ''}
                   </Text>
                   <View style={{ flexDirection: 'row', gap: 6, marginTop: 10, flexWrap: 'wrap', alignItems: 'center' }}>
                     {pill(scoreLabel)}
@@ -877,39 +896,14 @@ const addSelectedToRoster = async () => {
                   </TouchableOpacity>
                 )}
               </View>
-            </View>
 
-            {/* ===== Parent RSVP ===== */}
-            {isParent && linkedPlayerId && (
-              <View style={SC.container}>
-                <View style={[SC.header, { paddingBottom: 14 }]}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={SC.title}>Your Availability</Text>
-                    <Text style={{ fontSize: 13, color: '#9ca3af', marginTop: 2 }}>
-                      {myRsvp === 'attending' ? '✅ You confirmed attendance' : myRsvp === 'absent' ? "❌ You can't make it" : 'Let the coach know if you can make it'}
-                    </Text>
-                    {status === 'scheduled' && (
-                      <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
-                        <TouchableOpacity
-                          onPress={() => handleParentRsvp('attending')}
-                          disabled={submittingRsvp}
-                          style={{ paddingVertical: 8, paddingHorizontal: 20, borderRadius: 20, backgroundColor: myRsvp === 'attending' ? '#16a34a' : '#f3f4f6' }}
-                        >
-                          <Text style={{ fontSize: 14, fontWeight: '600', color: myRsvp === 'attending' ? '#fff' : '#374151' }}>✓ Going</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          onPress={() => handleParentRsvp('absent')}
-                          disabled={submittingRsvp}
-                          style={{ paddingVertical: 8, paddingHorizontal: 20, borderRadius: 20, backgroundColor: myRsvp === 'absent' ? '#ef4444' : '#f3f4f6' }}
-                        >
-                          <Text style={{ fontSize: 14, fontWeight: '600', color: myRsvp === 'absent' ? '#fff' : '#374151' }}>✗ Can't make it</Text>
-                        </TouchableOpacity>
-                      </View>
-                    )}
-                  </View>
+              {/* Map preview */}
+              {match?.location ? (
+                <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
+                  <LocationMapPreview address={match.location} fieldName={match.fieldName} />
                 </View>
-              </View>
-            )}
+              ) : null}
+            </View>
 
             {/* ===== Game Stats ===== */}
             <View style={SC.container}>
@@ -1014,6 +1008,38 @@ const addSelectedToRoster = async () => {
                 })
               ))}
             </View>
+
+            {/* ===== Parent RSVP ===== */}
+            {isParent && linkedPlayerId && status !== 'completed' && (
+              <View style={SC.container}>
+                <View style={[SC.header, { paddingBottom: 14 }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={SC.title}>Your Availability</Text>
+                    <Text style={{ fontSize: 13, color: '#9ca3af', marginTop: 2 }}>
+                      {myRsvp === 'attending' ? '✅ You confirmed attendance' : myRsvp === 'absent' ? "❌ You can't make it" : 'Let the coach know if you can make it'}
+                    </Text>
+                    {status === 'scheduled' && (
+                      <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+                        <TouchableOpacity
+                          onPress={() => handleParentRsvp('attending')}
+                          disabled={submittingRsvp}
+                          style={{ paddingVertical: 8, paddingHorizontal: 20, borderRadius: 20, backgroundColor: myRsvp === 'attending' ? '#16a34a' : '#f3f4f6' }}
+                        >
+                          <Text style={{ fontSize: 14, fontWeight: '600', color: myRsvp === 'attending' ? '#fff' : '#374151' }}>✓ Going</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => handleParentRsvp('absent')}
+                          disabled={submittingRsvp}
+                          style={{ paddingVertical: 8, paddingHorizontal: 20, borderRadius: 20, backgroundColor: myRsvp === 'absent' ? '#ef4444' : '#f3f4f6' }}
+                        >
+                          <Text style={{ fontSize: 14, fontWeight: '600', color: myRsvp === 'absent' ? '#fff' : '#374151' }}>✗ Can't make it</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              </View>
+            )}
 
             {/* ===== Availability (RSVP) ===== */}
             <View style={SC.container}>
@@ -1621,8 +1647,24 @@ const addSelectedToRoster = async () => {
                     </Text>
                     <Text style={{ fontSize: 16 }}>📅</Text>
                   </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => { setLocQuery(''); setShowLocationPicker(true); }}
+                    activeOpacity={0.7}
+                    style={{ backgroundColor: '#f3f4f6', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 11, flexDirection: 'row', alignItems: 'center', gap: 8 }}
+                  >
+                    <Text style={{ fontSize: 15, color: editLocationName || editLocation ? '#111' : '#9ca3af', flex: 1 }} numberOfLines={1}>
+                      {editLocationName || editLocation || 'Select a location…'}
+                    </Text>
+                    {(editLocationName || editLocation) ? (
+                      <TouchableOpacity onPress={() => { setEditLocation(''); setEditLocationName(''); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                        <Text style={{ fontSize: 16, color: '#9ca3af' }}>✕</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <Text style={{ fontSize: 14, color: '#9ca3af' }}>›</Text>
+                    )}
+                  </TouchableOpacity>
                   <TextInput
-                    placeholder="Location (optional)" value={editLocation} onChangeText={setEditLocation}
+                    placeholder="Field number (e.g. BMO 1, Field 3)" value={editFieldName} onChangeText={setEditFieldName}
                     style={{ backgroundColor: '#f3f4f6', paddingHorizontal: 12, paddingVertical: 11, borderRadius: 10, fontSize: 15, color: '#111' }}
                     placeholderTextColor="#9ca3af"
                   />
@@ -1660,6 +1702,66 @@ const addSelectedToRoster = async () => {
                 <Text style={{ fontWeight: '700', color: '#fff', fontSize: 15 }}>{savingEdit ? 'Saving…' : 'Save'}</Text>
               </TouchableOpacity>
             </View>
+
+            {/* ── Inline location picker overlay ── */}
+            {showLocationPicker && (
+              <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, zIndex: 10 }}>
+                {/* Header */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 20, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' }}>
+                  <Text style={{ fontSize: 17, fontWeight: '700', color: '#111' }}>Saved Locations</Text>
+                  <TouchableOpacity onPress={() => { setShowLocationPicker(false); setLocQuery(''); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Text style={{ fontSize: 15, color: '#3b82f6', fontWeight: '600' }}>Cancel</Text>
+                  </TouchableOpacity>
+                </View>
+                {/* Search */}
+                <View style={{ paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' }}>
+                  <TextInput
+                    value={locQuery}
+                    onChangeText={setLocQuery}
+                    placeholder="Search locations…"
+                    placeholderTextColor="#9ca3af"
+                    autoFocus
+                    clearButtonMode="while-editing"
+                    style={{ backgroundColor: '#f3f4f6', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, fontSize: 15, color: '#111' }}
+                  />
+                </View>
+                {/* List */}
+                <FlatList
+                  data={locQuery.trim()
+                    ? savedLocations.filter((l) => l.name.toLowerCase().includes(locQuery.toLowerCase()) || l.address.toLowerCase().includes(locQuery.toLowerCase()))
+                    : savedLocations}
+                  keyExtractor={(item) => item.id}
+                  contentContainerStyle={{ padding: 16 }}
+                  ListEmptyComponent={
+                    <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+                      <Text style={{ fontSize: 14, color: '#9ca3af', textAlign: 'center' }}>
+                        {savedLocations.length === 0
+                          ? 'No saved locations yet.\nAdd some from Settings → Locations.'
+                          : 'No matches found.'}
+                      </Text>
+                    </View>
+                  }
+                  ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: '#f3f4f6' }} />}
+                  renderItem={({ item, index }) => {
+                    const list = locQuery.trim()
+                      ? savedLocations.filter((l) => l.name.toLowerCase().includes(locQuery.toLowerCase()) || l.address.toLowerCase().includes(locQuery.toLowerCase()))
+                      : savedLocations;
+                    const isFirst = index === 0;
+                    const isLast = index === list.length - 1;
+                    return (
+                      <TouchableOpacity
+                        onPress={() => { setEditLocation(item.address); setEditLocationName(item.name); setShowLocationPicker(false); setLocQuery(''); }}
+                        activeOpacity={0.7}
+                        style={{ backgroundColor: '#fff', paddingHorizontal: 16, paddingVertical: 14, borderTopLeftRadius: isFirst ? 14 : 0, borderTopRightRadius: isFirst ? 14 : 0, borderBottomLeftRadius: isLast ? 14 : 0, borderBottomRightRadius: isLast ? 14 : 0, borderWidth: 1, borderColor: '#e5e7eb', borderTopWidth: isFirst ? 1 : 0 }}
+                      >
+                        <Text style={{ fontSize: 15, fontWeight: '600', color: '#111' }}>{item.name}</Text>
+                        <Text style={{ fontSize: 13, color: '#6b7280', marginTop: 2 }}>{item.address}</Text>
+                      </TouchableOpacity>
+                    );
+                  }}
+                />
+              </View>
+            )}
           </View>
         </View>
         {showEditDatePicker && (

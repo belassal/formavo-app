@@ -31,12 +31,13 @@ export async function createMatch(params: {
   opponent: string;
   dateISO: string; // "2026-02-20 19:00"
   location?: string;
+  fieldName?: string;    // e.g. "BMO 1", "Field 3"
   format?: string;       // e.g. "7v7" | "9v9" | "11v11"
   formation?: string;    // e.g. "4-3-3"
   halfDuration?: number; // minutes per half, default 45
   seasonId?: string;     // optional: links match to a specific season
 }) {
-  const { teamId, opponent, dateISO, location = '', format = '', formation = '', halfDuration = 45, seasonId } = params;
+  const { teamId, opponent, dateISO, location = '', fieldName = '', format = '', formation = '', halfDuration = 45, seasonId } = params;
 
   if (!opponent.trim()) throw new Error('Opponent is required');
   if (!dateISO.trim()) throw new Error('Date is required');
@@ -48,6 +49,7 @@ export async function createMatch(params: {
     opponentLower: opponent.trim().toLowerCase(),
     dateISO: dateISO.trim(),
     location: location.trim(),
+    fieldName: fieldName.trim(),
     format: format.trim(),
     formation: formation.trim(),
     halfDuration,
@@ -96,6 +98,7 @@ export async function updateMatch(params: {
   opponent?: string;
   dateISO?: string;
   location?: string;
+  fieldName?: string;
 }) {
   const { teamId, matchId } = params;
 
@@ -114,6 +117,9 @@ export async function updateMatch(params: {
   }
   if (params.location != null) {
     patch.location = norm(params.location);
+  }
+  if (params.fieldName != null) {
+    patch.fieldName = norm(params.fieldName);
   }
 
   await db.collection(COL.teams).doc(teamId).collection(COL.matches).doc(matchId).update(patch);

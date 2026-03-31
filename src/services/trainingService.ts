@@ -10,6 +10,7 @@ export type Training = {
   startISO: string;  // 'YYYY-MM-DD HH:mm'
   endISO: string;    // 'YYYY-MM-DD HH:mm'
   location?: string;
+  fieldName?: string;
   notes?: string;
   status: TrainingStatus;
   isDeleted?: boolean;
@@ -47,9 +48,10 @@ export async function createTraining(params: {
   startISO: string;
   endISO: string;
   location?: string;
+  fieldName?: string;
   notes?: string;
 }): Promise<string> {
-  const { teamId, title, startISO, endISO, location, notes } = params;
+  const { teamId, title, startISO, endISO, location, fieldName, notes } = params;
   const ref = db
     .collection(COL.teams)
     .doc(teamId)
@@ -66,6 +68,7 @@ export async function createTraining(params: {
     updatedAt: serverTimestamp(),
   };
   if (location) doc.location = location;
+  if (fieldName) doc.fieldName = fieldName;
   if (notes) doc.notes = notes;
 
   await ref.set(doc);
@@ -79,16 +82,18 @@ export async function updateTraining(params: {
   startISO?: string;
   endISO?: string;
   location?: string;
+  fieldName?: string;
   notes?: string;
   status?: TrainingStatus;
 }): Promise<void> {
-  const { teamId, trainingId, title, startISO, endISO, location, notes, status } = params;
+  const { teamId, trainingId, title, startISO, endISO, location, fieldName, notes, status } = params;
 
   const patch: Record<string, any> = { updatedAt: serverTimestamp() };
   if (title !== undefined) patch.title = title;
   if (startISO !== undefined) patch.startISO = startISO;
   if (endISO !== undefined) patch.endISO = endISO;
   if (location !== undefined) patch.location = location || '';
+  if (fieldName !== undefined) patch.fieldName = fieldName || '';
   if (notes !== undefined) patch.notes = notes || '';
   if (status !== undefined) patch.status = status;
 

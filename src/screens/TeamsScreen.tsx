@@ -31,9 +31,6 @@ type TeamRow = {
   role?: string;
 };
 
-// Try to load the logo — falls back gracefully if not saved yet
-let logoSrc: any = null;
-try { logoSrc = require('../assets/logo.png'); } catch { logoSrc = null; }
 
 const S = {
   sectionContainer: {
@@ -140,6 +137,21 @@ export default function TeamsScreen() {
     });
     return () => unsub();
   }, [uid]);
+
+  // Auto-navigate parent-only users straight into their team (skip the Teams list)
+  useEffect(() => {
+    if (loading) return;
+    const isParentOnly = teams.length > 0 && teams.every((t) => t.role === 'parent');
+    if (!isParentOnly) return;
+    const parentTeams = teams.map((t) => ({ id: t.id, teamName: t.teamName || 'Team' }));
+    const first = teams[0];
+    navigation.replace('TeamDetail', {
+      teamId: first.id,
+      teamName: first.teamName,
+      role: first.role,
+      parentTeams: parentTeams.length > 1 ? parentTeams : undefined,
+    });
+  }, [loading, teams]);
 
   // Listen to the user's club
   useEffect(() => {
@@ -271,21 +283,6 @@ export default function TeamsScreen() {
   if (teams.length === 0) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: '#f8fafc' }}>
-        {/* Compact wordmark header */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10,
-          paddingHorizontal: 20, paddingTop: 18, paddingBottom: 16,
-          backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: B.border }}>
-          {logoSrc ? (
-            <Image source={logoSrc} style={{ width: 36, height: 36, resizeMode: 'contain' }} />
-          ) : (
-            <View style={{ width: 36, height: 36, borderRadius: 9, backgroundColor: B.navy,
-              alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ color: B.green, fontSize: 15, fontWeight: '900' }}>F</Text>
-            </View>
-          )}
-          <Text style={{ fontSize: 20, fontWeight: '900', color: B.navy, letterSpacing: 1 }}>FORMAVO</Text>
-        </View>
-
         <View style={{ flex: 1, padding: 24, justifyContent: 'center', gap: 14 }}>
           <View style={{ alignItems: 'center', marginBottom: 8 }}>
             <Text style={{ fontSize: 24, fontWeight: '800', color: B.ink }}>Welcome to Formavo</Text>
@@ -324,35 +321,6 @@ export default function TeamsScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#f8fafc' }}>
       <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
-
-        {/* ===== COMPACT WORDMARK HEADER ===== */}
-        <View style={{
-          flexDirection: 'row', alignItems: 'center', gap: 10,
-          paddingHorizontal: 20, paddingTop: 18, paddingBottom: 16,
-          backgroundColor: '#fff',
-          borderBottomWidth: 1, borderBottomColor: B.border,
-        }}>
-          {logoSrc ? (
-            <Image source={logoSrc} style={{ width: 36, height: 36, resizeMode: 'contain' }} />
-          ) : (
-            <View style={{
-              width: 36, height: 36, borderRadius: 9,
-              backgroundColor: B.navy,
-              alignItems: 'center', justifyContent: 'center',
-            }}>
-              <Text style={{ color: B.green, fontSize: 15, fontWeight: '900' }}>F</Text>
-            </View>
-          )}
-          <View>
-            <Text style={{ fontSize: 20, fontWeight: '900', color: B.navy, letterSpacing: 1 }}>
-              FORMAVO
-            </Text>
-            <Text style={{ fontSize: 11, color: B.inkFaint, fontWeight: '500', letterSpacing: 0.5, marginTop: 1 }}>
-              Team Management
-            </Text>
-          </View>
-        </View>
-
         <View style={{ paddingHorizontal: 16, paddingTop: 20, gap: 14 }}>
 
         {/* Club Section — only when user has multiple teams OR has staff beyond themselves */}

@@ -1,0 +1,107 @@
+import React from 'react';
+import {
+  Alert,
+  SafeAreaView,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import auth from '@react-native-firebase/auth';
+import messaging from '@react-native-firebase/messaging';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { SettingsStackParamList } from '../../navigation/stacks/SettingsStack';
+import { removeFCMToken } from '../../services/notificationService';
+
+type Nav = NativeStackNavigationProp<SettingsStackParamList>;
+
+function Row({
+  label,
+  icon,
+  onPress,
+  destructive,
+}: {
+  label: string;
+  icon: string;
+  onPress: () => void;
+  destructive?: boolean;
+}) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.7}
+      style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, gap: 12 }}
+    >
+      <View style={{
+        width: 34, height: 34, borderRadius: 8,
+        backgroundColor: destructive ? '#fee2e2' : '#f3f4f6',
+        alignItems: 'center', justifyContent: 'center',
+      }}>
+        <Text style={{ fontSize: 18 }}>{icon}</Text>
+      </View>
+      <Text style={{ flex: 1, fontSize: 16, color: destructive ? '#ef4444' : '#111' }}>{label}</Text>
+      {!destructive && <Text style={{ fontSize: 18, color: '#c7c7cc' }}>›</Text>}
+    </TouchableOpacity>
+  );
+}
+
+function Divider() {
+  return <View style={{ height: 1, backgroundColor: '#f3f4f6', marginLeft: 62 }} />;
+}
+
+export default function SettingsScreen() {
+  const navigation = useNavigation<Nav>();
+  const uid = auth().currentUser?.uid ?? null;
+
+  const handleSignOut = () => {
+    Alert.alert('Sign out', 'Are you sure you want to sign out?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Sign Out',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            const token = await messaging().getToken().catch(() => null);
+            if (uid && token) await removeFCMToken(uid, token).catch(console.warn);
+          } finally {
+            auth().signOut();
+          }
+        },
+      },
+    ]);
+  };
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#f2f2f7' }}>
+      <ScrollView contentContainerStyle={{ padding: 16, gap: 20 }}>
+
+        {/* Account */}
+        <View>
+          <Text style={{ fontSize: 12, fontWeight: '700', color: '#9ca3af', marginBottom: 8, marginLeft: 4, letterSpacing: 0.5 }}>
+            ACCOUNT
+          </Text>
+          <View style={{ backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#e5e7eb', overflow: 'hidden' }}>
+            <Row label="Profile" icon="👤" onPress={() => navigation.navigate('Profile')} />
+          </View>
+        </View>
+
+        {/* App */}
+        <View>
+          <Text style={{ fontSize: 12, fontWeight: '700', color: '#9ca3af', marginBottom: 8, marginLeft: 4, letterSpacing: 0.5 }}>
+            APP
+          </Text>
+          <View style={{ backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#e5e7eb', overflow: 'hidden' }}>
+            <Row label="Locations" icon="📍" onPress={() => navigation.navigate('Locations')} />
+          </View>
+        </View>
+
+        {/* Sign Out */}
+        <View style={{ backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#e5e7eb', overflow: 'hidden' }}>
+          <Row label="Sign Out" icon="🚪" onPress={handleSignOut} destructive />
+        </View>
+
+      </ScrollView>
+    </SafeAreaView>
+  );
+}

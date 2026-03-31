@@ -18,7 +18,7 @@ import TeamPhotosScreen from '../../screens/teams/TeamPhotosScreen';
 
 export type TeamsStackParamList = {
   TeamsHome: undefined;
-  TeamDetail: { teamId: string; teamName?: string; role?: string };
+  TeamDetail: { teamId: string; teamName?: string; role?: string; parentTeams?: { id: string; teamName: string }[] };
   MatchDetail: { teamId: string; matchId: string; title?: string; role?: string };
   GameDayPitch: { teamId: string; matchId: string; role?: string };
   TeamStats: { teamId: string; teamName?: string };
@@ -36,7 +36,7 @@ export type TeamsStackParamList = {
   StaffProfile: { clubId: string; memberId: string; memberName?: string; viewerRole?: string };
   ClubPlayers: { clubId: string; clubName?: string };
   PlayerEdit: { clubId: string; playerId: string; playerName?: string };
-  TrainingDetail: { teamId: string; trainingId?: string };
+  TrainingDetail: { teamId: string; trainingId?: string; role?: string };
   TeamChat: { teamId: string; teamName?: string; role?: string };
   TeamSchedule: { teamId: string; teamName?: string; role?: string };
   TeamPhotos: { teamId: string; teamName?: string; role?: string };
@@ -101,7 +101,11 @@ export default function TeamsStack() {
       <Stack.Screen
         name="TrainingDetail"
         component={TrainingDetailScreen}
-        options={({ route }) => ({ title: route.params.trainingId ? 'Edit Session' : 'New Session' })}
+        options={({ route }) => ({
+          title: route.params.role === 'parent'
+            ? 'Training'
+            : route.params.trainingId ? 'Edit Session' : 'New Session',
+        })}
       />
       <Stack.Screen
         name="TeamChat"

@@ -17,6 +17,7 @@ import {
   updateTraining,
   softDeleteTraining,
   markTrainingAttended,
+  setTrainingAttendance,
   type Training,
   type TrainingStatus,
 } from '../../services/trainingService';
@@ -24,6 +25,9 @@ import { listenTeamMembers } from '../../services/teamService';
 import { listenTeamMemberships } from '../../services/playerService';
 import DateTimePickerModal, { formatDateISO } from '../../components/DateTimePickerModal';
 import auth from '@react-native-firebase/auth';
+import { openMaps } from '../../utils/openMaps';
+import LocationMapPreview from '../../components/LocationMapPreview';
+import LocationPickerModal from '../../components/LocationPickerModal';
 import { db } from '../../services/firebase';
 import { COL } from '../../models/collections';
 
@@ -80,11 +84,14 @@ export default function TrainingDetailScreen() {
   const [startISO, setStartISO] = useState(defaultStart);
   const [endISO, setEndISO] = useState(() => defaultEnd(defaultStart()));
   const [location, setLocation] = useState('');
+  const [locationName, setLocationName] = useState('');
+  const [fieldName, setFieldName] = useState('');
   const [notes, setNotes] = useState('');
   const [status, setStatus] = useState<TrainingStatus>('scheduled');
 
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
 
   const [confirmedIds, setConfirmedIds] = useState<string[]>([]);
   const [declinedIds, setDeclinedIds] = useState<string[]>([]);
@@ -93,7 +100,8 @@ export default function TrainingDetailScreen() {
   // Full player roster for attendance breakdown
   const [roster, setRoster] = useState<{ id: string; playerName: string }[]>([]);
   // Parent member docs — used to resolve player names for confirmed/declined IDs
-  const [parentMembers, setParentMembers] = useState<{ linkedPlayerId: string; linkedPlayerName: string }[]>([]);
+  const [parentMembers, setParentMembers] = useState<{ id: string; linkedPlayerId: string; linkedPlayerName: string }[]>([]);
+  const [submittingRsvp, setSubmittingRsvp] = useState(false);
 
   useEffect(() => {
     if (!trainingId) return;
@@ -108,6 +116,8 @@ export default function TrainingDetailScreen() {
         if (data.startISO) setStartISO(data.startISO);
         if (data.endISO) setEndISO(data.endISO);
         setLocation(data.location ?? '');
+        setLocationName('');
+        setFieldName(data.fieldName ?? '');
         setNotes(data.notes ?? '');
         setStatus(data.status ?? 'scheduled');
         setConfirmedIds(data.confirmedPlayerIds ?? []);
@@ -128,13 +138,13 @@ export default function TrainingDetailScreen() {
       setParentMembers(
         members
           .filter((m) => m.role === 'parent' && m.status === 'active' && m.linkedPlayerId)
-          .map((m) => ({ linkedPlayerId: m.linkedPlayerId, linkedPlayerName: m.linkedPlayerName || 'Unknown Player' }))
+          .map((m) => ({ id: m.id, linkedPlayerId: m.linkedPlayerId, linkedPlayerName: m.linkedPlayerName || 'Unknown Player' }))
       );
     });
     return () => { unsubRoster(); unsubMembers(); };
   }, [teamId, isNew]);
 
-  const isCoach = !!(auth().currentUser);
+  const isParent = route.params.role === 'parent';
 
   const toggleAttendance = async (playerId: string) => {
     if (!trainingId) return;
@@ -163,6 +173,7 @@ export default function TrainingDetailScreen() {
           startISO,
           endISO,
           location: location.trim() || undefined,
+          fieldName: fieldName.trim() || undefined,
           notes: notes.trim() || undefined,
         });
       } else {
@@ -173,6 +184,7 @@ export default function TrainingDetailScreen() {
           startISO,
           endISO,
           location: location.trim(),
+          fieldName: fieldName.trim(),
           notes: notes.trim(),
           status,
         });
@@ -215,6 +227,195 @@ export default function TrainingDetailScreen() {
     overflow: 'hidden' as const,
   };
 
+  // ── Read-only view for parents ──
+  if (isParent && !isNew) {
+    const statusColors: Record<string, string> = {
+      scheduled: '#9ca3af',
+      completed: '#374151',
+      cancelled: '#ef4444',
+      live: '#16a34a',
+    };
+    return (
+      <ScrollView style={{ flex: 1, backgroundColor: '#f2f2f7' }} contentContainerStyle={{ padding: 16, gap: 16 }}>
+        {/* Session info card */}
+        <View style={{ backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#e5e7eb', overflow: 'hidden' }}>
+          <View style={{ padding: 16, gap: 6 }}>
+            <Text style={{ fontSize: 20, fontWeight: '800', color: '#111' }}>{title}</Text>
+            <Text style={{ fontSize: 14, color: '#6b7280' }}>
+              {(() => {
+                if (!startISO) return '';
+                const startFormatted = formatDateISO(startISO);
+                if (!endISO || endISO === startISO) return startFormatted;
+                // If same date, only show end time (after ' · ')
+                const startDate = startISO.split(' ')[0];
+                const endDate = endISO.split(' ')[0];
+                const endFormatted = formatDateISO(endISO);
+                const endTimePart = endFormatted.split(' · ')[1] ?? endFormatted;
+                return startDate === endDate
+                  ? `${startFormatted} – ${endTimePart}`
+                  : `${startFormatted} – ${endFormatted}`;
+              })()}
+            </Text>
+            {status && status !== 'scheduled' && (
+              <View style={{ alignSelf: 'flex-start', marginTop: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, backgroundColor: '#f3f4f6' }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: statusColors[status] ?? '#9ca3af', textTransform: 'uppercase' }}>
+                  {status}
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {/* Location */}
+          {location ? (
+            <View style={{ borderTopWidth: 1, borderTopColor: '#f3f4f6', padding: 16 }}>
+              <LocationMapPreview address={location} fieldName={fieldName} />
+            </View>
+          ) : fieldName ? (
+            <View style={{ borderTopWidth: 1, borderTopColor: '#f3f4f6', padding: 16 }}>
+              <Text style={{ fontSize: 14, color: '#374151', fontWeight: '500' }}>{fieldName}</Text>
+            </View>
+          ) : null}
+
+          {/* Notes row */}
+          {notes ? (
+            <View style={{ borderTopWidth: 1, borderTopColor: '#f3f4f6', padding: 16 }}>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: '#9ca3af', marginBottom: 6, letterSpacing: 0.4 }}>NOTES</Text>
+              <Text style={{ fontSize: 14, color: '#374151', lineHeight: 20 }}>{notes}</Text>
+            </View>
+          ) : null}
+        </View>
+
+        {/* RSVP for parent's child */}
+        {(() => {
+          const uid = auth().currentUser?.uid;
+          const me = parentMembers.find((m) => m.id === uid);
+          if (!me) return null;
+          const { linkedPlayerId: pid, linkedPlayerName: playerName } = me;
+          const isGoing = confirmedIds.includes(pid);
+          const isCant = declinedIds.includes(pid);
+
+          const handleRsvp = async (status: 'confirmed' | 'declined') => {
+            if (!trainingId || submittingRsvp) return;
+            setSubmittingRsvp(true);
+            try {
+              await setTrainingAttendance({ teamId, trainingId, playerId: pid, status });
+            } catch (e: any) {
+              Alert.alert('Error', e?.message ?? 'Could not save response.');
+            } finally {
+              setSubmittingRsvp(false);
+            }
+          };
+
+          return (
+            <View style={{ backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#e5e7eb', padding: 16, gap: 12 }}>
+              <View>
+                <Text style={{ fontSize: 12, color: '#9ca3af', fontWeight: '500' }}>Answering on behalf of</Text>
+                <Text style={{ fontSize: 17, fontWeight: '800', color: '#111', marginTop: 2 }}>{playerName}</Text>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <TouchableOpacity
+                  onPress={() => handleRsvp('confirmed')}
+                  disabled={submittingRsvp}
+                  style={{
+                    flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: 'center',
+                    backgroundColor: isGoing ? '#16a34a' : '#f3f4f6',
+                    borderWidth: isGoing ? 0 : 1, borderColor: '#e5e7eb',
+                  }}
+                >
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: isGoing ? '#fff' : '#374151' }}>
+                    {submittingRsvp ? '…' : '✓  Attending'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => handleRsvp('declined')}
+                  disabled={submittingRsvp}
+                  style={{
+                    flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: 'center',
+                    backgroundColor: isCant ? '#ef4444' : '#f3f4f6',
+                    borderWidth: isCant ? 0 : 1, borderColor: '#e5e7eb',
+                  }}
+                >
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: isCant ? '#fff' : '#374151' }}>
+                    {submittingRsvp ? '…' : "✕  Can't Make It"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          );
+        })()}
+
+        {/* Attendance list */}
+        {(() => {
+          const resolveName = (id: string): string => {
+            const fromRoster = roster.find((r) => r.id === id);
+            if (fromRoster) return fromRoster.playerName;
+            const fromParent = parentMembers.find((m) => m.linkedPlayerId === id);
+            return fromParent?.linkedPlayerName ?? 'Unknown Player';
+          };
+          const goingNames = confirmedIds.map(resolveName);
+          const cantNames = declinedIds.map(resolveName);
+          const noResponsePlayers = roster.filter(
+            (r) => !confirmedIds.includes(r.id) && !declinedIds.includes(r.id)
+          );
+          if (confirmedIds.length === 0 && declinedIds.length === 0 && noResponsePlayers.length === 0) return null;
+          return (
+            <View style={{ backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#e5e7eb', overflow: 'hidden' }}>
+
+              {/* Going */}
+              <View style={{ padding: 16 }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#16a34a', letterSpacing: 0.4, marginBottom: 8 }}>
+                  GOING ({goingNames.length})
+                </Text>
+                {goingNames.length === 0 ? (
+                  <Text style={{ fontSize: 14, color: '#9ca3af' }}>No responses yet</Text>
+                ) : (
+                  goingNames.map((name, i) => (
+                    <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 3 }}>
+                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#16a34a' }} />
+                      <Text style={{ fontSize: 14, color: '#111' }}>{name}</Text>
+                    </View>
+                  ))
+                )}
+              </View>
+
+              {/* Can't make it */}
+              {cantNames.length > 0 && (
+                <View style={{ borderTopWidth: 1, borderTopColor: '#f3f4f6', padding: 16 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#ef4444', letterSpacing: 0.4, marginBottom: 8 }}>
+                    CAN'T MAKE IT ({cantNames.length})
+                  </Text>
+                  {cantNames.map((name, i) => (
+                    <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 3 }}>
+                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#ef4444' }} />
+                      <Text style={{ fontSize: 14, color: '#111' }}>{name}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {/* No response */}
+              {noResponsePlayers.length > 0 && (
+                <View style={{ borderTopWidth: 1, borderTopColor: '#f3f4f6', padding: 16 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#9ca3af', letterSpacing: 0.4, marginBottom: 8 }}>
+                    NO RESPONSE ({noResponsePlayers.length})
+                  </Text>
+                  {noResponsePlayers.map((p, i) => (
+                    <View key={p.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 3 }}>
+                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#d1d5db' }} />
+                      <Text style={{ fontSize: 14, color: '#6b7280' }}>{p.playerName}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+          );
+        })()}
+
+        <View style={{ height: 32 }} />
+      </ScrollView>
+    );
+  }
+
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView style={{ flex: 1, backgroundColor: '#f2f2f7' }} contentContainerStyle={{ padding: 16, gap: 20 }}>
@@ -238,12 +439,29 @@ export default function TrainingDetailScreen() {
             </View>
             <TimeRow label="Start" value={startISO} onPress={() => setShowStartPicker(true)} />
             <TimeRow label="End" value={endISO} onPress={() => setShowEndPicker(true)} />
-            <View style={{ borderTopWidth: 1, borderTopColor: '#f3f4f6', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, gap: 12 }}>
+            <TouchableOpacity
+              onPress={() => setShowLocationPicker(true)}
+              activeOpacity={0.7}
+              style={{ borderTopWidth: 1, borderTopColor: '#f3f4f6', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, gap: 12 }}
+            >
               <Text style={{ width: 100, fontSize: 14, fontWeight: '500', color: '#6b7280' }}>Location</Text>
+              <Text style={{ flex: 1, fontSize: 15, color: locationName || location ? '#111' : '#d1d5db' }} numberOfLines={1}>
+                {locationName || location || 'Select a location…'}
+              </Text>
+              {locationName || location ? (
+                <TouchableOpacity onPress={() => { setLocation(''); setLocationName(''); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Text style={{ fontSize: 16, color: '#9ca3af' }}>✕</Text>
+                </TouchableOpacity>
+              ) : (
+                <Text style={{ fontSize: 18, color: '#d1d5db' }}>›</Text>
+              )}
+            </TouchableOpacity>
+            <View style={{ borderTopWidth: 1, borderTopColor: '#f3f4f6', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, gap: 12 }}>
+              <Text style={{ width: 100, fontSize: 14, fontWeight: '500', color: '#6b7280' }}>Field</Text>
               <TextInput
-                value={location}
-                onChangeText={setLocation}
-                placeholder="Field, gym, etc."
+                value={fieldName}
+                onChangeText={setFieldName}
+                placeholder="e.g. BMO 1, Field 3"
                 placeholderTextColor="#d1d5db"
                 style={{ flex: 1, fontSize: 15, color: '#111' }}
               />
@@ -449,6 +667,11 @@ export default function TrainingDetailScreen() {
         value={endISO}
         onConfirm={(iso) => { setEndISO(iso); setShowEndPicker(false); }}
         onClose={() => setShowEndPicker(false)}
+      />
+      <LocationPickerModal
+        visible={showLocationPicker}
+        onClose={() => setShowLocationPicker(false)}
+        onSelect={(loc) => { setLocation(loc.address); setLocationName(loc.name); setShowLocationPicker(false); }}
       />
     </KeyboardAvoidingView>
   );
