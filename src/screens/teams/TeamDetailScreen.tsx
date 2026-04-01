@@ -769,7 +769,7 @@ export default function TeamDetailScreen() {
             onPress={() => setMatchesOpen((v) => !v)}
             activeOpacity={0.7}
           >
-            <View style={S.sectionTitleRow}>
+            <View style={[S.sectionTitleRow, { flex: 1, flexShrink: 1 }]}>
               <Text style={S.sectionTitle}>Matches</Text>
               {matches.length > 0 && (
                 <Text style={S.sectionCount}>{matches.length} matches</Text>
@@ -799,7 +799,7 @@ export default function TeamDetailScreen() {
                 ) : null;
               })()}
             </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 0 }}>
               {!isParent && matches.some((m: any) => m.status === 'completed') && (
                 <TouchableOpacity
                   onPress={(e) => { e.stopPropagation(); navigation.navigate('OpponentHistory', { teamId, teamName: route.params.teamName }); }}
