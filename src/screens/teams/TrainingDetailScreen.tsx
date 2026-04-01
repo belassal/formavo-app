@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
+  ActionSheetIOS,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -14,6 +15,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { TeamsStackParamList } from '../../navigation/stacks/TeamsStack';
 import {
   createTraining,
+  createRecurringTrainings,
   updateTraining,
   softDeleteTraining,
   markTrainingAttended,
@@ -92,6 +94,9 @@ export default function TrainingDetailScreen() {
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
+  const [repeatType, setRepeatType] = useState<'none' | 'weekly' | 'biweekly'>('none');
+  const [repeatUntil, setRepeatUntil] = useState('');
+  const [showRepeatUntilPicker, setShowRepeatUntilPicker] = useState(false);
 
   const [confirmedIds, setConfirmedIds] = useState<string[]>([]);
   const [declinedIds, setDeclinedIds] = useState<string[]>([]);
@@ -167,15 +172,29 @@ export default function TrainingDetailScreen() {
     try {
       setSaving(true);
       if (isNew) {
-        await createTraining({
-          teamId,
-          title: title.trim(),
-          startISO,
-          endISO,
-          location: location.trim() || undefined,
-          fieldName: fieldName.trim() || undefined,
-          notes: notes.trim() || undefined,
-        });
+        if (repeatType !== 'none' && repeatUntil) {
+          await createRecurringTrainings({
+            teamId,
+            title: title.trim(),
+            startISO,
+            endISO,
+            location: location.trim() || undefined,
+            fieldName: fieldName.trim() || undefined,
+            notes: notes.trim() || undefined,
+            repeatType,
+            repeatUntil,
+          });
+        } else {
+          await createTraining({
+            teamId,
+            title: title.trim(),
+            startISO,
+            endISO,
+            location: location.trim() || undefined,
+            fieldName: fieldName.trim() || undefined,
+            notes: notes.trim() || undefined,
+          });
+        }
       } else {
         await updateTraining({
           teamId,
@@ -195,6 +214,17 @@ export default function TrainingDetailScreen() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const openRepeatPicker = () => {
+    ActionSheetIOS.showActionSheetWithOptions(
+      { options: ['Cancel', 'Does not repeat', 'Weekly', 'Every 2 weeks'], cancelButtonIndex: 0 },
+      (idx) => {
+        if (idx === 1) setRepeatType('none');
+        else if (idx === 2) setRepeatType('weekly');
+        else if (idx === 3) setRepeatType('biweekly');
+      },
+    );
   };
 
   const handleDelete = () => {
@@ -466,6 +496,36 @@ export default function TrainingDetailScreen() {
                 style={{ flex: 1, fontSize: 15, color: '#111' }}
               />
             </View>
+            {isNew && (
+              <>
+                <TouchableOpacity
+                  onPress={openRepeatPicker}
+                  style={{ borderTopWidth: 1, borderTopColor: '#f3f4f6', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, gap: 12 }}
+                >
+                  <Text style={{ width: 100, fontSize: 14, fontWeight: '500', color: '#6b7280' }}>Repeat</Text>
+                  <Text style={{ flex: 1, fontSize: 15, color: '#111' }}>
+                    {repeatType === 'none' ? 'Does not repeat' : repeatType === 'weekly' ? 'Weekly' : 'Every 2 weeks'}
+                  </Text>
+                  <Text style={{ fontSize: 18, color: '#d1d5db' }}>›</Text>
+                </TouchableOpacity>
+                {repeatType !== 'none' && (
+                  <TouchableOpacity
+                    onPress={() => setShowRepeatUntilPicker(true)}
+                    style={{ borderTopWidth: 1, borderTopColor: '#f3f4f6', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, gap: 12 }}
+                  >
+                    <Text style={{ width: 100, fontSize: 14, fontWeight: '500', color: '#6b7280' }}>Repeat until</Text>
+                    <Text style={{ flex: 1, fontSize: 15, color: repeatUntil ? '#111' : '#d1d5db' }}>
+                      {repeatUntil ? (() => {
+                        const [y, m, d] = repeatUntil.split('-');
+                        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                        return `${months[parseInt(m,10)-1]} ${parseInt(d,10)}, ${y}`;
+                      })() : 'Select end date'}
+                    </Text>
+                    <Text style={{ fontSize: 18, color: '#d1d5db' }}>›</Text>
+                  </TouchableOpacity>
+                )}
+              </>
+            )}
           </View>
         </View>
 
@@ -667,6 +727,12 @@ export default function TrainingDetailScreen() {
         value={endISO}
         onConfirm={(iso) => { setEndISO(iso); setShowEndPicker(false); }}
         onClose={() => setShowEndPicker(false)}
+      />
+      <DateTimePickerModal
+        visible={showRepeatUntilPicker}
+        value={repeatUntil ? `${repeatUntil} 00:00` : startISO}
+        onConfirm={(iso) => { setRepeatUntil(iso.split(' ')[0]); setShowRepeatUntilPicker(false); }}
+        onClose={() => setShowRepeatUntilPicker(false)}
       />
       <LocationPickerModal
         visible={showLocationPicker}

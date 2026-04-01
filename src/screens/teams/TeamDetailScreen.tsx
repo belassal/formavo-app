@@ -800,6 +800,15 @@ export default function TeamDetailScreen() {
               })()}
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              {!isParent && matches.some((m: any) => m.status === 'completed') && (
+                <TouchableOpacity
+                  onPress={(e) => { e.stopPropagation(); navigation.navigate('OpponentHistory', { teamId, teamName: route.params.teamName }); }}
+                  style={S.addBtn}
+                  hitSlop={ICON_HITSLOP}
+                >
+                  <Text style={S.addBtnText}>History</Text>
+                </TouchableOpacity>
+              )}
               {!isParent && (
                 <TouchableOpacity
                   onPress={(e) => { e.stopPropagation(); openCreateMatch(); }}

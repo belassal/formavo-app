@@ -19,6 +19,7 @@ export type Training = {
   attendedPlayerIds?: string[];  // actual check-in by coach
   createdAt?: any;
   updatedAt?: any;
+  recurrenceId?: string;
 };
 
 // teams/{teamId}/trainings
@@ -73,6 +74,58 @@ export async function createTraining(params: {
 
   await ref.set(doc);
   return ref.id;
+}
+
+function advanceDateByDays(iso: string, days: number): string {
+  // iso format: 'YYYY-MM-DD HH:mm'
+  const [datePart, timePart] = iso.split(' ');
+  const d = new Date(datePart + 'T00:00:00');
+  d.setDate(d.getDate() + days);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day} ${timePart}`;
+}
+
+export async function createRecurringTrainings(params: {
+  teamId: string;
+  title: string;
+  startISO: string;
+  endISO: string;
+  location?: string;
+  fieldName?: string;
+  notes?: string;
+  repeatType: 'weekly' | 'biweekly';
+  repeatUntil: string; // 'YYYY-MM-DD'
+}): Promise<void> {
+  const { teamId, title, startISO, endISO, location, fieldName, notes, repeatType, repeatUntil } = params;
+  const interval = repeatType === 'weekly' ? 7 : 14;
+  const recurrenceId = Date.now().toString();
+
+  const base: Record<string, any> = {
+    title,
+    status: 'scheduled' as TrainingStatus,
+    isDeleted: false,
+    recurrenceId,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
+  if (location) base.location = location;
+  if (fieldName) base.fieldName = fieldName;
+  if (notes) base.notes = notes;
+
+  const batch = db.batch();
+  let curStart = startISO;
+  let curEnd = endISO;
+
+  while (curStart.split(' ')[0] <= repeatUntil) {
+    const ref = db.collection(COL.teams).doc(teamId).collection(COL.trainings).doc();
+    batch.set(ref, { ...base, startISO: curStart, endISO: curEnd });
+    curStart = advanceDateByDays(curStart, interval);
+    curEnd = advanceDateByDays(curEnd, interval);
+  }
+
+  await batch.commit();
 }
 
 export async function updateTraining(params: {
@@ -187,6 +240,35 @@ export async function fetchPlayerTrainingStats(
   );
 
   return { attended, total };
+}
+
+export type TrainingSessionRecord = {
+  training: Training;
+  status: 'attended' | 'confirmed' | 'declined' | 'no_response';
+};
+
+export async function fetchPlayerTrainingHistory(
+  teamId: string,
+  playerId: string,
+): Promise<TrainingSessionRecord[]> {
+  const snap = await db
+    .collection(COL.teams)
+    .doc(teamId)
+    .collection(COL.trainings)
+    .orderBy('startISO', 'desc')
+    .get();
+
+  return snap.docs
+    .map((d) => ({ id: d.id, ...(d.data() as any) } as Training))
+    .filter((t) => !t.isDeleted)
+    .map((t) => {
+      let status: TrainingSessionRecord['status'];
+      if (t.attendedPlayerIds?.includes(playerId)) status = 'attended';
+      else if (t.confirmedPlayerIds?.includes(playerId)) status = 'confirmed';
+      else if (t.declinedPlayerIds?.includes(playerId)) status = 'declined';
+      else status = 'no_response';
+      return { training: t, status };
+    });
 }
 
 export async function setTrainingAttendance(params: {

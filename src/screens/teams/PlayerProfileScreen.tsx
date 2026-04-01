@@ -336,12 +336,15 @@ export default function PlayerProfileScreen() {
                   <StatBox value={displayStats?.yellowCards ?? 0} label="Yellow Cards" color="#ca8a04" bg="#fefce8" />
                   <StatBox value={displayStats?.redCards ?? 0} label="Red Cards" color="#dc2626" bg="#fef2f2" />
                 </View>
-                <View style={{
-                  backgroundColor: '#fff', borderRadius: 14,
-                  paddingVertical: 16, paddingHorizontal: 20,
-                  flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-                  borderWidth: 1, borderColor: '#e5e7eb',
-                }}>
+                <TouchableOpacity
+                  onPress={() => navigation.navigate('PlayerAttendance', { teamId, playerId, playerName })}
+                  style={{
+                    backgroundColor: '#fff', borderRadius: 14,
+                    paddingVertical: 16, paddingHorizontal: 20,
+                    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                    borderWidth: 1, borderColor: '#e5e7eb',
+                  }}
+                >
                   <Text style={{ fontSize: 14, fontWeight: '700', color: '#374151' }}>Training Attendance</Text>
                   <View style={{ alignItems: 'flex-end' }}>
                     <Text style={{ fontSize: 24, fontWeight: '800', color: '#111' }}>
@@ -349,11 +352,11 @@ export default function PlayerProfileScreen() {
                     </Text>
                     {trainingStats.total > 0 && (
                       <Text style={{ fontSize: 12, fontWeight: '600', color: '#9ca3af' }}>
-                        {Math.round((trainingStats.attended / trainingStats.total) * 100)}%
+                        {Math.round((trainingStats.attended / trainingStats.total) * 100)}% · View history ›
                       </Text>
                     )}
                   </View>
-                </View>
+                </TouchableOpacity>
               </View>
             </View>
 

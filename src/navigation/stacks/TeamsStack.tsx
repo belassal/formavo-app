@@ -15,6 +15,8 @@ import TrainingDetailScreen from '../../screens/teams/TrainingDetailScreen';
 import TeamChatScreen from '../../screens/teams/TeamChatScreen';
 import TeamScheduleScreen from '../../screens/teams/TeamScheduleScreen';
 import TeamPhotosScreen from '../../screens/teams/TeamPhotosScreen';
+import PlayerAttendanceScreen from '../../screens/teams/PlayerAttendanceScreen';
+import OpponentHistoryScreen from '../../screens/teams/OpponentHistoryScreen';
 
 export type TeamsStackParamList = {
   TeamsHome: undefined;
@@ -40,6 +42,8 @@ export type TeamsStackParamList = {
   TeamChat: { teamId: string; teamName?: string; role?: string };
   TeamSchedule: { teamId: string; teamName?: string; role?: string };
   TeamPhotos: { teamId: string; teamName?: string; role?: string };
+  PlayerAttendance: { teamId: string; playerId: string; playerName: string };
+  OpponentHistory: { teamId: string; teamName?: string };
 };
 
 const Stack = createNativeStackNavigator<TeamsStackParamList>();
@@ -121,6 +125,16 @@ export default function TeamsStack() {
         name="TeamPhotos"
         component={TeamPhotosScreen}
         options={({ route }) => ({ title: `${route.params.teamName || 'Team'} Photos` })}
+      />
+      <Stack.Screen
+        name="PlayerAttendance"
+        component={PlayerAttendanceScreen}
+        options={({ route }) => ({ title: `${route.params.playerName} Attendance` })}
+      />
+      <Stack.Screen
+        name="OpponentHistory"
+        component={OpponentHistoryScreen}
+        options={({ route }) => ({ title: `${route.params.teamName || 'Team'} vs History` })}
       />
     </Stack.Navigator>
   );
