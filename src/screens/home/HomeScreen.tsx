@@ -379,8 +379,11 @@ export default function HomeScreen() {
                   // For parent view: show "Child Name · Team Name" when multiple children
                   // For coach view: show team name when multiple teams
                   if (item.role === 'parent' && children.length > 1 && selectedChild === null) {
-                    const child = children.find((c) => c.teamIds.includes(item.teamId));
-                    const label = [child?.name, item.teamName].filter(Boolean).join(' · ');
+                    const names = children
+                      .filter((c) => c.teamIds.includes(item.teamId))
+                      .map((c) => c.name)
+                      .filter(Boolean);
+                    const label = [...names, item.teamName].filter(Boolean).join(' · ');
                     return <Text style={{ fontSize: 11, color: B.inkFaint, marginTop: 2, fontWeight: '500' }}>{label}</Text>;
                   }
                   if (teams.length > 1) {

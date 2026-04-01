@@ -174,6 +174,8 @@ export default function TeamDetailScreen() {
     navigation.setOptions({
       // Hide back button for parents (they have no Teams list to go back to)
       headerBackVisible: !isParent,
+      // When switcher is shown it already displays the team name — hide the title to avoid duplicate
+      headerTitle: showSwitcher ? () => null : undefined,
       headerLeft: showSwitcher
         ? () => (
             <TouchableOpacity
