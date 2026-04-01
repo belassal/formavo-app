@@ -1,10 +1,26 @@
-import { db, serverTimestamp } from './firebase';
+import { db, serverTimestamp, arrayUnion } from './firebase';
 import { COL } from '../models/collections';
 import { getOrCreateClubForUser } from './clubService';
 import { getOrCreateDefaultSeason, setActiveSeasonId } from './seasonService';
 
 export type TeamRole = 'coach' | 'assistant' | 'parent';
 export type MemberStatus = 'active' | 'invited';
+
+export type LinkedPlayer = { id: string; name: string };
+
+/**
+ * Returns the linked children for a parent member doc.
+ * Handles both the new `linkedPlayers` array and the legacy `linkedPlayerId`/`linkedPlayerName` fields.
+ */
+export function getLinkedPlayers(member: any): LinkedPlayer[] {
+  if (Array.isArray(member?.linkedPlayers) && member.linkedPlayers.length > 0) {
+    return member.linkedPlayers as LinkedPlayer[];
+  }
+  if (member?.linkedPlayerId) {
+    return [{ id: member.linkedPlayerId, name: member.linkedPlayerName || '' }];
+  }
+  return [];
+}
 
 function norm(s: string) {
   return (s || '').trim();
@@ -300,6 +316,7 @@ export async function inviteParent(params: {
     invitedBy,
     linkedPlayerId,
     linkedPlayerName,
+    linkedPlayers: [{ id: linkedPlayerId, name: linkedPlayerName }],
   });
 
   // 2) Write to the `mail` collection — picked up by the Trigger Email extension
@@ -412,12 +429,12 @@ export async function acceptTeamInvitesForUser(params: {
     const inviteData: any = inviteDoc.data();
     const role: TeamRole = inviteData.role || 'assistant';
 
-    // Propagate parent-player link fields if present
+    // Propagate parent-player link fields if present.
+    // Use arrayUnion so a second child invite for the same team appends to linkedPlayers.
     const parentFields =
-      role === 'parent'
+      role === 'parent' && inviteData.linkedPlayerId
         ? {
-            linkedPlayerId: inviteData.linkedPlayerId || '',
-            linkedPlayerName: inviteData.linkedPlayerName || '',
+            linkedPlayers: arrayUnion({ id: inviteData.linkedPlayerId, name: inviteData.linkedPlayerName || '' }),
           }
         : {};
 

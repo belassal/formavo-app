@@ -12,7 +12,7 @@ import {
 import auth from '@react-native-firebase/auth';
 import { useNavigation } from '@react-navigation/native';
 
-import { listenMyTeams } from '../../services/teamService';
+import { listenMyTeams, getLinkedPlayers } from '../../services/teamService';
 import { listenMatches } from '../../services/matchService';
 import { formatDateISO } from '../../components/DateTimePickerModal';
 import ParentMatchesSection from './ParentMatchesSection';
@@ -24,6 +24,7 @@ type TeamRow = {
   role?: string;
   linkedPlayerId?: string;
   linkedPlayerName?: string;
+  linkedPlayers?: { id: string; name: string }[];
 };
 type StatusFilter = 'all' | 'scheduled' | 'live' | 'completed';
 
@@ -47,10 +48,19 @@ export default function MatchesScreen() {
 
   // Partition teams by role
   const coachTeams = useMemo(() => teams.filter((t) => t.role !== 'parent'), [teams]);
-  const parentTeamRefs = useMemo(
-    () => teams.filter((t) => t.role === 'parent' && !!t.linkedPlayerId),
-    [teams],
-  );
+
+  // Expand parent teams: one entry per linked child (a parent may have 2+ kids on the same team)
+  const parentTeamRefs = useMemo(() => {
+    const result: (TeamRow & { linkedPlayerId: string; linkedPlayerName: string })[] = [];
+    for (const t of teams) {
+      if (t.role !== 'parent') continue;
+      const children = getLinkedPlayers(t);
+      for (const child of children) {
+        result.push({ ...t, linkedPlayerId: child.id, linkedPlayerName: child.name });
+      }
+    }
+    return result;
+  }, [teams]);
 
   // teams
   useEffect(() => {

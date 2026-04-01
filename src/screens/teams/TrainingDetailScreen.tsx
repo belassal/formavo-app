@@ -105,7 +105,7 @@ export default function TrainingDetailScreen() {
   // Full player roster for attendance breakdown
   const [roster, setRoster] = useState<{ id: string; playerName: string }[]>([]);
   // Parent member docs — used to resolve player names for confirmed/declined IDs
-  const [parentMembers, setParentMembers] = useState<{ id: string; linkedPlayerId: string; linkedPlayerName: string }[]>([]);
+  const [parentMembers, setParentMembers] = useState<{ id: string; linkedPlayerId: string; linkedPlayerName: string; linkedPlayers?: { id: string; name: string }[] }[]>([]);
   const [submittingRsvp, setSubmittingRsvp] = useState(false);
 
   useEffect(() => {
@@ -142,8 +142,14 @@ export default function TrainingDetailScreen() {
     const unsubMembers = listenTeamMembers(teamId, (members) => {
       setParentMembers(
         members
-          .filter((m) => m.role === 'parent' && m.status === 'active' && m.linkedPlayerId)
-          .map((m) => ({ id: m.id, linkedPlayerId: m.linkedPlayerId, linkedPlayerName: m.linkedPlayerName || 'Unknown Player' }))
+          .filter((m) => m.role === 'parent' && m.status === 'active' &&
+            (m.linkedPlayerId || (Array.isArray(m.linkedPlayers) && m.linkedPlayers.length > 0)))
+          .map((m) => ({
+            id: m.id,
+            linkedPlayerId: m.linkedPlayerId || '',
+            linkedPlayerName: m.linkedPlayerName || '',
+            linkedPlayers: m.linkedPlayers,
+          }))
       );
     });
     return () => { unsubRoster(); unsubMembers(); };
@@ -315,20 +321,28 @@ export default function TrainingDetailScreen() {
           ) : null}
         </View>
 
-        {/* RSVP for parent's child */}
+        {/* RSVP for parent's children */}
         {(() => {
           const uid = auth().currentUser?.uid;
           const me = parentMembers.find((m) => m.id === uid);
           if (!me) return null;
-          const { linkedPlayerId: pid, linkedPlayerName: playerName } = me;
-          const isGoing = confirmedIds.includes(pid);
-          const isCant = declinedIds.includes(pid);
+          const children: { id: string; name: string }[] =
+            Array.isArray(me.linkedPlayers) && me.linkedPlayers.length > 0
+              ? me.linkedPlayers
+              : me.linkedPlayerId ? [{ id: me.linkedPlayerId, name: me.linkedPlayerName || '' }] : [];
+          if (children.length === 0) return null;
+
+          const isGoing = children.every((c) => confirmedIds.includes(c.id));
+          const isCant = children.every((c) => declinedIds.includes(c.id));
+          const childLabel = children.map((c) => c.name).filter(Boolean).join(', ') || 'your child';
 
           const handleRsvp = async (status: 'confirmed' | 'declined') => {
             if (!trainingId || submittingRsvp) return;
             setSubmittingRsvp(true);
             try {
-              await setTrainingAttendance({ teamId, trainingId, playerId: pid, status });
+              await Promise.all(
+                children.map((c) => setTrainingAttendance({ teamId, trainingId, playerId: c.id, status })),
+              );
             } catch (e: any) {
               Alert.alert('Error', e?.message ?? 'Could not save response.');
             } finally {
@@ -340,7 +354,7 @@ export default function TrainingDetailScreen() {
             <View style={{ backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#e5e7eb', padding: 16, gap: 12 }}>
               <View>
                 <Text style={{ fontSize: 12, color: '#9ca3af', fontWeight: '500' }}>Answering on behalf of</Text>
-                <Text style={{ fontSize: 17, fontWeight: '800', color: '#111', marginTop: 2 }}>{playerName}</Text>
+                <Text style={{ fontSize: 17, fontWeight: '800', color: '#111', marginTop: 2 }}>{childLabel}</Text>
               </View>
               <View style={{ flexDirection: 'row', gap: 10 }}>
                 <TouchableOpacity
@@ -379,8 +393,15 @@ export default function TrainingDetailScreen() {
           const resolveName = (id: string): string => {
             const fromRoster = roster.find((r) => r.id === id);
             if (fromRoster) return fromRoster.playerName;
-            const fromParent = parentMembers.find((m) => m.linkedPlayerId === id);
-            return fromParent?.linkedPlayerName ?? 'Unknown Player';
+            for (const m of parentMembers) {
+              const children: { id: string; name: string }[] =
+                Array.isArray((m as any).linkedPlayers) && (m as any).linkedPlayers.length > 0
+                  ? (m as any).linkedPlayers
+                  : m.linkedPlayerId ? [{ id: m.linkedPlayerId, name: m.linkedPlayerName }] : [];
+              const match = children.find((c) => c.id === id);
+              if (match) return match.name || 'Unknown Player';
+            }
+            return 'Unknown Player';
           };
           const goingNames = confirmedIds.map(resolveName);
           const cantNames = declinedIds.map(resolveName);
@@ -580,8 +601,15 @@ export default function TrainingDetailScreen() {
           const resolveName = (id: string): string => {
             const fromRoster = roster.find((r) => r.id === id);
             if (fromRoster) return fromRoster.playerName;
-            const fromParent = parentMembers.find((m) => m.linkedPlayerId === id);
-            return fromParent?.linkedPlayerName ?? 'Unknown Player';
+            for (const m of parentMembers) {
+              const children: { id: string; name: string }[] =
+                Array.isArray((m as any).linkedPlayers) && (m as any).linkedPlayers.length > 0
+                  ? (m as any).linkedPlayers
+                  : m.linkedPlayerId ? [{ id: m.linkedPlayerId, name: m.linkedPlayerName }] : [];
+              const match = children.find((c) => c.id === id);
+              if (match) return match.name || 'Unknown Player';
+            }
+            return 'Unknown Player';
           };
 
           const goingPlayers = confirmedIds.map((id) => ({ id, name: resolveName(id) }));

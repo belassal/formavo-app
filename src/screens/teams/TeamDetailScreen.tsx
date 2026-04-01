@@ -267,9 +267,13 @@ export default function TeamDetailScreen() {
   // Coaches / members
   const [teamMembers, setTeamMembers] = useState<any[]>([]);
 
-  const linkedPlayerId = useMemo(() => {
-    if (!isParent || !uid) return null;
-    return teamMembers.find((m) => m.id === uid)?.linkedPlayerId ?? null;
+  const linkedPlayers = useMemo(() => {
+    if (!isParent || !uid) return [];
+    const me = teamMembers.find((m) => m.id === uid);
+    if (!me) return [];
+    if (Array.isArray(me.linkedPlayers) && me.linkedPlayers.length > 0) return me.linkedPlayers as { id: string; name: string }[];
+    if (me.linkedPlayerId) return [{ id: me.linkedPlayerId, name: me.linkedPlayerName || '' }];
+    return [];
   }, [isParent, uid, teamMembers]);
 
   // Invite Parent modal
@@ -680,9 +684,13 @@ export default function TeamDetailScreen() {
   };
 
   const handleRSVP = async (trainingId: string, status: 'confirmed' | 'declined') => {
-    if (!linkedPlayerId) return;
+    if (linkedPlayers.length === 0) return;
     try {
-      await setTrainingAttendance({ teamId, trainingId, playerId: linkedPlayerId, status });
+      await Promise.all(
+        linkedPlayers.map((child) =>
+          setTrainingAttendance({ teamId, trainingId, playerId: child.id, status }),
+        ),
+      );
     } catch (e: any) {
       Alert.alert('Error', e?.message ?? 'Could not save your response.');
     }
@@ -1055,12 +1063,10 @@ export default function TeamDetailScreen() {
                 const statusColor = item.status === 'completed' ? '#16a34a' : item.status === 'cancelled' ? '#ef4444' : '#6b7280';
                 const statusLabel = item.status === 'completed' ? 'Done' : item.status === 'cancelled' ? 'Cancelled' : 'Scheduled';
                 const confirmedCount = item.confirmedPlayerIds?.length ?? 0;
-                const myStatus = linkedPlayerId
-                  ? (item.confirmedPlayerIds ?? []).includes(linkedPlayerId)
-                    ? 'confirmed'
-                    : (item.declinedPlayerIds ?? []).includes(linkedPlayerId)
-                      ? 'declined'
-                      : null
+                // For multiple children: confirmed if ALL are confirmed, declined if ALL are declined, else null
+                const myStatus = linkedPlayers.length === 0 ? null
+                  : linkedPlayers.every((c) => (item.confirmedPlayerIds ?? []).includes(c.id)) ? 'confirmed'
+                  : linkedPlayers.every((c) => (item.declinedPlayerIds ?? []).includes(c.id)) ? 'declined'
                   : null;
                 const subtitleText = [
                   item.startISO ? formatTrainingDate(item.startISO) : '',
@@ -1077,7 +1083,7 @@ export default function TeamDetailScreen() {
                           {item.title}
                         </Text>
                         <Text style={{ marginTop: 2, fontSize: 13, color: '#9ca3af' }}>{subtitleText}</Text>
-                        {item.status === 'scheduled' && linkedPlayerId ? (
+                        {item.status === 'scheduled' && linkedPlayers.length > 0 ? (
                           <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
                             <TouchableOpacity
                               onPress={() => handleRSVP(item.id, 'confirmed')}
@@ -1291,7 +1297,14 @@ export default function TeamDetailScreen() {
                           {isInvite ? m.invitedEmail || 'Invited' : (m.displayName || m.invitedEmail || m.id)}
                         </Text>
                         <Text style={{ marginTop: 2, fontSize: 13, color: '#9ca3af' }}>
-                          Parent of {m.linkedPlayerName || 'Unknown Player'}{isInvite ? ' · Pending' : ' · Active'}
+                          Parent of {
+                            (() => {
+                              const children = Array.isArray(m.linkedPlayers) && m.linkedPlayers.length > 0
+                                ? m.linkedPlayers.map((c: any) => c.name).filter(Boolean)
+                                : m.linkedPlayerName ? [m.linkedPlayerName] : [];
+                              return children.length > 0 ? children.join(', ') : 'Unknown Player';
+                            })()
+                          }{isInvite ? ' · Pending' : ' · Active'}
                         </Text>
                       </View>
                       {isInvite ? (

@@ -121,7 +121,7 @@ export default function MatchDetailScreen() {
   const [roster, setRoster] = useState<any[]>([]);
 
   // parent RSVP
-  const [linkedPlayerId, setLinkedPlayerId] = useState<string | null>(null);
+  const [linkedPlayers, setLinkedPlayers] = useState<{ id: string; name: string }[]>([]);
   const [myRsvp, setMyRsvp] = useState<RsvpStatus | null>(null);
   const [submittingRsvp, setSubmittingRsvp] = useState(false);
 
@@ -246,14 +246,21 @@ export default function MatchDetailScreen() {
     }
   }, [goalSide]);
 
-  // Parent: get linkedPlayerId from member doc
+  // Parent: get linked children from member doc
   useEffect(() => {
     if (!isParent) return;
     const uid = auth().currentUser?.uid;
     if (!uid) return;
     const unsub = listenTeamMembers(teamId, (members) => {
       const me = members.find((m) => m.id === uid);
-      setLinkedPlayerId(me?.linkedPlayerId ?? null);
+      if (!me) { setLinkedPlayers([]); return; }
+      if (Array.isArray(me.linkedPlayers) && me.linkedPlayers.length > 0) {
+        setLinkedPlayers(me.linkedPlayers);
+      } else if (me.linkedPlayerId) {
+        setLinkedPlayers([{ id: me.linkedPlayerId, name: me.linkedPlayerName || '' }]);
+      } else {
+        setLinkedPlayers([]);
+      }
     });
     return () => unsub();
   }, [teamId, isParent]);
@@ -265,27 +272,31 @@ export default function MatchDetailScreen() {
     return () => unsub();
   }, [teamId, matchId, isParent]);
 
-  // Parent: listen to my RSVP for this match
+  // Parent: listen to first child's RSVP for this match (represents the family's status)
   useEffect(() => {
-    if (!isParent || !linkedPlayerId) return;
+    if (!isParent || linkedPlayers.length === 0) return;
     const unsub = db
       .collection(COL.teams).doc(teamId)
       .collection(COL.matches).doc(matchId)
-      .collection(COL.roster).doc(linkedPlayerId)
+      .collection(COL.roster).doc(linkedPlayers[0].id)
       .onSnapshot((snap) => {
         if (!snap.exists) { setMyRsvp(null); return; }
         setMyRsvp((snap.data()?.rsvpStatus as RsvpStatus) ?? null);
       }, console.warn);
     return () => unsub();
-  }, [teamId, matchId, isParent, linkedPlayerId]);
+  }, [teamId, matchId, isParent, linkedPlayers]);
 
   const handleParentRsvp = async (status: 'attending' | 'absent') => {
-    if (!linkedPlayerId) return;
+    if (linkedPlayers.length === 0) return;
     const uid = auth().currentUser?.uid;
     const displayName = auth().currentUser?.displayName || auth().currentUser?.email || 'Parent';
     try {
       setSubmittingRsvp(true);
-      await setRsvp({ teamId, matchId, playerId: linkedPlayerId, status, byUid: uid!, confirmedByName: displayName });
+      await Promise.all(
+        linkedPlayers.map((child) =>
+          setRsvp({ teamId, matchId, playerId: child.id, status, byUid: uid!, confirmedByName: displayName }),
+        ),
+      );
     } catch (e: any) {
       Alert.alert('Error', e?.message ?? 'Could not save your response.');
     } finally {
@@ -1011,7 +1022,7 @@ const addSelectedToRoster = async () => {
             </View>
 
             {/* ===== Parent RSVP ===== */}
-            {isParent && linkedPlayerId && status !== 'completed' && (
+            {isParent && linkedPlayers.length > 0 && status !== 'completed' && (
               <View style={SC.container}>
                 <View style={[SC.header, { paddingBottom: 14 }]}>
                   <View style={{ flex: 1 }}>
