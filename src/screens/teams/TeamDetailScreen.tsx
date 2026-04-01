@@ -800,15 +800,6 @@ export default function TeamDetailScreen() {
               })()}
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-              {!isParent && matches.some((m: any) => m.status === 'completed') && (
-                <TouchableOpacity
-                  onPress={(e) => { e.stopPropagation(); navigation.navigate('OpponentHistory', { teamId, teamName: route.params.teamName }); }}
-                  style={S.addBtn}
-                  hitSlop={ICON_HITSLOP}
-                >
-                  <Text style={S.addBtnText}>History</Text>
-                </TouchableOpacity>
-              )}
               {!isParent && (
                 <TouchableOpacity
                   onPress={(e) => { e.stopPropagation(); openCreateMatch(); }}
@@ -831,45 +822,59 @@ export default function TeamDetailScreen() {
                 </View>
               </>
             ) : (
-              matches.map((item) => {
-                const status = String(item.status || 'scheduled');
-                const home = Number.isFinite(item.homeScore) ? item.homeScore : 0;
-                const away = Number.isFinite(item.awayScore) ? item.awayScore : 0;
-                let rightLabel = 'Scheduled';
-                let labelColor = '#6b7280';
-                if (status === 'live') { rightLabel = `LIVE ${home}–${away}`; labelColor = '#16a34a'; }
-                if (status === 'completed') { rightLabel = `FT ${home}–${away}`; labelColor = '#374151'; }
+              <>
+                {matches.map((item) => {
+                  const status = String(item.status || 'scheduled');
+                  const home = Number.isFinite(item.homeScore) ? item.homeScore : 0;
+                  const away = Number.isFinite(item.awayScore) ? item.awayScore : 0;
+                  let rightLabel = 'Scheduled';
+                  let labelColor = '#6b7280';
+                  if (status === 'live') { rightLabel = `LIVE ${home}–${away}`; labelColor = '#16a34a'; }
+                  if (status === 'completed') { rightLabel = `FT ${home}–${away}`; labelColor = '#374151'; }
 
-                return (
-                  <View key={item.id}>
+                  return (
+                    <View key={item.id}>
+                      <View style={S.divider} />
+                      <TouchableOpacity
+                        onPress={() => navigation.navigate('MatchDetail', { teamId, matchId: item.id, title: `${teamName} vs ${item.opponent || 'Opponent'}`, role: route.params.role })}
+                        style={S.row}
+                        activeOpacity={0.6}
+                      >
+                        <View style={{ flex: 1, marginRight: 12 }}>
+                          <Text style={{ fontSize: 15, fontWeight: '600', color: '#111' }} numberOfLines={1}>
+                            vs {item.opponent || 'Opponent'}
+                          </Text>
+                          <Text style={{ marginTop: 2, fontSize: 13, color: '#9ca3af' }}>
+                            {item.dateISO ? formatDateISO(item.dateISO) : ''}
+                            {item.location ? ` · ${item.location}` : ''}
+                          </Text>
+                          {item.format ? (
+                            <View style={{ marginTop: 6, alignSelf: 'flex-start', paddingVertical: 2, paddingHorizontal: 8, backgroundColor: '#f3f4f6', borderRadius: 999 }}>
+                              <Text style={{ fontSize: 11, fontWeight: '600', color: '#6b7280' }}>{item.format}</Text>
+                            </View>
+                          ) : null}
+                        </View>
+                        <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                          <Text style={{ fontSize: 12, fontWeight: '700', color: labelColor }}>{rightLabel}</Text>
+                          <Text style={{ fontSize: 18, color: '#c7c7cc' }}>›</Text>
+                        </View>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
+                {!isParent && matches.some((m: any) => m.status === 'completed') && (
+                  <View>
                     <View style={S.divider} />
                     <TouchableOpacity
-                      onPress={() => navigation.navigate('MatchDetail', { teamId, matchId: item.id, title: `${teamName} vs ${item.opponent || 'Opponent'}`, role: route.params.role })}
-                      style={S.row}
+                      onPress={() => navigation.navigate('OpponentHistory', { teamId, teamName: route.params.teamName })}
+                      style={[S.row, { justifyContent: 'center' }]}
                       activeOpacity={0.6}
                     >
-                      <View style={{ flex: 1, marginRight: 12 }}>
-                        <Text style={{ fontSize: 15, fontWeight: '600', color: '#111' }} numberOfLines={1}>
-                          vs {item.opponent || 'Opponent'}
-                        </Text>
-                        <Text style={{ marginTop: 2, fontSize: 13, color: '#9ca3af' }}>
-                          {item.dateISO ? formatDateISO(item.dateISO) : ''}
-                          {item.location ? ` · ${item.location}` : ''}
-                        </Text>
-                        {item.format ? (
-                          <View style={{ marginTop: 6, alignSelf: 'flex-start', paddingVertical: 2, paddingHorizontal: 8, backgroundColor: '#f3f4f6', borderRadius: 999 }}>
-                            <Text style={{ fontSize: 11, fontWeight: '600', color: '#6b7280' }}>{item.format}</Text>
-                          </View>
-                        ) : null}
-                      </View>
-                      <View style={{ alignItems: 'flex-end', gap: 4 }}>
-                        <Text style={{ fontSize: 12, fontWeight: '700', color: labelColor }}>{rightLabel}</Text>
-                        <Text style={{ fontSize: 18, color: '#c7c7cc' }}>›</Text>
-                      </View>
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: '#3b82f6' }}>View Opponent History →</Text>
                     </TouchableOpacity>
                   </View>
-                );
-              })
+                )}
+              </>
             )
           )}
         </View>
