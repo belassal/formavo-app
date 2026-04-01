@@ -7,7 +7,7 @@ import TrainingDetailScreen from '../../screens/teams/TrainingDetailScreen';
 
 export type HomeStackParamList = {
   HomeRoot: undefined;
-  MatchDetail: { teamId: string; matchId: string; title?: string; role?: string };
+  MatchDetail: { teamId: string; matchId: string; title?: string; role?: string; linkedPlayerId?: string };
   GameDayPitch: { teamId: string; matchId: string; role?: string };
   TrainingDetail: { teamId: string; trainingId?: string; role?: string };
 };

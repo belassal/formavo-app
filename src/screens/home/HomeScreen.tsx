@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   SafeAreaView,
+  ScrollView,
   SectionList,
   Text,
   TouchableOpacity,
@@ -13,7 +14,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { HomeStackParamList } from '../../navigation/stacks/HomeStack';
 import { openMaps } from '../../utils/openMaps';
 import { B } from '../../constants/brand';
-import { listenMyTeams } from '../../services/teamService';
+import { listenMyTeams, getLinkedPlayers } from '../../services/teamService';
 import { listenMatches } from '../../services/matchService';
 import { listenTrainings, type Training } from '../../services/trainingService';
 import { formatDateISO } from '../../components/DateTimePickerModal';
@@ -22,6 +23,9 @@ type TeamRow = {
   id: string;
   teamName?: string;
   role?: string;
+  linkedPlayerId?: string;
+  linkedPlayerName?: string;
+  linkedPlayers?: { id: string; name: string }[];
 };
 
 type ScheduleEvent = {
@@ -32,13 +36,15 @@ type ScheduleEvent = {
   role: string;
   title: string;
   dateISO: string;
-  subtitle?: string;   // address
-  fieldName?: string;  // e.g. "BMO 1"
+  subtitle?: string;
+  fieldName?: string;
   status?: string;
-  // original ids for navigation
   matchId?: string;
   trainingId?: string;
+  linkedPlayerId?: string; // for parent RSVP scoping
 };
+
+type ChildFilter = { id: string; name: string } | null; // null = All
 
 function getDateKey(isoStr: string): string {
   return (isoStr || '').split(' ')[0] || '';
@@ -85,6 +91,25 @@ export default function HomeScreen() {
   const [loadingTeams, setLoadingTeams] = useState(true);
   const [matchesByTeam, setMatchesByTeam] = useState<Record<string, any[]>>({});
   const [trainingsByTeam, setTrainingsByTeam] = useState<Record<string, Training[]>>({});
+  const [selectedChild, setSelectedChild] = useState<ChildFilter>(null);
+
+  // Build a deduplicated list of children across all parent teams.
+  // Each entry: { id, name, teamIds[] }
+  const children = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; teamIds: string[] }>();
+    for (const team of teams) {
+      if (team.role !== 'parent') continue;
+      for (const child of getLinkedPlayers(team)) {
+        if (!child.id) continue;
+        if (map.has(child.id)) {
+          map.get(child.id)!.teamIds.push(team.id);
+        } else {
+          map.set(child.id, { id: child.id, name: child.name, teamIds: [team.id] });
+        }
+      }
+    }
+    return Array.from(map.values());
+  }, [teams]);
 
   useEffect(() => {
     if (!uid) { setLoadingTeams(false); return; }
@@ -122,17 +147,27 @@ export default function HomeScreen() {
   const thisMondayKey = useMemo(() => getMondayKey(todayKey), [todayKey]);
 
   const sections = useMemo(() => {
-    // Group events by their week's Monday key
     const byWeek: Record<string, ScheduleEvent[]> = {};
 
-    // Show past events up to 30 days back
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - 30);
     const cutoffKey = `${cutoff.getFullYear()}-${pad2(cutoff.getMonth() + 1)}-${pad2(cutoff.getDate())}`;
 
-    for (const team of teams) {
+    // When a child filter is active, only include teams linked to that child
+    const filteredTeams = selectedChild
+      ? teams.filter((team) =>
+          getLinkedPlayers(team).some((c) => c.id === selectedChild.id),
+        )
+      : teams;
+
+    for (const team of filteredTeams) {
       const teamName = team.teamName || 'Team';
       const role = team.role || 'member';
+
+      // For parent teams, find which child is linked to this specific team
+      const childForTeam = role === 'parent'
+        ? (selectedChild ?? getLinkedPlayers(team)[0] ?? null)
+        : null;
 
       for (const m of (matchesByTeam[team.id] || [])) {
         const dateKey = getDateKey(m.dateISO || '');
@@ -150,6 +185,7 @@ export default function HomeScreen() {
           fieldName: m.fieldName || '',
           status: m.status,
           matchId: m.id,
+          linkedPlayerId: childForTeam?.id,
         };
         if (!byWeek[weekKey]) byWeek[weekKey] = [];
         byWeek[weekKey].push(event);
@@ -177,7 +213,6 @@ export default function HomeScreen() {
       }
     }
 
-    // Sort weeks: upcoming weeks ascending, past weeks descending (most recent first)
     const upcomingWeeks = Object.entries(byWeek)
       .filter(([wk]) => wk >= thisMondayKey)
       .sort(([a], [b]) => a.localeCompare(b));
@@ -191,7 +226,7 @@ export default function HomeScreen() {
       title: getWeekLabel(weekKey, thisMondayKey),
       data: data.sort((a, b) => a.dateISO.localeCompare(b.dateISO)),
     }));
-  }, [teams, matchesByTeam, trainingsByTeam, todayKey, thisMondayKey]);
+  }, [teams, matchesByTeam, trainingsByTeam, todayKey, thisMondayKey, selectedChild]);
 
   const handleEventPress = (event: ScheduleEvent) => {
     if (event.type === 'match') {
@@ -200,6 +235,7 @@ export default function HomeScreen() {
         matchId: event.matchId!,
         title: `${event.teamName} ${event.title}`,
         role: event.role,
+        linkedPlayerId: event.linkedPlayerId,
       });
     } else {
       navigation.navigate('TrainingDetail', {
@@ -226,9 +262,57 @@ export default function HomeScreen() {
         contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
         stickySectionHeadersEnabled={false}
         ListHeaderComponent={
-          <Text style={{ fontSize: 28, fontWeight: '800', color: B.ink, marginBottom: 4 }}>
-            Schedule
-          </Text>
+          <View>
+            <Text style={{ fontSize: 28, fontWeight: '800', color: B.ink, marginBottom: children.length > 1 ? 12 : 4 }}>
+              Schedule
+            </Text>
+            {/* Child switcher — only shown to parents with 2+ distinct children */}
+            {children.length > 1 && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: 8, paddingBottom: 4 }}
+                style={{ marginBottom: 8 }}
+              >
+                {/* All pill */}
+                <TouchableOpacity
+                  onPress={() => setSelectedChild(null)}
+                  style={{
+                    paddingHorizontal: 16, paddingVertical: 7, borderRadius: 20,
+                    backgroundColor: selectedChild === null ? B.green : '#fff',
+                    borderWidth: 1,
+                    borderColor: selectedChild === null ? B.green : B.border,
+                  }}
+                >
+                  <Text style={{
+                    fontSize: 13, fontWeight: '700',
+                    color: selectedChild === null ? '#fff' : B.inkFaint,
+                  }}>All</Text>
+                </TouchableOpacity>
+                {/* One pill per child */}
+                {children.map((child) => {
+                  const active = selectedChild?.id === child.id;
+                  return (
+                    <TouchableOpacity
+                      key={child.id}
+                      onPress={() => setSelectedChild(active ? null : child)}
+                      style={{
+                        paddingHorizontal: 16, paddingVertical: 7, borderRadius: 20,
+                        backgroundColor: active ? B.green : '#fff',
+                        borderWidth: 1,
+                        borderColor: active ? B.green : B.border,
+                      }}
+                    >
+                      <Text style={{
+                        fontSize: 13, fontWeight: '700',
+                        color: active ? '#fff' : B.ink,
+                      }}>{child.name || 'Child'}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            )}
+          </View>
         }
         renderSectionHeader={({ section }) => (
           <View style={{ marginTop: 20, marginBottom: 8, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -291,11 +375,19 @@ export default function HomeScreen() {
                 {item.fieldName ? (
                   <Text style={{ fontSize: 12, color: B.inkFaint, marginTop: 1 }}>{item.fieldName}</Text>
                 ) : null}
-                {teams.length > 1 && (
-                  <Text style={{ fontSize: 11, color: B.inkFaint, marginTop: 2, fontWeight: '500' }}>
-                    {item.teamName}
-                  </Text>
-                )}
+                {(() => {
+                  // For parent view: show "Child Name · Team Name" when multiple children
+                  // For coach view: show team name when multiple teams
+                  if (item.role === 'parent' && children.length > 1 && selectedChild === null) {
+                    const child = children.find((c) => c.teamIds.includes(item.teamId));
+                    const label = [child?.name, item.teamName].filter(Boolean).join(' · ');
+                    return <Text style={{ fontSize: 11, color: B.inkFaint, marginTop: 2, fontWeight: '500' }}>{label}</Text>;
+                  }
+                  if (teams.length > 1) {
+                    return <Text style={{ fontSize: 11, color: B.inkFaint, marginTop: 2, fontWeight: '500' }}>{item.teamName}</Text>;
+                  }
+                  return null;
+                })()}
               </View>
 
               {/* Right badges */}
