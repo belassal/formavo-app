@@ -769,35 +769,11 @@ export default function TeamDetailScreen() {
             onPress={() => setMatchesOpen((v) => !v)}
             activeOpacity={0.7}
           >
-            <View style={[S.sectionTitleRow, { flex: 1, flexShrink: 1 }]}>
+            <View style={S.sectionTitleRow}>
               <Text style={S.sectionTitle}>Matches</Text>
               {matches.length > 0 && (
-                <Text style={S.sectionCount}>{matches.length} matches</Text>
+                <Text style={S.sectionCount}>{matches.length}</Text>
               )}
-              {/* Season badge pill — coaches only */}
-              {!isParent && seasons.length > 0 && viewingSeasonId && (() => {
-                const currentSeason = seasons.find((s) => s.id === viewingSeasonId);
-                return currentSeason ? (
-                  <TouchableOpacity
-                    onPress={(e) => { e.stopPropagation(); setShowSeasonPicker(true); }}
-                    hitSlop={ICON_HITSLOP}
-                    style={{
-                      backgroundColor: currentSeason.status === 'active' ? '#dcfce7' : '#f3f4f6',
-                      borderRadius: 20,
-                      paddingHorizontal: 10,
-                      paddingVertical: 4,
-                    }}
-                  >
-                    <Text style={{
-                      fontSize: 13,
-                      fontWeight: '600',
-                      color: currentSeason.status === 'active' ? '#15803d' : '#374151',
-                    }}>
-                      {currentSeason.label} ▾
-                    </Text>
-                  </TouchableOpacity>
-                ) : null;
-              })()}
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 0 }}>
               {!isParent && (
@@ -816,6 +792,29 @@ export default function TeamDetailScreen() {
           {matchesOpen && (
             matches.length === 0 ? (
               <>
+                {!isParent && seasons.length > 0 && viewingSeasonId && (() => {
+                  const currentSeason = seasons.find((s) => s.id === viewingSeasonId);
+                  return currentSeason ? (
+                    <>
+                      <View style={S.divider} />
+                      <TouchableOpacity
+                        onPress={() => setShowSeasonPicker(true)}
+                        style={[S.row, { justifyContent: 'space-between' }]}
+                        activeOpacity={0.6}
+                      >
+                        <Text style={{ fontSize: 14, color: '#6b7280' }}>Season</Text>
+                        <View style={{
+                          backgroundColor: currentSeason.status === 'active' ? '#dcfce7' : '#f3f4f6',
+                          borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4,
+                        }}>
+                          <Text style={{ fontSize: 13, fontWeight: '600', color: currentSeason.status === 'active' ? '#15803d' : '#374151' }}>
+                            {currentSeason.label} ▾
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    </>
+                  ) : null;
+                })()}
                 <View style={S.divider} />
                 <View style={S.emptyRow}>
                   <Text style={S.emptyText}>No matches yet. Tap "+ Match" to create one.</Text>
@@ -823,6 +822,29 @@ export default function TeamDetailScreen() {
               </>
             ) : (
               <>
+                {!isParent && seasons.length > 0 && viewingSeasonId && (() => {
+                  const currentSeason = seasons.find((s) => s.id === viewingSeasonId);
+                  return currentSeason ? (
+                    <>
+                      <View style={S.divider} />
+                      <TouchableOpacity
+                        onPress={() => setShowSeasonPicker(true)}
+                        style={[S.row, { justifyContent: 'space-between' }]}
+                        activeOpacity={0.6}
+                      >
+                        <Text style={{ fontSize: 14, color: '#6b7280' }}>Season</Text>
+                        <View style={{
+                          backgroundColor: currentSeason.status === 'active' ? '#dcfce7' : '#f3f4f6',
+                          borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4,
+                        }}>
+                          <Text style={{ fontSize: 13, fontWeight: '600', color: currentSeason.status === 'active' ? '#15803d' : '#374151' }}>
+                            {currentSeason.label} ▾
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    </>
+                  ) : null;
+                })()}
                 {matches.map((item) => {
                   const status = String(item.status || 'scheduled');
                   const home = Number.isFinite(item.homeScore) ? item.homeScore : 0;
