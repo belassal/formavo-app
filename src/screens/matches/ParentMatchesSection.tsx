@@ -31,6 +31,7 @@ type Props = {
     matchId: string;
     teamName: string;
     opponent: string;
+    linkedPlayerId: string;
   }) => void;
 };
 
@@ -40,12 +41,13 @@ type ChildSectionProps = {
   teamRef: ParentTeamRef;
   uid: string;
   onNavigateToMatch: Props['onNavigateToMatch'];
+  linkedPlayerId: string;
 };
 
-function ChildSection({ teamRef, uid, onNavigateToMatch }: ChildSectionProps) {
+function ChildSection({ teamRef, uid, onNavigateToMatch, linkedPlayerId }: ChildSectionProps) {
   const teamId = teamRef.teamId || teamRef.id;
   const teamName = teamRef.teamName || 'Team';
-  const { linkedPlayerId, linkedPlayerName } = teamRef;
+  const { linkedPlayerName } = teamRef;
 
   const [matches, setMatches] = useState<any[]>([]);
   const [loadingMatches, setLoadingMatches] = useState(true);
@@ -150,7 +152,7 @@ function ChildSection({ teamRef, uid, onNavigateToMatch }: ChildSectionProps) {
                   <View key={match.id}>
                     {idx > 0 && <View style={{ height: 1, backgroundColor: '#e5e7eb' }} />}
                     <TouchableOpacity
-                      onPress={() => onNavigateToMatch({ teamId, matchId: match.id, teamName, opponent: match.opponent || 'Opponent' })}
+                      onPress={() => onNavigateToMatch({ teamId, matchId: match.id, teamName, opponent: match.opponent || 'Opponent', linkedPlayerId })}
                       activeOpacity={0.7}
                       style={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 10 }}
                     >
@@ -244,7 +246,7 @@ function ChildSection({ teamRef, uid, onNavigateToMatch }: ChildSectionProps) {
                   <View key={match.id}>
                     {idx > 0 && <View style={{ height: 1, backgroundColor: '#e5e7eb' }} />}
                     <TouchableOpacity
-                      onPress={() => onNavigateToMatch({ teamId, matchId: match.id, teamName, opponent: match.opponent || 'Opponent' })}
+                      onPress={() => onNavigateToMatch({ teamId, matchId: match.id, teamName, opponent: match.opponent || 'Opponent', linkedPlayerId })}
                       activeOpacity={0.7}
                       style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 13 }}
                     >
@@ -281,10 +283,11 @@ export default function ParentMatchesSection({ parentTeamRefs, uid, onNavigateTo
 
       {parentTeamRefs.map((ref) => (
         <ChildSection
-          key={ref.id}
+          key={`${ref.id}-${ref.linkedPlayerId}`}
           teamRef={ref}
           uid={uid}
           onNavigateToMatch={onNavigateToMatch}
+          linkedPlayerId={ref.linkedPlayerId}
         />
       ))}
     </View>

@@ -735,6 +735,58 @@ export default function TeamDetailScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: '#f2f2f7' }}>
       <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
 
+        {/* ===== MY CHILDREN (parent view) ===== */}
+        {isParent && linkedPlayers.length > 0 && (
+          <View style={S.sectionContainer}>
+            <View style={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 6 }}>
+              <Text style={{ fontSize: 13, fontWeight: '700', color: '#9ca3af', letterSpacing: 0.5 }}>
+                {linkedPlayers.length === 1 ? 'MY CHILD' : 'MY CHILDREN'}
+              </Text>
+            </View>
+            {linkedPlayers.map((child, idx) => {
+              const member = memberships.find((m: any) => m.id === child.id);
+              return (
+                <View key={child.id}>
+                  {idx > 0 && <View style={S.divider} />}
+                  <TouchableOpacity
+                    style={[S.row, { paddingVertical: 12 }]}
+                    activeOpacity={0.7}
+                    onPress={() => navigation.navigate('PlayerProfile', {
+                      teamId,
+                      playerId: child.id,
+                      playerName: child.name || member?.playerName || 'Player',
+                      playerNumber: member?.number?.toString(),
+                      playerPosition: member?.position,
+                      avatarUrl: member?.avatarUrl,
+                    })}
+                  >
+                    <View style={{
+                      width: 44, height: 44, borderRadius: 22,
+                      backgroundColor: '#f3f4f6',
+                      alignItems: 'center', justifyContent: 'center', marginRight: 12,
+                    }}>
+                      <Text style={{ fontSize: 18, fontWeight: '800', color: '#374151' }}>
+                        {(child.name || '?').charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: '#111' }}>
+                        {child.name || member?.playerName || 'Player'}
+                      </Text>
+                      {(member?.number || member?.position) ? (
+                        <Text style={{ fontSize: 13, color: '#6b7280', marginTop: 2 }}>
+                          {[member?.number ? `#${member.number}` : null, member?.position].filter(Boolean).join('  ·  ')}
+                        </Text>
+                      ) : null}
+                    </View>
+                    <Text style={{ fontSize: 18, color: '#c7c7cc' }}>›</Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
         {/* ===== STATS BANNER ===== */}
         <TouchableOpacity
           onPress={() => navigation.navigate('TeamStats', { teamId, teamName })}
@@ -1084,19 +1136,32 @@ export default function TeamDetailScreen() {
                         </Text>
                         <Text style={{ marginTop: 2, fontSize: 13, color: '#9ca3af' }}>{subtitleText}</Text>
                         {item.status === 'scheduled' && linkedPlayers.length > 0 ? (
-                          <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
-                            <TouchableOpacity
-                              onPress={() => handleRSVP(item.id, 'confirmed')}
-                              style={{ paddingVertical: 7, paddingHorizontal: 18, borderRadius: 20, backgroundColor: myStatus === 'confirmed' ? '#16a34a' : '#f3f4f6' }}
-                            >
-                              <Text style={{ fontSize: 13, fontWeight: '600', color: myStatus === 'confirmed' ? '#fff' : '#374151' }}>✓ Going</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                              onPress={() => handleRSVP(item.id, 'declined')}
-                              style={{ paddingVertical: 7, paddingHorizontal: 18, borderRadius: 20, backgroundColor: myStatus === 'declined' ? '#ef4444' : '#f3f4f6' }}
-                            >
-                              <Text style={{ fontSize: 13, fontWeight: '600', color: myStatus === 'declined' ? '#fff' : '#374151' }}>✗ Can't make it</Text>
-                            </TouchableOpacity>
+                          <View style={{ marginTop: 10, gap: 8 }}>
+                            {linkedPlayers.map((child) => {
+                              const childConfirmed = (item.confirmedPlayerIds ?? []).includes(child.id);
+                              const childDeclined = (item.declinedPlayerIds ?? []).includes(child.id);
+                              return (
+                                <View key={child.id}>
+                                  {linkedPlayers.length > 1 && child.name ? (
+                                    <Text style={{ fontSize: 12, fontWeight: '600', color: '#6b7280', marginBottom: 4 }}>{child.name}</Text>
+                                  ) : null}
+                                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                                    <TouchableOpacity
+                                      onPress={() => setTrainingAttendance({ teamId, trainingId: item.id, playerId: child.id, status: 'confirmed' }).catch(console.warn)}
+                                      style={{ paddingVertical: 7, paddingHorizontal: 18, borderRadius: 20, backgroundColor: childConfirmed ? '#16a34a' : '#f3f4f6' }}
+                                    >
+                                      <Text style={{ fontSize: 13, fontWeight: '600', color: childConfirmed ? '#fff' : '#374151' }}>✓ Going</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                      onPress={() => setTrainingAttendance({ teamId, trainingId: item.id, playerId: child.id, status: 'declined' }).catch(console.warn)}
+                                      style={{ paddingVertical: 7, paddingHorizontal: 18, borderRadius: 20, backgroundColor: childDeclined ? '#ef4444' : '#f3f4f6' }}
+                                    >
+                                      <Text style={{ fontSize: 13, fontWeight: '600', color: childDeclined ? '#fff' : '#374151' }}>✗ Can't make it</Text>
+                                    </TouchableOpacity>
+                                  </View>
+                                </View>
+                              );
+                            })}
                           </View>
                         ) : (
                           <Text style={{ marginTop: 6, fontSize: 12, fontWeight: '700', color: statusColor }}>{statusLabel}</Text>

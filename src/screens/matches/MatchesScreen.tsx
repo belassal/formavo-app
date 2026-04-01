@@ -132,10 +132,10 @@ export default function MatchesScreen() {
                 <ParentMatchesSection
                   parentTeamRefs={parentTeamRefs as any}
                   uid={uid!}
-                  onNavigateToMatch={({ teamId, matchId, teamName, opponent }) =>
+                  onNavigateToMatch={({ teamId, matchId, teamName, opponent, linkedPlayerId }) =>
                     navigation.navigate('Teams', {
                       screen: 'MatchDetail',
-                      params: { teamId, matchId, title: `${teamName} vs ${opponent}`, role: 'parent' },
+                      params: { teamId, matchId, title: `${teamName} vs ${opponent}`, role: 'parent', linkedPlayerId },
                     })
                   }
                 />

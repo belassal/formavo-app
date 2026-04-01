@@ -80,6 +80,7 @@ export default function MatchDetailScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<TeamsStackParamList>>();
   const { teamId, matchId } = route.params;
   const isParent = route.params.role === 'parent';
+  const paramLinkedPlayerId = route.params.linkedPlayerId ?? null;
 
   // --- icon buttons (make ALL edit/delete icons match the event style) ---
   const ICON_BTN = {
@@ -246,9 +247,15 @@ export default function MatchDetailScreen() {
     }
   }, [goalSide]);
 
-  // Parent: get linked children from member doc
+  // Parent: resolve linked children.
+  // If a specific child was passed as a nav param (tapped from their own section), use only that child.
+  // Otherwise load all linked children from the member doc.
   useEffect(() => {
     if (!isParent) return;
+    if (paramLinkedPlayerId) {
+      setLinkedPlayers([{ id: paramLinkedPlayerId, name: '' }]);
+      return;
+    }
     const uid = auth().currentUser?.uid;
     if (!uid) return;
     const unsub = listenTeamMembers(teamId, (members) => {
@@ -263,7 +270,7 @@ export default function MatchDetailScreen() {
       }
     });
     return () => unsub();
-  }, [teamId, isParent]);
+  }, [teamId, isParent, paramLinkedPlayerId]);
 
   // Listen to match ratings
   useEffect(() => {
