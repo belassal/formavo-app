@@ -16,6 +16,7 @@ import type { TeamsStackParamList } from '../../navigation/stacks/TeamsStack';
 import { getPlayerCareerStats, getClubPlayer, type CareerSeason, type ClubPlayer } from '../../services/clubPlayerService';
 import { fetchPlayerRatings, type PlayerRating } from '../../services/ratingService';
 import { fetchPlayerTrainingStats } from '../../services/trainingService';
+import { fetchPlayerSeasonMinutes, type PlayerSeasonMinutes } from '../../services/minutesService';
 
 type PlayerProfileRoute = RouteProp<TeamsStackParamList, 'PlayerProfile'>;
 type Nav = NativeStackNavigationProp<TeamsStackParamList>;
@@ -172,6 +173,7 @@ export default function PlayerProfileScreen() {
   const [devLog, setDevLog] = useState<PlayerRating[]>([]);
   const [loadingLog, setLoadingLog] = useState(true);
   const [trainingStats, setTrainingStats] = useState<{ attended: number; total: number }>({ attended: 0, total: 0 });
+  const [seasonMinutes, setSeasonMinutes] = useState<PlayerSeasonMinutes | null>(null);
 
   // Edit button + live title in header
   useLayoutEffect(() => {
@@ -213,6 +215,11 @@ export default function PlayerProfileScreen() {
         .catch(() => setTrainingStats({ attended: 0, total: 0 }));
     }, [teamId, playerId, clubId]),
   );
+
+  useEffect(() => {
+    if (!teamId) return;
+    fetchPlayerSeasonMinutes(teamId, playerId).then(setSeasonMinutes).catch(console.warn);
+  }, [teamId, playerId]);
 
   useEffect(() => {
     if (clubId) {
@@ -357,6 +364,41 @@ export default function PlayerProfileScreen() {
                     )}
                   </View>
                 </TouchableOpacity>
+
+                {/* Season Minutes card */}
+                {seasonMinutes && seasonMinutes.appearances > 0 && (
+                  <View style={{
+                    backgroundColor: '#fff', borderRadius: 14,
+                    paddingVertical: 16, paddingHorizontal: 20,
+                    borderWidth: 1, borderColor: '#e5e7eb',
+                  }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#374151', marginBottom: 12 }}>Season Minutes</Text>
+                    <View style={{ flexDirection: 'row', gap: 10 }}>
+                      <View style={{ flex: 1, backgroundColor: '#f2f2f7', borderRadius: 10, padding: 12, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 22, fontWeight: '800', color: '#111' }}>{seasonMinutes.totalMinutes}'</Text>
+                        <Text style={{ fontSize: 11, fontWeight: '600', color: '#6b7280', marginTop: 2 }}>Total</Text>
+                      </View>
+                      <View style={{ flex: 1, backgroundColor: '#f2f2f7', borderRadius: 10, padding: 12, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 22, fontWeight: '800', color: '#111' }}>{seasonMinutes.avgMinutes}'</Text>
+                        <Text style={{ fontSize: 11, fontWeight: '600', color: '#6b7280', marginTop: 2 }}>Avg/Game</Text>
+                      </View>
+                    </View>
+                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+                      <View style={{ flex: 1, backgroundColor: '#dcfce7', borderRadius: 10, padding: 10, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 18, fontWeight: '800', color: '#16a34a' }}>{seasonMinutes.starts}</Text>
+                        <Text style={{ fontSize: 11, fontWeight: '600', color: '#15803d', marginTop: 1 }}>Starts</Text>
+                      </View>
+                      <View style={{ flex: 1, backgroundColor: '#dbeafe', borderRadius: 10, padding: 10, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 18, fontWeight: '800', color: '#2563eb' }}>{seasonMinutes.subAppearances}</Text>
+                        <Text style={{ fontSize: 11, fontWeight: '600', color: '#1d4ed8', marginTop: 1 }}>Sub-In</Text>
+                      </View>
+                      <View style={{ flex: 1, backgroundColor: '#f3f4f6', borderRadius: 10, padding: 10, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 18, fontWeight: '800', color: '#374151' }}>{seasonMinutes.appearances}</Text>
+                        <Text style={{ fontSize: 11, fontWeight: '600', color: '#6b7280', marginTop: 1 }}>Appearances</Text>
+                      </View>
+                    </View>
+                  </View>
+                )}
               </View>
             </View>
 

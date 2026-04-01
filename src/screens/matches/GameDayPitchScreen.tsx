@@ -39,6 +39,7 @@ import {
 import { saveLineup, listenLineups, deleteLineup, applyLineupToMatch } from '../../services/lineupService';
 import type { SavedLineup } from '../../models/lineup';
 import type { MatchEvent } from '../../models/matchEvent';
+import { calculateMatchMinutes } from '../../services/minutesService';
 type RouteT = RouteProp<TeamsStackParamList, 'GameDayPitch'>;
 
 type SlotPos = { x: number; y: number };
@@ -113,6 +114,8 @@ export default function GameDayPitchScreen() {
   const [lineupName, setLineupName] = useState('');
   const [savingLineup, setSavingLineup] = useState(false);
   const [applyingLineup, setApplyingLineup] = useState(false);
+
+  const [showMinutes, setShowMinutes] = useState(false);
 
   // Player avatar URLs: playerId → avatarUrl
   const [avatarUrls, setAvatarUrls] = useState<Record<string, string>>({});
@@ -652,6 +655,16 @@ const onEnd = async () => {
               <Text style={styles.modeBtnText}>💾 Save</Text>
             </TouchableOpacity>
 
+            {/* Minutes tracker */}
+            {(derivedState.status === 'live' || derivedState.status === 'completed' || derivedState.status === 'halftime' || derivedState.status === 'second_half') && (
+              <TouchableOpacity
+                onPress={() => setShowMinutes(true)}
+                style={styles.modeBtn}
+              >
+                <Text style={styles.modeBtnText}>⏱ Min</Text>
+              </TouchableOpacity>
+            )}
+
             {/* Edit layout toggle */}
             <TouchableOpacity
               onPress={() => setLayoutMode((v) => !v)}
@@ -945,6 +958,94 @@ const onEnd = async () => {
           }
         }}
       />
+
+      {/* ===== Minutes Tracker Modal ===== */}
+      <Modal visible={showMinutes} animationType="slide" transparent onRequestClose={() => setShowMinutes(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalSheet, { maxHeight: '80%' }]}>
+            {/* Header */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <Text style={styles.modalTitle}>⏱ Minutes Tracker</Text>
+              <TouchableOpacity onPress={() => setShowMinutes(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Text style={{ fontSize: 20, color: '#9ca3af' }}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {(() => {
+              const matchDuration = derivedState.status === 'completed'
+                ? (match?.halfDuration ?? 45) * 2
+                : computeMinute(state, Date.now());
+              const rosterForCalc = roster.map((r) => ({
+                playerId: r.playerId || r.id,
+                playerName: r.playerName || 'Unknown',
+                role: r.role,
+                attendance: r.attendance,
+              }));
+              const minutes = calculateMatchMinutes(rosterForCalc, events as any, matchDuration);
+              const onPitchNow = minutes.filter((p) => !p.subbedOff);
+              const subbedOff = minutes.filter((p) => p.subbedOff);
+
+              return (
+                <ScrollView showsVerticalScrollIndicator={false}>
+                  {/* Current minute */}
+                  <View style={{ backgroundColor: '#f3f4f6', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#6b7280' }}>MATCH TIME</Text>
+                    <Text style={{ fontSize: 18, fontWeight: '800', color: '#111' }}>{matchDuration}'</Text>
+                  </View>
+
+                  {onPitchNow.length > 0 && (
+                    <>
+                      <Text style={[styles.modalSectionTitle, { marginBottom: 8 }]}>ON PITCH</Text>
+                      {onPitchNow.map((p) => (
+                        <View key={p.playerId} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: 15, fontWeight: '600', color: '#111' }}>{p.playerName}</Text>
+                            <Text style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>
+                              {p.startedMatch ? 'Started' : `Sub on ${p.minuteOn}'`}
+                            </Text>
+                          </View>
+                          <View style={{ alignItems: 'flex-end' }}>
+                            <Text style={{ fontSize: 18, fontWeight: '800', color: '#16a34a' }}>{p.minutesPlayed}'</Text>
+                            <Text style={{ fontSize: 11, color: '#9ca3af' }}>played</Text>
+                          </View>
+                        </View>
+                      ))}
+                    </>
+                  )}
+
+                  {subbedOff.length > 0 && (
+                    <>
+                      <Text style={[styles.modalSectionTitle, { marginTop: 16, marginBottom: 8 }]}>SUBBED OFF</Text>
+                      {subbedOff.map((p) => (
+                        <View key={p.playerId} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: 15, fontWeight: '600', color: '#6b7280' }}>{p.playerName}</Text>
+                            <Text style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>
+                              {p.startedMatch ? 'Started' : `Sub on ${p.minuteOn}'`} · Off at {p.minuteOff}'
+                            </Text>
+                          </View>
+                          <View style={{ alignItems: 'flex-end' }}>
+                            <Text style={{ fontSize: 18, fontWeight: '800', color: '#374151' }}>{p.minutesPlayed}'</Text>
+                            <Text style={{ fontSize: 11, color: '#9ca3af' }}>played</Text>
+                          </View>
+                        </View>
+                      ))}
+                    </>
+                  )}
+
+                  {minutes.length === 0 && (
+                    <Text style={{ color: '#9ca3af', fontSize: 14, textAlign: 'center', marginTop: 20 }}>
+                      No players on pitch yet.
+                    </Text>
+                  )}
+
+                  <View style={{ height: 20 }} />
+                </ScrollView>
+              );
+            })()}
+          </View>
+        </View>
+      </Modal>
 
       {/* ===== Save Lineup Modal ===== */}
       <Modal visible={showSaveLineup} animationType="slide" transparent onRequestClose={() => setShowSaveLineup(false)}>

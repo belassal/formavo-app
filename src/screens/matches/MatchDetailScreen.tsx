@@ -50,6 +50,7 @@ import MiniPitchDisplay from '../../components/MiniPitchDisplay';
 import { listenMatchRatings, setPlayerMatchRating, type PlayerRating } from '../../services/ratingService';
 import { openMaps } from '../../utils/openMaps';
 import LocationMapPreview from '../../components/LocationMapPreview';
+import { calculateMatchMinutes } from '../../services/minutesService';
 import { listenLocations, type SavedLocation } from '../../services/locationService';
 
 
@@ -1206,48 +1207,82 @@ const addSelectedToRoster = async () => {
                       <View style={{ paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#f9fafb' }}>
                         <Text style={{ fontSize: 11, fontWeight: '700', color: '#9ca3af', letterSpacing: 0.5 }}>STARTING XI</Text>
                       </View>
-                      {starters.map((item) => (
-                        <View key={item.id}>
-                          <View style={SC.divider} />
-                          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, gap: 12 }}>
-                            {item.number ? (
-                              <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#f3f4f6', alignItems: 'center', justifyContent: 'center' }}>
-                                <Text style={{ fontSize: 12, fontWeight: '700', color: '#374151' }}>{item.number}</Text>
-                              </View>
-                            ) : null}
-                            <View style={{ flex: 1 }}>
-                              <Text style={{ fontSize: 14, fontWeight: '700', color: '#111' }}>{item.playerName}</Text>
-                              {item.position ? <Text style={{ fontSize: 12, color: '#9ca3af', marginTop: 1 }}>{item.position}</Text> : null}
-                            </View>
-                          </View>
-                        </View>
-                      ))}
-
-                      {/* Bench */}
-                      {bench.length > 0 && (
-                        <>
-                          <View style={SC.divider} />
-                          <View style={{ paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#f9fafb' }}>
-                            <Text style={{ fontSize: 11, fontWeight: '700', color: '#9ca3af', letterSpacing: 0.5 }}>BENCH</Text>
-                          </View>
-                          {bench.map((item) => (
-                            <View key={item.id}>
-                              <View style={SC.divider} />
-                              <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, gap: 12 }}>
-                                {item.number ? (
-                                  <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#f3f4f6', alignItems: 'center', justifyContent: 'center' }}>
-                                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#374151' }}>{item.number}</Text>
+                      {(() => {
+                        const matchDuration = (match?.halfDuration ?? 45) * 2;
+                        const allRoster = [...starters, ...bench].map((r) => ({
+                          playerId: r.id,
+                          playerName: r.playerName,
+                          role: r.role as 'starter' | 'bench',
+                          attendance: r.attendance,
+                        }));
+                        const minutesMap = status === 'completed'
+                          ? Object.fromEntries(calculateMatchMinutes(allRoster, events, matchDuration).map((m) => [m.playerId, m]))
+                          : {};
+                        return (
+                          <>
+                            {starters.map((item) => {
+                              const min = minutesMap[item.id];
+                              return (
+                                <View key={item.id}>
+                                  <View style={SC.divider} />
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, gap: 12 }}>
+                                    {item.number ? (
+                                      <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#f3f4f6', alignItems: 'center', justifyContent: 'center' }}>
+                                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#374151' }}>{item.number}</Text>
+                                      </View>
+                                    ) : null}
+                                    <View style={{ flex: 1 }}>
+                                      <Text style={{ fontSize: 14, fontWeight: '700', color: '#111' }}>{item.playerName}</Text>
+                                      {item.position ? <Text style={{ fontSize: 12, color: '#9ca3af', marginTop: 1 }}>{item.position}</Text> : null}
+                                    </View>
+                                    {min ? (
+                                      <View style={{ alignItems: 'flex-end' }}>
+                                        <Text style={{ fontSize: 13, fontWeight: '700', color: min.subbedOff ? '#9ca3af' : '#16a34a' }}>{min.minutesPlayed}'</Text>
+                                        {min.subbedOff && <Text style={{ fontSize: 10, color: '#9ca3af' }}>off {min.minuteOff}'</Text>}
+                                      </View>
+                                    ) : null}
                                   </View>
-                                ) : null}
-                                <View style={{ flex: 1 }}>
-                                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151' }}>{item.playerName}</Text>
-                                  {item.position ? <Text style={{ fontSize: 12, color: '#9ca3af', marginTop: 1 }}>{item.position}</Text> : null}
                                 </View>
-                              </View>
-                            </View>
-                          ))}
-                        </>
-                      )}
+                              );
+                            })}
+
+                            {/* Bench */}
+                            {bench.length > 0 && (
+                              <>
+                                <View style={SC.divider} />
+                                <View style={{ paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#f9fafb' }}>
+                                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#9ca3af', letterSpacing: 0.5 }}>BENCH</Text>
+                                </View>
+                                {bench.map((item) => {
+                                  const min = minutesMap[item.id];
+                                  return (
+                                    <View key={item.id}>
+                                      <View style={SC.divider} />
+                                      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, gap: 12 }}>
+                                        {item.number ? (
+                                          <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#f3f4f6', alignItems: 'center', justifyContent: 'center' }}>
+                                            <Text style={{ fontSize: 12, fontWeight: '700', color: '#374151' }}>{item.number}</Text>
+                                          </View>
+                                        ) : null}
+                                        <View style={{ flex: 1 }}>
+                                          <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151' }}>{item.playerName}</Text>
+                                          {item.position ? <Text style={{ fontSize: 12, color: '#9ca3af', marginTop: 1 }}>{item.position}</Text> : null}
+                                        </View>
+                                        {min ? (
+                                          <View style={{ alignItems: 'flex-end' }}>
+                                            <Text style={{ fontSize: 13, fontWeight: '700', color: '#2563eb' }}>{min.minutesPlayed}'</Text>
+                                            <Text style={{ fontSize: 10, color: '#9ca3af' }}>sub on {min.minuteOn}'</Text>
+                                          </View>
+                                        ) : null}
+                                      </View>
+                                    </View>
+                                  );
+                                })}
+                              </>
+                            )}
+                          </>
+                        );
+                      })()}
                     </>
                   )
                 )}
