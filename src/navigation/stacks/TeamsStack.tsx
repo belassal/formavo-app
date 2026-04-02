@@ -17,6 +17,7 @@ import TeamScheduleScreen from '../../screens/teams/TeamScheduleScreen';
 import TeamPhotosScreen from '../../screens/teams/TeamPhotosScreen';
 import PlayerAttendanceScreen from '../../screens/teams/PlayerAttendanceScreen';
 import OpponentHistoryScreen from '../../screens/teams/OpponentHistoryScreen';
+import ClubDashboardScreen from '../../screens/club/ClubDashboardScreen';
 
 export type TeamsStackParamList = {
   TeamsHome: undefined;
@@ -33,6 +34,7 @@ export type TeamsStackParamList = {
     avatarUrl?: string;
     clubId?: string;
   };
+  ClubDashboard: { clubId: string; clubName: string; viewerRole?: string };
   ClubSettings: { clubId: string; clubName?: string };
   StaffList: { clubId: string; clubName?: string; viewerRole?: string };
   StaffProfile: { clubId: string; memberId: string; memberName?: string; viewerRole?: string };
@@ -76,6 +78,11 @@ export default function TeamsStack() {
         name="PlayerProfile"
         component={PlayerProfileScreen}
         options={({ route }) => ({ title: route.params.playerName || 'Player' })}
+      />
+      <Stack.Screen
+        name="ClubDashboard"
+        component={ClubDashboardScreen}
+        options={({ route }) => ({ title: `${route.params.clubName} Dashboard` })}
       />
       <Stack.Screen
         name="ClubSettings"
