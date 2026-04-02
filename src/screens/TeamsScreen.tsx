@@ -354,39 +354,32 @@ export default function TeamsScreen() {
             </View>
 
             {/* Action buttons */}
-            <View style={{ flexDirection: 'row', borderTopWidth: 1, borderTopColor: B.border }}>
-              <TouchableOpacity
-                onPress={() => navigation.navigate('ClubDashboard', { clubId, clubName: club.name, viewerRole: viewerClubRole })}
-                activeOpacity={0.7}
-                style={{ flex: 1, paddingVertical: 13, alignItems: 'center', borderRightWidth: 1, borderRightColor: B.border }}
-              >
-                <Text style={{ fontSize: 13, fontWeight: '600', color: B.inkMid }}>📊 Dashboard</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={() => navigation.navigate('ClubPlayers', { clubId, clubName: club.name })}
-                activeOpacity={0.7}
-                style={{ flex: 1, paddingVertical: 13, alignItems: 'center', borderRightWidth: 1, borderRightColor: B.border }}
-              >
-                <Text style={{ fontSize: 13, fontWeight: '600', color: B.inkMid }}>👤 Players</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={() => navigation.navigate('StaffList', { clubId, clubName: club.name, viewerRole: viewerClubRole })}
-                activeOpacity={0.7}
-                style={{ flex: 1, paddingVertical: 13, alignItems: 'center', borderRightWidth: 1, borderRightColor: B.border }}
-              >
-                <Text style={{ fontSize: 13, fontWeight: '600', color: B.inkMid }}>🪪 Staff</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={() => navigation.navigate('ClubSettings', { clubId, clubName: club.name })}
-                activeOpacity={0.7}
-                style={{ flex: 1, paddingVertical: 13, alignItems: 'center' }}
-              >
-                <Text style={{ fontSize: 13, fontWeight: '600', color: B.inkMid }}>⚙️ Settings</Text>
-              </TouchableOpacity>
-            </View>
+            {(() => {
+              const btnStyle = { flex: 1, paddingVertical: 11, alignItems: 'center' as const, gap: 3 };
+              const iconStyle = { fontSize: 18 };
+              const labelStyle = { fontSize: 11, fontWeight: '600' as const, color: B.inkMid };
+              const divider = { borderRightWidth: 1, borderRightColor: B.border };
+              return (
+                <View style={{ flexDirection: 'row', borderTopWidth: 1, borderTopColor: B.border }}>
+                  <TouchableOpacity onPress={() => navigation.navigate('ClubDashboard', { clubId, clubName: club.name, viewerRole: viewerClubRole })} activeOpacity={0.7} style={[btnStyle, divider]}>
+                    <Text style={iconStyle}>📊</Text>
+                    <Text style={labelStyle}>Dashboard</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => navigation.navigate('ClubPlayers', { clubId, clubName: club.name })} activeOpacity={0.7} style={[btnStyle, divider]}>
+                    <Text style={iconStyle}>👤</Text>
+                    <Text style={labelStyle}>Players</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => navigation.navigate('StaffList', { clubId, clubName: club.name, viewerRole: viewerClubRole })} activeOpacity={0.7} style={[btnStyle, divider]}>
+                    <Text style={iconStyle}>🪪</Text>
+                    <Text style={labelStyle}>Staff</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => navigation.navigate('ClubSettings', { clubId, clubName: club.name })} activeOpacity={0.7} style={btnStyle}>
+                    <Text style={iconStyle}>⚙️</Text>
+                    <Text style={labelStyle}>Settings</Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })()}
           </View>
         )}
 
