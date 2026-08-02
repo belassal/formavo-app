@@ -7,7 +7,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useRoute, RouteProp } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { TeamsStackParamList } from '../../navigation/stacks/TeamsStack';
 import { listenMatches } from '../../services/matchService';
 import { listenTrainings, type Training } from '../../services/trainingService';
@@ -51,6 +52,7 @@ function padTwo(n: number): string {
 
 export default function TeamScheduleScreen() {
   const route = useRoute<Route>();
+  const navigation = useNavigation<NativeStackNavigationProp<TeamsStackParamList>>();
   const { teamId } = route.params;
 
   const today = new Date();
@@ -398,7 +400,22 @@ export default function TeamScheduleScreen() {
                     {idx > 0 && (
                       <View style={{ height: 1, backgroundColor: '#f3f4f6' }} />
                     )}
-                    <View
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      onPress={() =>
+                        event.type === 'match'
+                          ? navigation.navigate('MatchDetail', {
+                              teamId,
+                              matchId: event.id,
+                              title: event.title,
+                              role: route.params.role,
+                            })
+                          : navigation.navigate('TrainingDetail', {
+                              teamId,
+                              trainingId: event.id,
+                              role: route.params.role,
+                            })
+                      }
                       style={{
                         flexDirection: 'row',
                         alignItems: 'center',
@@ -471,7 +488,7 @@ export default function TeamScheduleScreen() {
                             </View>
                           )}
                       </View>
-                    </View>
+                    </TouchableOpacity>
                   </View>
                 );
               })}

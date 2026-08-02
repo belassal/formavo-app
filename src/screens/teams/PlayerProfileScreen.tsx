@@ -365,6 +365,43 @@ export default function PlayerProfileScreen() {
                   </View>
                 </TouchableOpacity>
 
+                {/* Shareable season card */}
+                <TouchableOpacity
+                  onPress={() => {
+                    const positions: string[] =
+                      playerData?.positions && playerData.positions.length > 0
+                        ? playerData.positions
+                        : playerData?.position ? [playerData.position]
+                        : playerPosition ? [playerPosition] : [];
+                    navigation.navigate('PlayerSeasonCard' as any, {
+                      playerName: playerData?.name ?? playerName,
+                      playerNumber: playerData?.number ?? playerNumber,
+                      positions,
+                      avatarUrl: playerData?.avatarUrl ?? avatarUrl ?? null,
+                      stats: {
+                        appearances: displayStats?.appearances ?? 0,
+                        goals: displayStats?.goals ?? 0,
+                        assists: displayStats?.assists ?? 0,
+                        yellowCards: displayStats?.yellowCards ?? 0,
+                        redCards: displayStats?.redCards ?? 0,
+                        totalMinutes: seasonMinutes?.totalMinutes,
+                        starts: seasonMinutes?.starts,
+                        attendancePct: trainingStats.total > 0
+                          ? Math.round((trainingStats.attended / trainingStats.total) * 100)
+                          : null,
+                      },
+                    });
+                  }}
+                  style={{
+                    backgroundColor: '#0a1628', borderRadius: 14,
+                    paddingVertical: 16, paddingHorizontal: 20,
+                    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                  }}
+                >
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#fff' }}>🎴 Season Card</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: '#4ade80' }}>View & share ›</Text>
+                </TouchableOpacity>
+
                 {/* Season Minutes card */}
                 {seasonMinutes && seasonMinutes.appearances > 0 && (
                   <View style={{

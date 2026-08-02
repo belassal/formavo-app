@@ -192,6 +192,14 @@ export default function LoginScreen() {
             />
           )}
 
+          {mode === 'signup' && (
+            <Text style={{ fontSize: 12, color: '#9ca3af', lineHeight: 17, marginTop: 10, paddingHorizontal: 2 }}>
+              Coaching a team? You can create it right after sign-up.{'\n'}
+              Invited by a coach? Sign up with the email address your invite was
+              sent to — you'll join your team automatically.
+            </Text>
+          )}
+
           {/* Forgot password */}
           {mode === 'signin' && (
             <TouchableOpacity onPress={handleForgotPassword} activeOpacity={0.7} style={styles.forgotRow}>

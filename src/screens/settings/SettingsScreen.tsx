@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
   SafeAreaView,
   ScrollView,
+  Switch,
   Text,
   TouchableOpacity,
   View,
@@ -13,6 +14,17 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { SettingsStackParamList } from '../../navigation/stacks/SettingsStack';
 import { removeFCMToken } from '../../services/notificationService';
+import { db } from '../../services/firebase';
+
+// Mirrors NotifPref in functions/src/index.ts — missing key means ON.
+const NOTIF_PREFS: { key: string; label: string; icon: string }[] = [
+  { key: 'live', label: 'Live goals', icon: '⚽' },
+  { key: 'schedule', label: 'New matches & trainings', icon: '📅' },
+  { key: 'rsvp', label: 'RSVPs & reminders', icon: '⏰' },
+  { key: 'chat', label: 'Team chat', icon: '💬' },
+  { key: 'announcements', label: 'Announcements', icon: '📣' },
+  { key: 'digest', label: 'Weekly digest', icon: '📊' },
+];
 
 type Nav = NativeStackNavigationProp<SettingsStackParamList>;
 
@@ -54,6 +66,22 @@ export default function SettingsScreen() {
   const navigation = useNavigation<Nav>();
   const uid = auth().currentUser?.uid ?? null;
 
+  const [prefs, setPrefs] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    if (!uid) return;
+    return db.collection('users').doc(uid).onSnapshot((snap) => {
+      setPrefs((snap.data() as any)?.notificationPrefs ?? {});
+    });
+  }, [uid]);
+
+  const togglePref = (key: string, value: boolean) => {
+    if (!uid) return;
+    setPrefs((p) => ({ ...p, [key]: value }));
+    db.collection('users').doc(uid)
+      .set({ notificationPrefs: { [key]: value } }, { merge: true })
+      .catch(console.warn);
+  };
+
   const handleSignOut = () => {
     Alert.alert('Sign out', 'Are you sure you want to sign out?', [
       { text: 'Cancel', style: 'cancel' },
@@ -93,6 +121,34 @@ export default function SettingsScreen() {
           </Text>
           <View style={{ backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#e5e7eb', overflow: 'hidden' }}>
             <Row label="Locations" icon="📍" onPress={() => navigation.navigate('Locations')} />
+          </View>
+        </View>
+
+        {/* Notifications */}
+        <View>
+          <Text style={{ fontSize: 12, fontWeight: '700', color: '#9ca3af', marginBottom: 8, marginLeft: 4, letterSpacing: 0.5 }}>
+            NOTIFICATIONS
+          </Text>
+          <View style={{ backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#e5e7eb', overflow: 'hidden' }}>
+            {NOTIF_PREFS.map((p, i) => (
+              <View key={p.key}>
+                {i > 0 && <Divider />}
+                <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 11, gap: 12 }}>
+                  <View style={{
+                    width: 34, height: 34, borderRadius: 8, backgroundColor: '#f3f4f6',
+                    alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <Text style={{ fontSize: 18 }}>{p.icon}</Text>
+                  </View>
+                  <Text style={{ flex: 1, fontSize: 16, color: '#111' }}>{p.label}</Text>
+                  <Switch
+                    value={prefs[p.key] !== false}
+                    onValueChange={(v) => togglePref(p.key, v)}
+                    trackColor={{ true: '#22c55e' }}
+                  />
+                </View>
+              </View>
+            ))}
           </View>
         </View>
 

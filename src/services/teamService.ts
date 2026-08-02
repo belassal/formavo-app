@@ -290,6 +290,32 @@ export async function inviteCoach(params: {
     },
     { merge: true },
   );
+
+  // Send the invite email (picked up by the Trigger Email extension)
+  const teamSnap = await teamRef.get();
+  const teamName = (teamSnap.data() as any)?.name || 'a team';
+  const roleLabel = role === 'coach' ? 'coach' : 'assistant coach';
+  await db.collection('mail').add({
+    to: [emailLower],
+    message: {
+      subject: `You've been invited to coach ${teamName} on Formavo`,
+      html: `
+        <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px;">
+          <h2 style="font-size: 22px; font-weight: 800; color: #111; margin-bottom: 8px;">
+            You're invited to Formavo ⚽
+          </h2>
+          <p style="color: #374151; font-size: 16px; line-height: 1.6;">
+            You've been invited to join <strong>${teamName}</strong> as ${roleLabel === 'coach' ? 'a' : 'an'} <strong>${roleLabel}</strong>.
+          </p>
+          <p style="color: #374151; font-size: 16px; line-height: 1.6;">
+            Download the Formavo app and sign up with this email address
+            (<strong>${emailLower}</strong>) to manage the roster, schedule and match days.
+          </p>
+        </div>
+      `,
+      text: `You've been invited to join ${teamName} on Formavo as ${roleLabel === 'coach' ? 'a' : 'an'} ${roleLabel}.\n\nDownload the Formavo app and sign up with this email address (${emailLower}) to manage the roster, schedule and match days.`,
+    },
+  }).catch((e) => console.warn('[inviteCoach] mail error:', e));
 }
 
 /**

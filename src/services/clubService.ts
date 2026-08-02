@@ -233,6 +233,35 @@ export async function inviteStaffMember(params: {
       },
       { merge: true },
     );
+
+  // Send the invite email (picked up by the Trigger Email extension)
+  const clubSnap = await db.collection(COL.clubs).doc(clubId).get();
+  const clubName = (clubSnap.data() as any)?.name || 'a club';
+  const roleLabels: Record<ClubRole, string> = {
+    owner: 'owner', head_coach: 'head coach', asst_coach: 'assistant coach', staff: 'staff member',
+  };
+  await db.collection('mail').add({
+    to: [emailLower],
+    message: {
+      subject: `${invitedByName || 'A club'} invited you to join ${clubName} on Formavo`,
+      html: `
+        <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px;">
+          <h2 style="font-size: 22px; font-weight: 800; color: #111; margin-bottom: 8px;">
+            You're invited to Formavo ⚽
+          </h2>
+          <p style="color: #374151; font-size: 16px; line-height: 1.6;">
+            ${invitedByName || 'A club administrator'} invited you to join
+            <strong>${clubName}</strong> as a <strong>${roleLabels[role]}</strong>.
+          </p>
+          <p style="color: #374151; font-size: 16px; line-height: 1.6;">
+            Download the Formavo app and sign up with this email address
+            (<strong>${emailLower}</strong>) to get access to your teams.
+          </p>
+        </div>
+      `,
+      text: `${invitedByName || 'A club administrator'} invited you to join ${clubName} on Formavo as a ${roleLabels[role]}.\n\nDownload the Formavo app and sign up with this email address (${emailLower}) to get access to your teams.`,
+    },
+  }).catch((e) => console.warn('[inviteStaff] mail error:', e));
 }
 
 /**
