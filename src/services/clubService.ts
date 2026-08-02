@@ -213,21 +213,119 @@ export async function inviteStaffMember(params: {
     throw new Error('Valid email is required');
   }
 
+  // Deterministic ID so security rules can validate acceptance (one pending invite per email).
   await db
     .collection(COL.clubs)
     .doc(clubId)
     .collection(COL.clubMembers)
-    .add({
+    .doc(`invite_${emailLower}`)
+    .set(
+      {
+        role,
+        status: 'invited' as ClubMemberStatus,
+        displayName: emailLower,
+        email: emailLower,
+        invitedEmail: emailLower,
+        invitedEmailLower: emailLower,
+        teamIds: teamIds ?? [],
+        joinedAt: serverTimestamp(),
+        invitedByName,
+      },
+      { merge: true },
+    );
+}
+
+/**
+ * Maps a club role to the team-level role granted on assigned teams.
+ */
+export function clubRoleToTeamRole(role: ClubRole): 'coach' | 'assistant' {
+  return role === 'owner' || role === 'head_coach' ? 'coach' : 'assistant';
+}
+
+/**
+ * Accepts a pending staff invite (clubs/{clubId}/members/{inviteId}).
+ *
+ * - creates clubs/{clubId}/members/{uid} as active
+ * - deletes the invite doc so the staff list doesn't show a duplicate row
+ * - sets users/{uid}/clubRef/data if the user doesn't already have a club
+ * - grants team membership + teamRefs for each team assigned on the invite
+ */
+export async function acceptClubStaffInvite(params: {
+  clubId: string;
+  inviteRef: any;
+  inviteData: any;
+  uid: string;
+  email: string;
+  displayName?: string;
+}): Promise<void> {
+  const { clubId, inviteRef, inviteData, uid, email, displayName } = params;
+
+  const role: ClubRole = inviteData?.role || 'staff';
+  const teamIds: string[] = Array.isArray(inviteData?.teamIds) ? inviteData.teamIds : [];
+  const teamRole = clubRoleToTeamRole(role);
+
+  const clubRefDoc = db.collection(COL.users).doc(uid).collection('clubRef').doc('data');
+  const [clubRefSnap, ...teamSnaps] = await Promise.all([
+    clubRefDoc.get(),
+    ...teamIds.map((teamId) => db.collection(COL.teams).doc(teamId).get()),
+  ]);
+
+  const batch = db.batch();
+
+  batch.set(
+    db.collection(COL.clubs).doc(clubId).collection(COL.clubMembers).doc(uid),
+    {
       role,
-      status: 'invited' as ClubMemberStatus,
-      displayName: emailLower,
-      email: emailLower,
-      invitedEmail: emailLower,
-      invitedEmailLower: emailLower,
-      teamIds: teamIds ?? [],
+      status: 'active' as ClubMemberStatus,
+      displayName: displayName || inviteData?.displayName || email,
+      email,
+      teamIds,
       joinedAt: serverTimestamp(),
-      invitedByName,
-    });
+      invitedEmailLower: email,
+    },
+    { merge: true },
+  );
+
+  batch.delete(inviteRef);
+
+  if (!clubRefSnap.data()?.clubId) {
+    batch.set(clubRefDoc, { clubId }, { merge: true });
+  }
+
+  for (const teamSnap of teamSnaps) {
+    if (!teamSnap.exists) continue;
+    const teamData: any = teamSnap.data() || {};
+    if (teamData.isDeleted) continue;
+    const teamId = teamSnap.id;
+    const teamName = teamData.name || 'Team';
+
+    batch.set(
+      db.collection(COL.teams).doc(teamId).collection(COL.members).doc(uid),
+      {
+        role: teamRole,
+        status: 'active',
+        joinedAt: serverTimestamp(),
+        invitedEmailLower: email,
+      },
+      { merge: true },
+    );
+
+    batch.set(
+      db.collection(COL.users).doc(uid).collection(COL.teamRefs).doc(teamId),
+      {
+        teamId,
+        role: teamRole,
+        status: 'active',
+        joinedAt: serverTimestamp(),
+        teamName,
+        teamNameLower: String(teamName).toLowerCase(),
+        isDeleted: false,
+      },
+      { merge: true },
+    );
+  }
+
+  await batch.commit();
 }
 
 /**

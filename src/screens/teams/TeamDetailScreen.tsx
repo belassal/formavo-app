@@ -373,10 +373,20 @@ export default function TeamDetailScreen() {
 
         if (teamClubId) {
           setClubId(teamClubId);
-          // Migrate existing players to club registry (idempotent)
-          migrateTeamPlayersToClub({ teamId, clubId: teamClubId }).catch((e) =>
-            console.warn('[TeamDetail] migration error:', e),
-          );
+          // Migrate existing players to club registry (idempotent, staff only —
+          // parents don't have write access to the club registry)
+          if (!isParent) {
+            migrateTeamPlayersToClub({ teamId, clubId: teamClubId }).catch((e) =>
+              console.warn('[TeamDetail] migration error:', e),
+            );
+          }
+        }
+
+        // Parents can't (and shouldn't) run the season bootstrap writes —
+        // just adopt the team's active season for filtering.
+        if (isParent) {
+          if (existingActiveSeasonId) setViewingSeasonId(existingActiveSeasonId);
+          return;
         }
 
         // Always call getOrCreateDefaultSeason — it handles re-tagging

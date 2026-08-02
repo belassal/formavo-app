@@ -1,0 +1,271 @@
+rules_version = '2';
+
+// Formavo security rules.
+//
+// Role model:
+//   teams/{teamId}/members/{uid}        role: 'coach' | 'assistant' | 'parent'
+//   clubs/{clubId}/members/{uid}        role: 'owner' | 'head_coach' | 'asst_coach' | 'staff'
+//   Pending invites live in the same collections keyed 'invite_{emailLower}'
+//   (deterministic IDs let these rules validate self-join on acceptance).
+//
+// Broad strokes:
+//   - Team data is readable by team members and by members of the team's club.
+//   - Team data is writable by team coaches/assistants and club staff.
+//   - Parents can only write their RSVP fields (match roster + training arrays)
+//     and send chat messages.
+//   - Users can accept invites addressed to their own email, and only with the
+//     role the invite specifies.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Identity helpers ────────────────────────────────────────────────────
+    function isSignedIn() { return request.auth != null; }
+    function uid() { return request.auth.uid; }
+    function userEmail() {
+      return request.auth.token.email != null
+        ? request.auth.token.email.lower()
+        : '__no_email__';
+    }
+    function myInviteId() { return 'invite_' + userEmail(); }
+
+    // ── Team membership helpers ─────────────────────────────────────────────
+    function teamMemberDoc(teamId) {
+      return get(/databases/$(database)/documents/teams/$(teamId)/members/$(uid()));
+    }
+    function isTeamMember(teamId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/teams/$(teamId)/members/$(uid()));
+    }
+    function isTeamStaff(teamId) {
+      return isTeamMember(teamId)
+        && teamMemberDoc(teamId).data.role in ['coach', 'assistant'];
+    }
+    function isTeamParent(teamId) {
+      return isTeamMember(teamId)
+        && teamMemberDoc(teamId).data.role == 'parent';
+    }
+    function teamInviteDoc(teamId) {
+      return get(/databases/$(database)/documents/teams/$(teamId)/members/$(myInviteId()));
+    }
+    function hasTeamInvite(teamId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/teams/$(teamId)/members/$(myInviteId()));
+    }
+
+    // ── Club membership helpers ─────────────────────────────────────────────
+    function clubMemberDoc(clubId) {
+      return get(/databases/$(database)/documents/clubs/$(clubId)/members/$(uid()));
+    }
+    function isClubMember(clubId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/clubs/$(clubId)/members/$(uid()));
+    }
+    function isClubManager(clubId) {
+      return isClubMember(clubId)
+        && clubMemberDoc(clubId).data.role in ['owner', 'head_coach'];
+    }
+    function isClubOwner(clubId) {
+      return isClubMember(clubId)
+        && clubMemberDoc(clubId).data.role == 'owner';
+    }
+    function teamClubId(teamId) {
+      return get(/databases/$(database)/documents/teams/$(teamId)).data.clubId;
+    }
+    // Any active member of the club a team belongs to (owner/coaching staff).
+    function isClubStaffOfTeam(teamId) {
+      return isClubMember(teamClubId(teamId));
+    }
+    function clubInviteDocForTeam(teamId) {
+      return get(/databases/$(database)/documents/clubs/$(teamClubId(teamId))/members/$(myInviteId()));
+    }
+    function hasClubInviteForTeam(teamId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/clubs/$(teamClubId(teamId))/members/$(myInviteId()));
+    }
+
+    // ── Combined access helpers ─────────────────────────────────────────────
+    function canReadTeam(teamId) {
+      return isTeamMember(teamId) || isClubStaffOfTeam(teamId);
+    }
+    function canWriteTeam(teamId) {
+      return isTeamStaff(teamId) || isClubStaffOfTeam(teamId);
+    }
+    // Parent may only touch roster docs for their own linked children
+    // (legacy member docs without linkedPlayerIds are allowed through).
+    function parentLinkedTo(teamId, playerId) {
+      return !('linkedPlayerIds' in teamMemberDoc(teamId).data)
+        || playerId in teamMemberDoc(teamId).data.linkedPlayerIds;
+    }
+
+    // ── Invite discovery (collectionGroup('members')) ───────────────────────
+    // Lets a user find pending invites addressed to their own email across
+    // all teams and clubs. Queries must filter invitedEmailLower == their email.
+    match /{path=**}/members/{memberId} {
+      allow read: if isSignedIn()
+        && resource.data.invitedEmailLower == userEmail();
+    }
+
+    // ── Users ───────────────────────────────────────────────────────────────
+    match /users/{userId} {
+      // Profiles (name/photo/bio) are shown to teammates and club staff.
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn() && userId == uid();
+
+      match /{sub=**} {
+        allow read, write: if isSignedIn() && userId == uid();
+      }
+    }
+
+    // ── Teams ───────────────────────────────────────────────────────────────
+    match /teams/{teamId} {
+      allow read: if isTeamMember(teamId)
+        || (('clubId' in resource.data) && isClubMember(resource.data.clubId))
+        || hasTeamInvite(teamId)
+        || (('clubId' in resource.data)
+            && exists(/databases/$(database)/documents/clubs/$(resource.data.clubId)/members/$(myInviteId())));
+      allow create: if isSignedIn() && request.resource.data.createdBy == uid();
+      allow update: if isTeamStaff(teamId)
+        || (('clubId' in resource.data) && isClubMember(resource.data.clubId));
+      allow delete: if false;
+
+      match /members/{memberId} {
+        allow read: if canReadTeam(teamId);
+        // Staff manage members and create invite docs (deterministic invite IDs only).
+        allow create: if isTeamStaff(teamId)
+          && (memberId == 'invite_' + request.resource.data.invitedEmailLower
+              || request.resource.data.status == 'active');
+        allow update, delete: if isTeamStaff(teamId);
+        // Self-join when creating your own team (team doc created in the same batch).
+        allow create: if isSignedIn() && memberId == uid()
+          && !exists(/databases/$(database)/documents/teams/$(teamId))
+          && request.resource.data.role == 'coach';
+        // Accept a team invite addressed to your email, with the invited role.
+        allow create, update: if isSignedIn() && memberId == uid()
+          && hasTeamInvite(teamId)
+          && request.resource.data.role == teamInviteDoc(teamId).data.role;
+        // Accept a club staff invite that assigns this team.
+        allow create, update: if isSignedIn() && memberId == uid()
+          && hasClubInviteForTeam(teamId)
+          && teamId in clubInviteDocForTeam(teamId).data.teamIds;
+        // Remove your own invite doc on acceptance.
+        allow delete: if isSignedIn() && memberId == myInviteId();
+      }
+
+      match /playerMemberships/{playerId} {
+        allow read: if canReadTeam(teamId);
+        allow write: if canWriteTeam(teamId);
+      }
+
+      match /matches/{matchId} {
+        allow read: if canReadTeam(teamId);
+        allow write: if canWriteTeam(teamId);
+
+        match /roster/{playerId} {
+          allow read: if canReadTeam(teamId);
+          allow write: if canWriteTeam(teamId);
+          // Parents may RSVP for their own children only, touching RSVP fields only.
+          allow create: if isTeamParent(teamId)
+            && request.resource.data.keys().hasOnly(['rsvpStatus', 'rsvpBy', 'rsvpAt', 'rsvpByName', 'rsvpNote'])
+            && request.resource.data.rsvpBy == uid()
+            && parentLinkedTo(teamId, playerId);
+          allow update: if isTeamParent(teamId)
+            && request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['rsvpStatus', 'rsvpBy', 'rsvpAt', 'rsvpByName', 'rsvpNote'])
+            && request.resource.data.rsvpBy == uid()
+            && parentLinkedTo(teamId, playerId);
+        }
+
+        match /events/{eventId} {
+          allow read: if canReadTeam(teamId);
+          allow write: if canWriteTeam(teamId);
+        }
+
+        match /ratings/{playerId} {
+          allow read: if canReadTeam(teamId);
+          allow write: if canWriteTeam(teamId);
+        }
+      }
+
+      match /trainings/{trainingId} {
+        allow read: if canReadTeam(teamId);
+        allow write: if canWriteTeam(teamId);
+        // Parents may only toggle the RSVP arrays.
+        allow update: if isTeamParent(teamId)
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['confirmedPlayerIds', 'declinedPlayerIds', 'updatedAt']);
+      }
+
+      match /seasons/{seasonId} {
+        allow read: if canReadTeam(teamId);
+        allow write: if canWriteTeam(teamId);
+      }
+
+      match /lineups/{lineupId} {
+        allow read: if canReadTeam(teamId);
+        allow write: if canWriteTeam(teamId);
+      }
+
+      match /announcements/{announcementId} {
+        allow read: if canReadTeam(teamId);
+        allow write: if canWriteTeam(teamId);
+      }
+
+      match /messages/{messageId} {
+        allow read: if canReadTeam(teamId);
+        allow create: if isTeamMember(teamId)
+          && request.resource.data.senderId == uid();
+      }
+
+      match /photos/{photoId} {
+        allow read: if canReadTeam(teamId);
+        allow write: if canWriteTeam(teamId);
+      }
+    }
+
+    // ── Clubs ───────────────────────────────────────────────────────────────
+    match /clubs/{clubId} {
+      allow read: if isClubMember(clubId)
+        || exists(/databases/$(database)/documents/clubs/$(clubId)/members/$(myInviteId()));
+      allow create: if isSignedIn() && request.resource.data.createdBy == uid();
+      allow update: if isClubManager(clubId);
+      allow delete: if false;
+
+      match /members/{memberId} {
+        allow read: if isClubMember(clubId);
+        // Managers create invite docs (deterministic IDs only).
+        allow create: if isClubManager(clubId)
+          && memberId == 'invite_' + request.resource.data.invitedEmailLower
+          && request.resource.data.status == 'invited';
+        // Owner bootstrap while creating the club (club doc created in the same batch).
+        allow create: if isSignedIn() && memberId == uid()
+          && !exists(/databases/$(database)/documents/clubs/$(clubId))
+          && request.resource.data.role == 'owner';
+        // Accept your own staff invite, with the invited role.
+        allow create, update: if isSignedIn() && memberId == uid()
+          && exists(/databases/$(database)/documents/clubs/$(clubId)/members/$(myInviteId()))
+          && request.resource.data.role
+               == get(/databases/$(database)/documents/clubs/$(clubId)/members/$(myInviteId())).data.role;
+        // Owner manages roles/teams/removal; owner's own teamIds updates included.
+        allow update, delete: if isClubOwner(clubId);
+        // Remove your own invite doc on acceptance.
+        allow delete: if isSignedIn() && memberId == myInviteId();
+      }
+
+      match /players/{playerId} {
+        allow read, write: if isClubMember(clubId);
+      }
+    }
+
+    // ── Legacy top-level players collection (fallback path in playerService) ─
+    match /players/{playerId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // ── Outbound email queue (Trigger Email extension) ──────────────────────
+    match /mail/{mailId} {
+      allow create: if isSignedIn();
+      allow read, update, delete: if false;
+    }
+  }
+}

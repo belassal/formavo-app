@@ -1,0 +1,60 @@
+rules_version = '2';
+
+// Formavo Storage rules.
+// Paths in use (src/services/storageService.ts):
+//   users/{uid}/avatar.jpg          — own profile photo
+//   players/{playerId}/avatar.jpg   — player photo (no teamId in path; see note)
+//   teams/{teamId}/photos/{file}    — team photo gallery (coach upload/delete)
+//   clubs/{clubId}/logo.jpg         — club logo (managers)
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() { return request.auth != null; }
+
+    function isImage() {
+      return request.resource != null
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    function isTeamStaff(teamId) {
+      return isSignedIn()
+        && firestore.exists(/databases/(default)/documents/teams/$(teamId)/members/$(request.auth.uid))
+        && firestore.get(/databases/(default)/documents/teams/$(teamId)/members/$(request.auth.uid)).data.role in ['coach', 'assistant'];
+    }
+
+    function isClubManager(clubId) {
+      return isSignedIn()
+        && firestore.exists(/databases/(default)/documents/clubs/$(clubId)/members/$(request.auth.uid))
+        && firestore.get(/databases/(default)/documents/clubs/$(clubId)/members/$(request.auth.uid)).data.role in ['owner', 'head_coach'];
+    }
+
+    match /users/{uid}/{file} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn() && request.auth.uid == uid && isImage();
+      allow delete: if isSignedIn() && request.auth.uid == uid;
+    }
+
+    // Player avatars: the path carries no team/club id, so membership can't be
+    // verified here — any signed-in user may upload an image. Tighten by moving
+    // avatars under teams/{teamId}/players/... if this becomes a concern.
+    match /players/{playerId}/{file} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn() && isImage();
+      allow delete: if isSignedIn();
+    }
+
+    match /teams/{teamId}/photos/{file} {
+      allow read: if isSignedIn();
+      allow create, update: if isTeamStaff(teamId) && isImage();
+      allow delete: if isTeamStaff(teamId);
+    }
+
+    match /clubs/{clubId}/{file} {
+      allow read: if isSignedIn();
+      allow create, update: if isClubManager(clubId) && isImage();
+      allow delete: if isClubManager(clubId);
+    }
+  }
+}

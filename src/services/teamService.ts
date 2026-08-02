@@ -1,6 +1,6 @@
 import { db, serverTimestamp, arrayUnion } from './firebase';
 import { COL } from '../models/collections';
-import { getOrCreateClubForUser } from './clubService';
+import { getOrCreateClubForUser, acceptClubStaffInvite } from './clubService';
 import { getOrCreateDefaultSeason, setActiveSeasonId } from './seasonService';
 
 export type TeamRole = 'coach' | 'assistant' | 'parent';
@@ -255,9 +255,16 @@ export function listenTeamMembers(
 }
 
 /**
+ * Deterministic invite doc ID: one pending invite per email per team/club.
+ * Security rules rely on this to validate that a self-join has a matching invite.
+ */
+export function inviteDocId(emailLower: string) {
+  return `invite_${emailLower}`;
+}
+
+/**
  * Invite an additional coach/assistant by email.
- * Creates a member invite doc under teams/{teamId}/members/{autoId}
- * (We use autoId so it supports multiple invites without collisions.)
+ * Creates a member invite doc under teams/{teamId}/members/invite_{email}.
  */
 export async function inviteCoach(params: {
   teamId: string;
@@ -272,14 +279,17 @@ export async function inviteCoach(params: {
 
   const teamRef = db.collection(COL.teams).doc(teamId);
 
-  await teamRef.collection(COL.members).add({
-    role,
-    status: 'invited' as MemberStatus,
-    invitedEmail: emailLower,
-    invitedEmailLower: emailLower,
-    invitedAt: serverTimestamp(),
-    invitedBy,
-  });
+  await teamRef.collection(COL.members).doc(inviteDocId(emailLower)).set(
+    {
+      role,
+      status: 'invited' as MemberStatus,
+      invitedEmail: emailLower,
+      invitedEmailLower: emailLower,
+      invitedAt: serverTimestamp(),
+      invitedBy,
+    },
+    { merge: true },
+  );
 }
 
 /**
@@ -306,18 +316,23 @@ export async function inviteParent(params: {
   const teamSnap = await teamRef.get();
   const teamName = (teamSnap.data() as any)?.name || 'your child\'s team';
 
-  // 1) Create the invite doc
-  await teamRef.collection(COL.members).add({
-    role: 'parent' as TeamRole,
-    status: 'invited' as MemberStatus,
-    invitedEmail: emailLower,
-    invitedEmailLower: emailLower,
-    invitedAt: serverTimestamp(),
-    invitedBy,
-    linkedPlayerId,
-    linkedPlayerName,
-    linkedPlayers: [{ id: linkedPlayerId, name: linkedPlayerName }],
-  });
+  // 1) Create/merge the invite doc — a second child invite for the same email
+  //    accumulates into linkedPlayers on the one pending invite.
+  await teamRef.collection(COL.members).doc(inviteDocId(emailLower)).set(
+    {
+      role: 'parent' as TeamRole,
+      status: 'invited' as MemberStatus,
+      invitedEmail: emailLower,
+      invitedEmailLower: emailLower,
+      invitedAt: serverTimestamp(),
+      invitedBy,
+      linkedPlayerId,
+      linkedPlayerName,
+      linkedPlayers: arrayUnion({ id: linkedPlayerId, name: linkedPlayerName }),
+      linkedPlayerIds: arrayUnion(linkedPlayerId),
+    },
+    { merge: true },
+  );
 
   // 2) Write to the `mail` collection — picked up by the Trigger Email extension
   await db.collection('mail').add({
@@ -410,12 +425,15 @@ export async function resendParentInvite(params: {
 export async function acceptTeamInvitesForUser(params: {
   uid: string;
   email: string;
+  displayName?: string;
 }) {
-  const { uid, email } = params;
+  const { uid, email, displayName } = params;
   const emailLower = normLower(email);
   if (!emailLower) return;
 
-  // Find invite docs anywhere: */members/* where invitedEmailLower == emailLower and status == invited
+  // Find invite docs anywhere: */members/* where invitedEmailLower == emailLower and status == invited.
+  // NOTE: clubs/{clubId}/members shares the 'members' collection name, so this
+  // collectionGroup query also returns club staff invites — routed below by parent collection.
   const invitesSnap = await db
     .collectionGroup(COL.members)
     .where('invitedEmailLower', '==', emailLower)
@@ -427,20 +445,37 @@ export async function acceptTeamInvitesForUser(params: {
   // For each invite doc, we need the teamId (parent path: teams/{teamId}/members/{inviteId})
   for (const inviteDoc of invitesSnap.docs) {
     const inviteData: any = inviteDoc.data();
+
+    const membersColRef = inviteDoc.ref.parent; // .../members
+    const teamRef = membersColRef.parent;       // teams/{teamId} or clubs/{clubId}
+    if (!teamRef) continue;
+
+    const parentCollection = teamRef.parent?.id;
+    if (parentCollection === COL.clubs) {
+      await acceptClubStaffInvite({
+        clubId: teamRef.id,
+        inviteRef: inviteDoc.ref,
+        inviteData,
+        uid,
+        email: emailLower,
+        displayName,
+      }).catch((e) => console.warn('[acceptInvites] club invite error:', e));
+      continue;
+    }
+    if (parentCollection !== COL.teams) continue;
+
     const role: TeamRole = inviteData.role || 'assistant';
 
     // Propagate parent-player link fields if present.
     // Use arrayUnion so a second child invite for the same team appends to linkedPlayers.
+    const invitedChildren: LinkedPlayer[] = getLinkedPlayers(inviteData);
     const parentFields =
-      role === 'parent' && inviteData.linkedPlayerId
+      role === 'parent' && invitedChildren.length > 0
         ? {
-            linkedPlayers: arrayUnion({ id: inviteData.linkedPlayerId, name: inviteData.linkedPlayerName || '' }),
+            linkedPlayers: arrayUnion(...invitedChildren),
+            linkedPlayerIds: arrayUnion(...invitedChildren.map((c) => c.id)),
           }
         : {};
-
-    const membersColRef = inviteDoc.ref.parent; // .../members
-    const teamRef = membersColRef.parent;       // .../teams/{teamId}
-    if (!teamRef) continue;
 
     const teamId = teamRef.id;
 
@@ -487,16 +522,9 @@ export async function acceptTeamInvitesForUser(params: {
       { merge: true }
     );
 
-    // 3) Mark invite doc accepted
-    batch.set(
-      inviteDoc.ref,
-      {
-        status: 'accepted',
-        acceptedAt: serverTimestamp(),
-        acceptedBy: uid,
-      },
-      { merge: true }
-    );
+    // 3) Remove the invite doc — the uid-keyed member doc replaces it,
+    //    so member lists don't show a stale duplicate row.
+    batch.delete(inviteDoc.ref);
 
     await batch.commit();
   }
