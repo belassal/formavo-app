@@ -25,7 +25,7 @@ import { setMatchRosterSlotKey, setMatchSlotPos, setMatchFormation } from '../..
 import FormationPickerModal, { type FormationPickerResult } from './components/FormationPickerModal';
 import { buildSlots } from '../../services/formation';
 import { assignByPositions } from '../../services/positionMatch';
-import { listenCustomFormations } from '../../services/formationConfigService';
+import { listenFormationConfig, applyLayout, type FormationLayouts } from '../../services/formationConfigService';
 import { listenTeamMemberships } from '../../services/playerService';
 import MatchHeader from './MatchHeader'; // adjust path if needed
 import type { MatchState } from '../../models/match';
@@ -132,11 +132,17 @@ export default function GameDayPitchScreen() {
   // ── Mid-game formation switch ─────────────────────────────────────────────
   const [showFormationPicker, setShowFormationPicker] = useState(false);
   const [customFormations, setCustomFormations] = useState<Record<string, string[]>>({});
+  const [formationLayouts, setFormationLayouts] = useState<FormationLayouts>({});
   useEffect(() => {
     let unsub: (() => void) | undefined;
     db.collection(COL.teams).doc(teamId).get().then((snap) => {
       const clubId = (snap.data() as any)?.clubId;
-      if (clubId) unsub = listenCustomFormations(clubId, setCustomFormations);
+      if (clubId) {
+        unsub = listenFormationConfig(clubId, (cfg) => {
+          setCustomFormations(cfg.byFormat);
+          setFormationLayouts(cfg.layouts);
+        });
+      }
     }).catch(() => {});
     return () => { if (unsub) unsub(); };
   }, [teamId]);
@@ -151,7 +157,10 @@ export default function GameDayPitchScreen() {
 
       // Remap everyone currently on pitch into the new slot set using ordered
       // position preferences (re-picking the same formation = reset to natural).
-      const slots = buildSlots(newFormation);
+      const slots = applyLayout(
+        buildSlots(newFormation),
+        formationLayouts[result.format]?.[newFormation],
+      );
       const currentGkId = slotToPlayerId['GK'] ?? null;
       const mapping = assignByPositions(toMatchable(onPitch), slots, newFormation, currentGkId);
       for (const [playerId, slotKey] of Object.entries(mapping)) {
@@ -325,7 +334,11 @@ export default function GameDayPitchScreen() {
 
   // Stable slotPos reference — avoids passing a new {} object every render
   // which would cause GameDayPitch effects to re-fire unnecessarily.
-  const slotPos = useMemo(() => match?.slotPos || {}, [match?.slotPos]);
+  // Club default layout for this formation first, per-match drags on top.
+  const slotPos = useMemo(() => {
+    const clubLayout = formationLayouts[match?.format ?? '']?.[formation] ?? {};
+    return { ...clubLayout, ...(match?.slotPos || {}) };
+  }, [match?.slotPos, match?.format, formation, formationLayouts]);
 
   const getCurrentMatchSec = () => computeElapsedSec(state, Date.now());
   const currentMinute = () => computeCappedMinute(state, Date.now(), match?.halfDuration ?? 45);
@@ -442,8 +455,9 @@ const derivedState = useMemo(() => {
     if (!positionsLoaded) return;  // wait for position prefs so first assign is smart
 
     // Fill slots deterministically and WRITE to Firestore (so it becomes stable).
-    // Position-aware: players land in their preferred roles when set.
-    const slots = buildSlots(formation);
+    // Position-aware: players land in their preferred roles when set; club
+    // layout tweaks feed the side-detection too.
+    const slots = applyLayout(buildSlots(formation), formationLayouts[match?.format ?? '']?.[formation]);
     const mapping = assignByPositions(toMatchable(starters), slots, formation, null);
 
     (async () => {

@@ -1,15 +1,18 @@
 /**
- * FormationsScreen — manage custom formations per format (7v7 / 9v9 / 11v11).
- * Built-in formations are shown locked; custom ones (stored on the club)
- * can be added with a validated "2-4-2" style input and removed with ×.
- * Custom formations appear in every formation picker (match creation,
- * mid-game switch) alongside the built-ins.
+ * FormationsScreen — manage formations per format (7v7 / 9v9 / 11v11).
+ *
+ * - Built-in formations shown locked; club custom ones added via a validated
+ *   "2-4-2" input and removable with ×.
+ * - Tap any formation chip to open it on a full pitch where the dots are
+ *   DRAGGABLE. Saving stores a club-wide default layout for that formation —
+ *   every future match pitch starts from it (per-match drags still override).
  */
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
   Modal,
+  PanResponder,
   Platform,
   SafeAreaView,
   ScrollView,
@@ -20,55 +23,89 @@ import {
 } from 'react-native';
 import auth from '@react-native-firebase/auth';
 import { listenMyClubId } from '../../services/clubService';
-import { DEFAULT_FORMATS, type FormationPosition } from '../../services/formationDefaults';
+import { DEFAULT_FORMATS } from '../../services/formationDefaults';
+import { buildSlots, type Slot } from '../../services/formation';
+import { slotRoles } from '../../services/positionMatch';
 import {
   addCustomFormation,
-  customFormationDef,
-  listenCustomFormations,
+  applyLayout,
+  clearFormationLayout,
+  listenFormationConfig,
   removeCustomFormation,
+  saveFormationLayout,
   validateFormationName,
   outfieldCount,
-  type CustomFormationsByFormat,
+  type FormationConfig,
+  type SlotPosMap,
 } from '../../services/formationConfigService';
 
-// ── Full-size vertical pitch preview ─────────────────────────────────────────
-const PW = 280;
-const PH = 380;
+const PW = 300;
+const PH = 400;
+const DOT = 34;
 
-function FormationPitch({ positions }: { positions: FormationPosition[] }) {
-  const L = 'rgba(255,255,255,0.45)';
+function clamp(v: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, v));
+}
+
+function DraggableDot({
+  slotKey,
+  role,
+  x,
+  y,
+  onDrop,
+}: {
+  slotKey: string;
+  role: string;
+  x: number;
+  y: number;
+  onDrop: (slotKey: string, x: number, y: number) => void;
+}) {
+  const [drag, setDrag] = useState<{ dx: number; dy: number } | null>(null);
+  const startRef = useRef({ x, y });
+  useEffect(() => { startRef.current = { x, y }; }, [x, y]);
+
+  const pan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderMove: (_, g) => setDrag({ dx: g.dx, dy: g.dy }),
+      onPanResponderRelease: (_, g) => {
+        setDrag(null);
+        onDrop(
+          slotKey,
+          clamp(startRef.current.x + g.dx / PW, 0.05, 0.95),
+          clamp(startRef.current.y + g.dy / PH, 0.05, 0.95),
+        );
+      },
+      onPanResponderTerminate: () => setDrag(null),
+    }),
+  ).current;
+
+  const left = x * PW - DOT / 2 + (drag?.dx ?? 0);
+  const top = y * PH - DOT / 2 + (drag?.dy ?? 0);
+
   return (
-    <View style={{
-      width: PW, height: PH, backgroundColor: '#1a8c42', borderRadius: 14,
-      borderWidth: 2, borderColor: 'rgba(255,255,255,0.5)', overflow: 'hidden', alignSelf: 'center',
-    }}>
-      {/* Halfway line + centre circle */}
-      <View style={{ position: 'absolute', top: PH / 2 - 1, left: 0, right: 0, height: 2, backgroundColor: L }} />
-      <View style={{
-        position: 'absolute', width: 76, height: 76, borderRadius: 38, borderWidth: 1.5,
-        borderColor: L, left: PW / 2 - 38, top: PH / 2 - 38,
-      }} />
-      {/* Penalty boxes */}
-      <View style={{ position: 'absolute', top: -2, left: PW * 0.22, width: PW * 0.56, height: 52, borderWidth: 1.5, borderColor: L }} />
-      <View style={{ position: 'absolute', bottom: -2, left: PW * 0.22, width: PW * 0.56, height: 52, borderWidth: 1.5, borderColor: L }} />
-
-      {/* Player dots */}
-      {positions.map((p, i) => (
-        <View
-          key={i}
-          style={{
-            position: 'absolute',
-            left: p.x * PW - 14,
-            top: p.y * PH - 14,
-            width: 28, height: 28, borderRadius: 14,
-            backgroundColor: p.role === 'GK' ? '#f59e0b' : '#fff',
-            alignItems: 'center', justifyContent: 'center',
-            borderWidth: 1.5, borderColor: 'rgba(0,0,0,0.15)',
-          }}
-        >
-          <Text style={{ fontSize: 9, fontWeight: '800', color: '#0a1628' }}>{p.role}</Text>
-        </View>
-      ))}
+    <View
+      {...pan.panHandlers}
+      style={{
+        position: 'absolute',
+        left,
+        top,
+        width: DOT,
+        height: DOT,
+        borderRadius: DOT / 2,
+        backgroundColor: role === 'GK' ? '#f59e0b' : '#fff',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1.5,
+        borderColor: drag ? '#4ade80' : 'rgba(0,0,0,0.15)',
+        shadowColor: '#000',
+        shadowOpacity: drag ? 0.4 : 0.15,
+        shadowRadius: 4,
+        shadowOffset: { width: 0, height: 2 },
+      }}
+    >
+      <Text style={{ fontSize: 9, fontWeight: '800', color: '#0a1628' }}>{role}</Text>
     </View>
   );
 }
@@ -76,9 +113,13 @@ function FormationPitch({ positions }: { positions: FormationPosition[] }) {
 export default function FormationsScreen() {
   const uid = auth().currentUser?.uid ?? null;
   const [clubId, setClubId] = useState<string | null>(null);
-  const [customs, setCustoms] = useState<CustomFormationsByFormat>({});
+  const [config, setConfig] = useState<FormationConfig>({ byFormat: {}, layouts: {} });
   const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const [preview, setPreview] = useState<{ title: string; positions: FormationPosition[] } | null>(null);
+
+  // Editor state
+  const [preview, setPreview] = useState<{ formatKey: string; name: string } | null>(null);
+  const [editLayout, setEditLayout] = useState<SlotPosMap>({});
+  const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
     if (!uid) return;
@@ -87,7 +128,7 @@ export default function FormationsScreen() {
 
   useEffect(() => {
     if (!clubId) return;
-    return listenCustomFormations(clubId, setCustoms);
+    return listenFormationConfig(clubId, setConfig);
   }, [clubId]);
 
   const formats = useMemo(
@@ -95,10 +136,52 @@ export default function FormationsScreen() {
     [],
   );
 
+  const openPreview = (formatKey: string, name: string) => {
+    setEditLayout(config.layouts[formatKey]?.[name] ?? {});
+    setDirty(false);
+    setPreview({ formatKey, name });
+  };
+
+  const previewSlots: Slot[] = useMemo(() => {
+    if (!preview) return [];
+    return applyLayout(buildSlots(preview.name), editLayout);
+  }, [preview, editLayout]);
+
+  const hasSavedLayout = !!(preview && config.layouts[preview.formatKey]?.[preview.name]);
+
+  const onDropDot = (slotKey: string, x: number, y: number) => {
+    setEditLayout((prev) => ({ ...prev, [slotKey]: { x, y } }));
+    setDirty(true);
+  };
+
+  const onSaveLayout = async () => {
+    if (!clubId || !preview) return;
+    // Persist the complete current geometry so future formation tweaks are stable
+    const full: SlotPosMap = {};
+    for (const s of previewSlots) full[s.key] = { x: s.x, y: s.y };
+    try {
+      await saveFormationLayout(clubId, preview.formatKey, preview.name, full);
+      setDirty(false);
+    } catch (e: any) {
+      Alert.alert('Save failed', e?.message ?? 'Unknown error');
+    }
+  };
+
+  const onResetLayout = async () => {
+    if (!clubId || !preview) return;
+    try {
+      await clearFormationLayout(clubId, preview.formatKey, preview.name);
+      setEditLayout({});
+      setDirty(false);
+    } catch (e: any) {
+      Alert.alert('Reset failed', e?.message ?? 'Unknown error');
+    }
+  };
+
   const onAdd = async (formatKey: string) => {
     if (!clubId) return;
     const draft = (drafts[formatKey] || '').trim();
-    const error = validateFormationName(draft, formatKey, customs[formatKey] ?? []);
+    const error = validateFormationName(draft, formatKey, config.byFormat[formatKey] ?? []);
     if (error) { Alert.alert('Invalid formation', error); return; }
     try {
       await addCustomFormation(clubId, formatKey, draft);
@@ -115,10 +198,12 @@ export default function FormationsScreen() {
       {
         text: 'Remove',
         style: 'destructive',
-        onPress: () =>
+        onPress: () => {
           removeCustomFormation(clubId, formatKey, name).catch((e: any) =>
             Alert.alert('Remove failed', e?.message ?? 'Unknown error'),
-          ),
+          );
+          clearFormationLayout(clubId, formatKey, name).catch(() => {});
+        },
       },
     ]);
   };
@@ -133,17 +218,21 @@ export default function FormationsScreen() {
     );
   }
 
+  const L = 'rgba(255,255,255,0.45)';
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#f2f2f7' }}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
           <Text style={{ fontSize: 13, color: '#9ca3af', marginBottom: 16, lineHeight: 19 }}>
-            Add your own formations per format — they appear in every formation picker.
-            Lines are back to front: 2-4-2 means 2 defenders, 4 midfielders, 2 forwards.
+            Tap a formation to see it on the pitch — drag players to fine-tune and save
+            your club's default layout. Lines are back to front: 2-4-2 means 2 defenders,
+            4 midfielders, 2 forwards.
           </Text>
 
           {formats.map(([formatKey, def]) => {
-            const customList = customs[formatKey] ?? [];
+            const customList = config.byFormat[formatKey] ?? [];
+            const layoutFor = (name: string) => !!config.layouts[formatKey]?.[name];
             return (
               <View key={formatKey} style={{ marginBottom: 22 }}>
                 <Text style={{ fontSize: 13, fontWeight: '800', color: '#111', letterSpacing: 0.3, marginBottom: 8 }}>
@@ -154,32 +243,33 @@ export default function FormationsScreen() {
                 </Text>
 
                 <View style={{ backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#e5e7eb', padding: 14 }}>
-                  {/* Built-in + custom chips */}
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                     {def.formations.filter((f) => !f.disabled).map((f) => (
                       <TouchableOpacity
                         key={f.id}
-                        onPress={() => setPreview({ title: `${def.label} · ${f.name}`, positions: f.positions })}
+                        onPress={() => openPreview(formatKey, f.name)}
                         style={{
                           paddingVertical: 7, paddingHorizontal: 12, borderRadius: 10,
                           backgroundColor: '#f3f4f6', borderWidth: 1, borderColor: '#e5e7eb',
                         }}
                       >
-                        <Text style={{ fontSize: 13, fontWeight: '700', color: '#6b7280' }}>{f.name}</Text>
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: '#6b7280' }}>
+                          {f.name}{layoutFor(f.name) ? ' ✎' : ''}
+                        </Text>
                       </TouchableOpacity>
                     ))}
                     {customList.map((name) => (
                       <TouchableOpacity
                         key={name}
-                        onPress={() =>
-                          setPreview({ title: `${def.label} · ${name}`, positions: customFormationDef(name, formatKey).positions })
-                        }
+                        onPress={() => openPreview(formatKey, name)}
                         style={{
                           paddingVertical: 7, paddingHorizontal: 12, borderRadius: 10,
                           backgroundColor: '#111', flexDirection: 'row', alignItems: 'center', gap: 8,
                         }}
                       >
-                        <Text style={{ fontSize: 13, fontWeight: '700', color: '#fff' }}>{name}</Text>
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: '#fff' }}>
+                          {name}{layoutFor(name) ? ' ✎' : ''}
+                        </Text>
                         <TouchableOpacity
                           onPress={() => onRemove(formatKey, name)}
                           hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
@@ -190,7 +280,6 @@ export default function FormationsScreen() {
                     ))}
                   </View>
 
-                  {/* Add row */}
                   <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
                     <TextInput
                       value={drafts[formatKey] ?? ''}
@@ -226,26 +315,72 @@ export default function FormationsScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* ── Formation preview ── */}
+      {/* ── Formation editor ── */}
       <Modal visible={!!preview} transparent animationType="fade" onRequestClose={() => setPreview(null)}>
-        <TouchableOpacity
-          activeOpacity={1}
-          onPress={() => setPreview(null)}
-          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', padding: 24 }}
-        >
-          <TouchableOpacity activeOpacity={1} style={{ backgroundColor: '#fff', borderRadius: 20, padding: 20 }}>
-            <Text style={{ fontSize: 18, fontWeight: '900', color: '#111', textAlign: 'center', marginBottom: 14 }}>
-              {preview?.title}
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.78)', justifyContent: 'center', padding: 20 }}>
+          <View style={{ backgroundColor: '#fff', borderRadius: 20, padding: 18 }}>
+            <Text style={{ fontSize: 18, fontWeight: '900', color: '#111', textAlign: 'center' }}>
+              {preview ? `${preview.formatKey} · ${preview.name}` : ''}
             </Text>
-            {preview && <FormationPitch positions={preview.positions} />}
-            <TouchableOpacity
-              onPress={() => setPreview(null)}
-              style={{ backgroundColor: '#111', borderRadius: 12, paddingVertical: 13, alignItems: 'center', marginTop: 16 }}
-            >
-              <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>Close</Text>
-            </TouchableOpacity>
-          </TouchableOpacity>
-        </TouchableOpacity>
+            <Text style={{ fontSize: 12, color: '#9ca3af', textAlign: 'center', marginTop: 3, marginBottom: 12 }}>
+              Drag players to adjust · saved layouts become your club default
+            </Text>
+
+            <View style={{
+              width: PW, height: PH, backgroundColor: '#1a8c42', borderRadius: 14,
+              borderWidth: 2, borderColor: 'rgba(255,255,255,0.5)', overflow: 'hidden', alignSelf: 'center',
+            }}>
+              <View style={{ position: 'absolute', top: PH / 2 - 1, left: 0, right: 0, height: 2, backgroundColor: L }} />
+              <View style={{
+                position: 'absolute', width: 80, height: 80, borderRadius: 40, borderWidth: 1.5,
+                borderColor: L, left: PW / 2 - 40, top: PH / 2 - 40,
+              }} />
+              <View style={{ position: 'absolute', top: -2, left: PW * 0.22, width: PW * 0.56, height: 54, borderWidth: 1.5, borderColor: L }} />
+              <View style={{ position: 'absolute', bottom: -2, left: PW * 0.22, width: PW * 0.56, height: 54, borderWidth: 1.5, borderColor: L }} />
+
+              {preview && previewSlots.map((s) => (
+                <DraggableDot
+                  key={s.key}
+                  slotKey={s.key}
+                  role={slotRoles(s, preview.name)[0] ?? s.label}
+                  x={s.x}
+                  y={s.y}
+                  onDrop={onDropDot}
+                />
+              ))}
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+              {(dirty || hasSavedLayout) && (
+                <TouchableOpacity
+                  onPress={onResetLayout}
+                  style={{
+                    flex: 1, borderRadius: 12, paddingVertical: 13, alignItems: 'center',
+                    borderWidth: 1, borderColor: '#d1d5db',
+                  }}
+                >
+                  <Text style={{ color: '#374151', fontWeight: '700', fontSize: 14 }}>Reset</Text>
+                </TouchableOpacity>
+              )}
+              {dirty && (
+                <TouchableOpacity
+                  onPress={onSaveLayout}
+                  style={{ flex: 1, backgroundColor: '#16a34a', borderRadius: 12, paddingVertical: 13, alignItems: 'center' }}
+                >
+                  <Text style={{ color: '#fff', fontWeight: '800', fontSize: 14 }}>Save layout</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                onPress={() => setPreview(null)}
+                style={{ flex: 1, backgroundColor: '#111', borderRadius: 12, paddingVertical: 13, alignItems: 'center' }}
+              >
+                <Text style={{ color: '#fff', fontWeight: '800', fontSize: 14 }}>
+                  {dirty ? 'Close without saving' : 'Close'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );

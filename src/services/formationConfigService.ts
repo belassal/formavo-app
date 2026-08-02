@@ -13,6 +13,10 @@ import { slotRoles } from './positionMatch';
 import { DEFAULT_FORMATS, type FormationDef } from './formationDefaults';
 
 export type CustomFormationsByFormat = Record<string, string[]>;
+export type SlotPosMap = Record<string, { x: number; y: number }>;
+/** formatKey → formationName → slotKey → {x,y} */
+export type FormationLayouts = Record<string, Record<string, SlotPosMap>>;
+export type FormationConfig = { byFormat: CustomFormationsByFormat; layouts: FormationLayouts };
 
 /** "9v9" → 8 outfield players. */
 export function outfieldCount(formatKey: string): number {
@@ -59,14 +63,59 @@ function configRef(clubId: string) {
   return db.collection(COL.clubs).doc(clubId).collection('config').doc('formations');
 }
 
+export function listenFormationConfig(
+  clubId: string,
+  onData: (cfg: FormationConfig) => void,
+): () => void {
+  return configRef(clubId).onSnapshot(
+    (snap) => {
+      const data: any = snap.data() ?? {};
+      onData({ byFormat: data.byFormat ?? {}, layouts: data.layouts ?? {} });
+    },
+    () => onData({ byFormat: {}, layouts: {} }),
+  );
+}
+
 export function listenCustomFormations(
   clubId: string,
   onData: (byFormat: CustomFormationsByFormat) => void,
 ): () => void {
-  return configRef(clubId).onSnapshot(
-    (snap) => onData(((snap.data() as any)?.byFormat ?? {}) as CustomFormationsByFormat),
-    () => onData({}),
+  return listenFormationConfig(clubId, (cfg) => onData(cfg.byFormat));
+}
+
+/** Save a club-wide default slot layout for a formation (built-in or custom). */
+export async function saveFormationLayout(
+  clubId: string,
+  formatKey: string,
+  formationName: string,
+  layout: SlotPosMap,
+) {
+  await configRef(clubId).set(
+    {
+      layouts: { [formatKey]: { [formationName]: layout } },
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true },
   );
+}
+
+export async function clearFormationLayout(clubId: string, formatKey: string, formationName: string) {
+  await configRef(clubId).set(
+    {
+      layouts: { [formatKey]: { [formationName]: firestore.FieldValue.delete() } },
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true },
+  );
+}
+
+/** Overlay a saved layout onto generated slots (unknown keys ignored). */
+export function applyLayout<T extends { key: string; x: number; y: number }>(
+  slots: T[],
+  layout?: SlotPosMap,
+): T[] {
+  if (!layout) return slots;
+  return slots.map((s) => (layout[s.key] ? { ...s, x: layout[s.key].x, y: layout[s.key].y } : s));
 }
 
 export async function addCustomFormation(clubId: string, formatKey: string, name: string) {
