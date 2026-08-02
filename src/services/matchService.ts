@@ -125,6 +125,19 @@ export async function updateMatch(params: {
   await db.collection(COL.teams).doc(teamId).collection(COL.matches).doc(matchId).update(patch);
 }
 
+/** Change the match formation (mid-game tactical switches included). */
+export async function setMatchFormation(params: {
+  teamId: string;
+  matchId: string;
+  formation: string;
+  format?: string;
+}) {
+  const { teamId, matchId, formation, format } = params;
+  const patch: any = { formation, updatedAt: serverTimestamp() };
+  if (format) patch.format = format;
+  await db.collection(COL.teams).doc(teamId).collection(COL.matches).doc(matchId).update(patch);
+}
+
 /** Soft delete match */
 export async function softDeleteMatch(params: { teamId: string; matchId: string }) {
   const { teamId, matchId } = params;

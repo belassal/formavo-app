@@ -39,6 +39,9 @@ export type MatchEvent = {
   outPlayerId?: string;
   outPlayerName?: string;
 
+  // note (e.g. "Formation → 3-2-1")
+  text?: string;
+
   // bookkeeping
   createdAt?: any;
   updatedAt?: any;

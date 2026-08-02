@@ -83,12 +83,21 @@ type Props = {
   visible: boolean;
   onClose: () => void;
   onConfirm: (result: FormationPickerResult) => void;
+  /** Skip step 1 and lock to this format (e.g. mid-game formation switch). */
+  initialFormat?: string;
 };
 
-export default function FormationPickerModal({ visible, onClose, onConfirm }: Props) {
-  const [step, setStep] = useState<1 | 2>(1);
-  const [selectedFormat, setSelectedFormat] = useState<string | null>(null);
+export default function FormationPickerModal({ visible, onClose, onConfirm, initialFormat }: Props) {
+  const [step, setStep] = useState<1 | 2>(initialFormat ? 2 : 1);
+  const [selectedFormat, setSelectedFormat] = useState<string | null>(initialFormat ?? null);
   const [selectedFormation, setSelectedFormation] = useState<FormationDef | null>(null);
+
+  React.useEffect(() => {
+    if (!visible) return;
+    setStep(initialFormat ? 2 : 1);
+    setSelectedFormat(initialFormat ?? null);
+    setSelectedFormation(null);
+  }, [visible, initialFormat]);
 
   const enabledFormats = Object.entries(DEFAULT_FORMATS).filter(([, v]) => v.enabled);
 

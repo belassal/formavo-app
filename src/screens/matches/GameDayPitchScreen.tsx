@@ -21,7 +21,8 @@ import type { TeamsStackParamList } from '../../navigation/stacks/TeamsStack';
 import GameDayPitch from './components/GameDayPitch';
 import { db } from '../../services/firebase';
 import { COL } from '../../models/collections';
-import { setMatchRosterSlotKey, setMatchSlotPos } from '../../services/matchService';
+import { setMatchRosterSlotKey, setMatchSlotPos, setMatchFormation } from '../../services/matchService';
+import FormationPickerModal, { type FormationPickerResult } from './components/FormationPickerModal';
 import { buildSlots } from '../../services/formation';
 import MatchHeader from './MatchHeader'; // adjust path if needed
 import type { MatchState } from '../../models/match';
@@ -98,6 +99,52 @@ export default function GameDayPitchScreen() {
       await deleteMatchEvent({ teamId, matchId, eventId: id });
     } catch (e: any) {
       Alert.alert('Undo failed', e?.message ?? 'Unknown error');
+    }
+  };
+
+  // ── Mid-game formation switch ─────────────────────────────────────────────
+  const [showFormationPicker, setShowFormationPicker] = useState(false);
+  const onFormationChange = async (result: FormationPickerResult) => {
+    setShowFormationPicker(false);
+    const newFormation = result.formation.name;
+    if (newFormation === formation) return;
+    try {
+      await setMatchFormation({ teamId, matchId, formation: newFormation, format: result.format });
+
+      // Remap everyone currently on pitch into the new slot set (GK stays GK,
+      // the rest re-slot back-to-front, same as the initial auto-assign).
+      const slots = buildSlots(newFormation);
+      const gkSlot = slots.find((sl) => sl.key === 'GK');
+      const others = slots.filter((sl) => sl.key !== 'GK').sort((a, b) => (b.y - a.y) || (a.x - b.x));
+      const currentGkId = slotToPlayerId['GK'];
+      const ordered = [
+        ...(currentGkId ? [currentGkId] : []),
+        ...onPitch.map((p) => p.id).filter((id) => id !== currentGkId),
+      ];
+      let idx = 0;
+      if (gkSlot && ordered[idx]) {
+        await setMatchRosterSlotKey({ teamId, matchId, playerId: ordered[idx], slotKey: gkSlot.key });
+        idx++;
+      }
+      for (const sl of others) {
+        const id = ordered[idx++];
+        if (!id) break;
+        await setMatchRosterSlotKey({ teamId, matchId, playerId: id, slotKey: sl.key });
+      }
+
+      // Custom dragged positions belonged to the old shape.
+      await matchRef.set({ slotPos: firestore.FieldValue.delete() }, { merge: true });
+
+      // Record the tactical switch in the event feed once the game has started.
+      if (derivedState.status !== 'draft') {
+        await addMatchEvent({
+          teamId,
+          matchId,
+          event: { type: 'note', minute: currentMinute(), text: `Formation → ${newFormation}` },
+        });
+      }
+    } catch (e: any) {
+      Alert.alert('Formation change failed', e?.message ?? 'Unknown error');
     }
   };
 
@@ -686,7 +733,18 @@ const onEnd = async () => {
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>Game Day Pitch</Text>
-          <Text style={styles.subtitle}>Formation: {formation}</Text>
+          {isParent ? (
+            <Text style={styles.subtitle}>Formation: {formation}</Text>
+          ) : (
+            <TouchableOpacity
+              onPress={() => setShowFormationPicker(true)}
+              hitSlop={{ top: 6, bottom: 6, left: 4, right: 8 }}
+            >
+              <Text style={styles.subtitle}>
+                Formation: {formation} <Text style={{ color: '#4ade80', fontWeight: '700' }}>change ›</Text>
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {!isParent && (
@@ -1196,6 +1254,14 @@ const onEnd = async () => {
           </View>
         </View>
       </Modal>
+
+      {/* ── Mid-game formation switch ── */}
+      <FormationPickerModal
+        visible={showFormationPicker}
+        initialFormat={match?.format}
+        onClose={() => setShowFormationPicker(false)}
+        onConfirm={onFormationChange}
+      />
 
       {/* ── Undo toast ── */}
       {undoInfo && (

@@ -1010,6 +1010,10 @@ const addSelectedToRoster = async () => {
                               <Text style={{ fontSize: 14, fontWeight: '600', color: '#111' }}>
                                 ↕ {item.outPlayerName || '?'} → {item.inPlayerName || '?'}
                               </Text>
+                            ) : item.type === 'note' ? (
+                              <Text style={{ fontSize: 14, fontWeight: '600', color: '#6b7280' }}>
+                                📋 {item.text || 'Note'}
+                              </Text>
                             ) : (
                               <Text style={{ fontSize: 14, fontWeight: '600', color: '#111' }}>
                                 {cardDot} {item.playerName || 'Unknown'}
