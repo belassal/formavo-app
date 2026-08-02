@@ -217,6 +217,14 @@ service cloud.firestore {
         allow read: if canReadTeam(teamId);
         allow create: if isTeamMember(teamId)
           && request.resource.data.senderId == uid();
+        // Sender may edit their own message text only
+        allow update: if isTeamMember(teamId)
+          && resource.data.senderId == uid()
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['text', 'isEdited', 'editedAt']);
+        // Sender may delete their own; coaches may moderate any
+        allow delete: if isSignedIn()
+          && (resource.data.senderId == uid() || isTeamStaff(teamId));
       }
 
       match /photos/{photoId} {

@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  ActionSheetIOS,
   ActivityIndicator,
+  Alert,
   FlatList,
   KeyboardAvoidingView,
   Platform,
@@ -14,7 +16,13 @@ import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
 import { useRoute, RouteProp } from '@react-navigation/native';
 import type { TeamsStackParamList } from '../../navigation/stacks/TeamsStack';
-import { listenMessages, sendMessage, type ChatMessage } from '../../services/chatService';
+import {
+  listenMessages,
+  sendMessage,
+  editMessage,
+  deleteMessage,
+  type ChatMessage,
+} from '../../services/chatService';
 
 type Route = RouteProp<TeamsStackParamList, 'TeamChat'>;
 
@@ -94,6 +102,51 @@ export default function TeamChatScreen() {
   const [inputText, setInputText] = useState('');
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState<ChatMessage | null>(null);
+
+  const isCoach = role === 'coach' || role === 'assistant';
+
+  const confirmDelete = useCallback((msg: ChatMessage) => {
+    Alert.alert('Delete message?', 'This removes it for everyone.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () =>
+          deleteMessage({ teamId, messageId: msg.id }).catch((e: any) =>
+            Alert.alert('Delete failed', e?.message ?? 'Unknown error'),
+          ),
+      },
+    ]);
+  }, [teamId]);
+
+  const onMessageLongPress = useCallback((msg: ChatMessage) => {
+    const isMe = msg.senderId === uid;
+    if (!isMe && !isCoach) return;
+
+    const startEdit = () => { setEditing(msg); setInputText(msg.text); };
+
+    if (Platform.OS === 'ios') {
+      const options = [...(isMe ? ['Edit'] : []), 'Delete', 'Cancel'];
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options,
+          destructiveButtonIndex: options.indexOf('Delete'),
+          cancelButtonIndex: options.length - 1,
+        },
+        (idx) => {
+          if (options[idx] === 'Edit') startEdit();
+          else if (options[idx] === 'Delete') confirmDelete(msg);
+        },
+      );
+    } else {
+      Alert.alert('Message', undefined, [
+        ...(isMe ? [{ text: 'Edit', onPress: startEdit }] : []),
+        { text: 'Delete', style: 'destructive' as const, onPress: () => confirmDelete(msg) },
+        { text: 'Cancel', style: 'cancel' as const },
+      ]);
+    }
+  }, [uid, isCoach, confirmDelete]);
 
   // Fetch current user's display name from Firestore
   useEffect(() => {
@@ -132,20 +185,26 @@ export default function TeamChatScreen() {
     setInputText('');
     try {
       setSending(true);
-      await sendMessage({
-        teamId,
-        text: trimmed,
-        senderId: uid,
-        senderName: myName || 'Unknown',
-        senderRole: role,
-      });
+      if (editing) {
+        const msg = editing;
+        setEditing(null);
+        await editMessage({ teamId, messageId: msg.id, text: trimmed });
+      } else {
+        await sendMessage({
+          teamId,
+          text: trimmed,
+          senderId: uid,
+          senderName: myName || 'Unknown',
+          senderRole: role,
+        });
+      }
     } catch (e) {
       console.warn('[chat] send error', e);
       setInputText(trimmed);
     } finally {
       setSending(false);
     }
-  }, [inputText, uid, teamId, myName, role]);
+  }, [inputText, uid, teamId, myName, role, editing]);
 
   const renderItem = useCallback(
     ({ item }: { item: DisplayItem }) => {
@@ -213,7 +272,10 @@ export default function TeamChatScreen() {
             )}
 
             {/* Message bubble */}
-            <View
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onLongPress={() => onMessageLongPress(msg)}
+              delayLongPress={350}
               style={{
                 backgroundColor: isMe ? '#111' : '#fff',
                 borderRadius: 18,
@@ -228,7 +290,7 @@ export default function TeamChatScreen() {
               <Text style={{ fontSize: 15, color: isMe ? '#fff' : '#111', lineHeight: 21 }}>
                 {msg.text}
               </Text>
-            </View>
+            </TouchableOpacity>
 
             {/* Timestamp */}
             <Text
@@ -240,13 +302,13 @@ export default function TeamChatScreen() {
                 marginHorizontal: 4,
               }}
             >
-              {formatTime(msg.createdAt)}
+              {formatTime(msg.createdAt)}{msg.isEdited ? ' · edited' : ''}
             </Text>
           </View>
         </View>
       );
     },
-    [uid]
+    [uid, onMessageLongPress]
   );
 
   return (
@@ -307,6 +369,27 @@ export default function TeamChatScreen() {
             contentContainerStyle={{ paddingVertical: 8 }}
             showsVerticalScrollIndicator={false}
           />
+        )}
+
+        {/* Editing banner */}
+        {editing && (
+          <View
+            style={{
+              flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+              backgroundColor: '#fefce8', borderTopWidth: 1, borderTopColor: '#fde68a',
+              paddingHorizontal: 16, paddingVertical: 8,
+            }}
+          >
+            <Text style={{ fontSize: 13, color: '#92400e', fontWeight: '600' }} numberOfLines={1}>
+              ✎ Editing message
+            </Text>
+            <TouchableOpacity
+              onPress={() => { setEditing(null); setInputText(''); }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text style={{ fontSize: 15, color: '#92400e', fontWeight: '800' }}>✕</Text>
+            </TouchableOpacity>
+          </View>
         )}
 
         {/* Input bar */}
