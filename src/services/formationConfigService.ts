@@ -13,7 +13,7 @@ import { slotRoles } from './positionMatch';
 import { DEFAULT_FORMATS, type FormationDef } from './formationDefaults';
 
 export type CustomFormationsByFormat = Record<string, string[]>;
-export type SlotPosMap = Record<string, { x: number; y: number }>;
+export type SlotPosMap = Record<string, { x: number; y: number; role?: string }>;
 /** formatKey → formationName → slotKey → {x,y} */
 export type FormationLayouts = Record<string, Record<string, SlotPosMap>>;
 export type FormationConfig = { byFormat: CustomFormationsByFormat; layouts: FormationLayouts };
@@ -109,13 +109,17 @@ export async function clearFormationLayout(clubId: string, formatKey: string, fo
   );
 }
 
-/** Overlay a saved layout onto generated slots (unknown keys ignored). */
-export function applyLayout<T extends { key: string; x: number; y: number }>(
+/** Overlay a saved layout (positions + coach-assigned roles) onto generated slots. */
+export function applyLayout<T extends { key: string; x: number; y: number; role?: string }>(
   slots: T[],
   layout?: SlotPosMap,
 ): T[] {
   if (!layout) return slots;
-  return slots.map((s) => (layout[s.key] ? { ...s, x: layout[s.key].x, y: layout[s.key].y } : s));
+  return slots.map((s) => {
+    const o = layout[s.key];
+    if (!o) return s;
+    return { ...s, x: o.x, y: o.y, ...(o.role ? { role: o.role } : {}) };
+  });
 }
 
 export async function addCustomFormation(clubId: string, formatKey: string, name: string) {

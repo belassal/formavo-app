@@ -15,7 +15,16 @@ import { parseFormation } from './formation';
 
 /** Ranked roles a slot can accept, best fit first. */
 export function slotRoles(slot: Slot, formation: string): string[] {
+  // A coach-assigned role (from the club's formation layout) always ranks first.
+  if (slot.role) {
+    const base = slot.key === 'GK' ? ['GK'] : heuristicRoles(slot, formation);
+    return [slot.role, ...base.filter((r) => r !== slot.role)];
+  }
   if (slot.key === 'GK') return ['GK'];
+  return heuristicRoles(slot, formation);
+}
+
+function heuristicRoles(slot: Slot, formation: string): string[] {
 
   const lines = parseFormation(formation);
   const L = lines.length;
@@ -25,14 +34,26 @@ export function slotRoles(slot: Slot, formation: string): string[] {
   const left = slot.x < 0.35;
   const right = slot.x > 0.65;
 
-  // Back line
+  const lineSize = lines[lineIndex - 1] ?? 0;
+
+  // Back line — a back two is conventionally CB+CB, not LB/RB
   if (band <= 0.001) {
+    if (lineSize <= 2) {
+      if (left) return ['CB', 'LB', 'CDM'];
+      if (right) return ['CB', 'RB', 'CDM'];
+      return ['CB', 'CDM', 'LB', 'RB'];
+    }
     if (left) return ['LB', 'CB', 'LW'];
     if (right) return ['RB', 'CB', 'RW'];
     return ['CB', 'CDM', 'LB', 'RB'];
   }
-  // Front line
+  // Front line — a front two is conventionally two strikers
   if (band >= 0.999) {
+    if (lineSize <= 2) {
+      if (left) return ['ST', 'LW', 'CAM'];
+      if (right) return ['ST', 'RW', 'CAM'];
+      return ['ST', 'CAM', 'CM'];
+    }
     if (left) return ['LW', 'ST', 'CAM'];
     if (right) return ['RW', 'ST', 'CAM'];
     return ['ST', 'CAM', 'CM'];

@@ -43,6 +43,8 @@ const PW = 300;
 const PH = 400;
 const DOT = 34;
 
+const ROLES = ['GK', 'CB', 'LB', 'RB', 'CDM', 'CM', 'CAM', 'LW', 'RW', 'ST'];
+
 function clamp(v: number, min: number, max: number) {
   return Math.max(min, Math.min(max, v));
 }
@@ -53,16 +55,20 @@ function DraggableDot({
   x,
   y,
   onDrop,
+  onTap,
 }: {
   slotKey: string;
   role: string;
   x: number;
   y: number;
   onDrop: (slotKey: string, x: number, y: number) => void;
+  onTap: (slotKey: string) => void;
 }) {
   const [drag, setDrag] = useState<{ dx: number; dy: number } | null>(null);
   const startRef = useRef({ x, y });
   useEffect(() => { startRef.current = { x, y }; }, [x, y]);
+  const callbacksRef = useRef({ onDrop, onTap });
+  useEffect(() => { callbacksRef.current = { onDrop, onTap }; }, [onDrop, onTap]);
 
   const pan = useRef(
     PanResponder.create({
@@ -71,7 +77,12 @@ function DraggableDot({
       onPanResponderMove: (_, g) => setDrag({ dx: g.dx, dy: g.dy }),
       onPanResponderRelease: (_, g) => {
         setDrag(null);
-        onDrop(
+        // Small movement = a tap → open the role picker instead of moving
+        if (Math.abs(g.dx) < 6 && Math.abs(g.dy) < 6) {
+          callbacksRef.current.onTap(slotKey);
+          return;
+        }
+        callbacksRef.current.onDrop(
           slotKey,
           clamp(startRef.current.x + g.dx / PW, 0.05, 0.95),
           clamp(startRef.current.y + g.dy / PH, 0.05, 0.95),
@@ -120,6 +131,7 @@ export default function FormationsScreen() {
   const [preview, setPreview] = useState<{ formatKey: string; name: string } | null>(null);
   const [editLayout, setEditLayout] = useState<SlotPosMap>({});
   const [dirty, setDirty] = useState(false);
+  const [rolePickerSlot, setRolePickerSlot] = useState<string | null>(null);
 
   useEffect(() => {
     if (!uid) return;
@@ -150,15 +162,31 @@ export default function FormationsScreen() {
   const hasSavedLayout = !!(preview && config.layouts[preview.formatKey]?.[preview.name]);
 
   const onDropDot = (slotKey: string, x: number, y: number) => {
-    setEditLayout((prev) => ({ ...prev, [slotKey]: { x, y } }));
+    setEditLayout((prev) => ({ ...prev, [slotKey]: { ...prev[slotKey], x, y } }));
+    setDirty(true);
+  };
+
+  const onPickRole = (role: string | null) => {
+    const slotKey = rolePickerSlot;
+    setRolePickerSlot(null);
+    if (!slotKey) return;
+    const base = previewSlots.find((s) => s.key === slotKey);
+    if (!base) return;
+    setEditLayout((prev) => {
+      const cur = prev[slotKey] ?? { x: base.x, y: base.y };
+      const next = { x: cur.x, y: cur.y, ...(role ? { role } : {}) };
+      return { ...prev, [slotKey]: next };
+    });
     setDirty(true);
   };
 
   const onSaveLayout = async () => {
     if (!clubId || !preview) return;
-    // Persist the complete current geometry so future formation tweaks are stable
+    // Persist the complete current geometry (+ chosen roles) so future tweaks are stable
     const full: SlotPosMap = {};
-    for (const s of previewSlots) full[s.key] = { x: s.x, y: s.y };
+    for (const s of previewSlots) {
+      full[s.key] = { x: s.x, y: s.y, ...(s.role ? { role: s.role } : {}) };
+    }
     try {
       await saveFormationLayout(clubId, preview.formatKey, preview.name, full);
       setDirty(false);
@@ -323,7 +351,7 @@ export default function FormationsScreen() {
               {preview ? `${preview.formatKey} · ${preview.name}` : ''}
             </Text>
             <Text style={{ fontSize: 12, color: '#9ca3af', textAlign: 'center', marginTop: 3, marginBottom: 12 }}>
-              Drag players to adjust · saved layouts become your club default
+              Drag to reposition · tap a player to rename the position
             </Text>
 
             <View style={{
@@ -342,12 +370,53 @@ export default function FormationsScreen() {
                 <DraggableDot
                   key={s.key}
                   slotKey={s.key}
-                  role={slotRoles(s, preview.name)[0] ?? s.label}
+                  role={s.role ?? slotRoles(s, preview.name)[0] ?? s.label}
                   x={s.x}
                   y={s.y}
                   onDrop={onDropDot}
+                  onTap={setRolePickerSlot}
                 />
               ))}
+
+              {/* ── Role picker overlay ── */}
+              {rolePickerSlot && (
+                <View style={{
+                  position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                  backgroundColor: 'rgba(10,22,40,0.88)', justifyContent: 'center', padding: 18,
+                }}>
+                  <Text style={{ color: '#fff', fontWeight: '900', fontSize: 15, textAlign: 'center', marginBottom: 14 }}>
+                    Position name for this spot
+                  </Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
+                    {ROLES.map((r) => (
+                      <TouchableOpacity
+                        key={r}
+                        onPress={() => onPickRole(r)}
+                        style={{
+                          paddingVertical: 9, paddingHorizontal: 14, borderRadius: 10,
+                          backgroundColor: '#fff', minWidth: 52, alignItems: 'center',
+                        }}
+                      >
+                        <Text style={{ fontSize: 13, fontWeight: '800', color: '#0a1628' }}>{r}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: 10, marginTop: 16, justifyContent: 'center' }}>
+                    <TouchableOpacity
+                      onPress={() => onPickRole(null)}
+                      style={{ paddingVertical: 9, paddingHorizontal: 16, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.18)' }}
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: '#fff' }}>Auto</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => setRolePickerSlot(null)}
+                      style={{ paddingVertical: 9, paddingHorizontal: 16, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.18)' }}
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: '#fff' }}>Cancel</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
             </View>
 
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>

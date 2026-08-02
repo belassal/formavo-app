@@ -3,6 +3,7 @@ export type Slot = {
   label: string;    // optional role label
   x: number;        // 0..1
   y: number;        // 0..1
+  role?: string;    // coach-assigned role (e.g. 'CB', 'CAM') via club layout
 };
 
 export function parseFormation(formation: string): number[] {
