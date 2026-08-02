@@ -61,6 +61,8 @@ export async function createTeam(params: {
       role: 'coach' as TeamRole,
       status: 'active' as MemberStatus,
       joinedAt: serverTimestamp(),
+      displayName: createdByName || '',
+      invitedEmail: createdByEmail || '',
     });
 
     const userTeamRef = db
@@ -520,7 +522,9 @@ export async function acceptTeamInvitesForUser(params: {
         role,
         status: 'active' as MemberStatus,
         joinedAt: serverTimestamp(),
+        invitedEmail: emailLower,
         invitedEmailLower: emailLower,
+        ...(displayName ? { displayName } : {}),
         ...parentFields,
       },
       { merge: true }

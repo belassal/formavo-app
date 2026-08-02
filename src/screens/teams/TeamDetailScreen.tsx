@@ -274,6 +274,41 @@ export default function TeamDetailScreen() {
 
   // Coaches / members
   const [teamMembers, setTeamMembers] = useState<any[]>([]);
+  // uid → display name from users/{uid}, for member docs written before
+  // displayName was stored on them (would otherwise render the raw uid).
+  const [memberNames, setMemberNames] = useState<Record<string, string>>({});
+  useEffect(() => {
+    const missing = teamMembers.filter(
+      (m) => m.status === 'active' && !m.displayName && !memberNames[m.id],
+    );
+    if (missing.length === 0) return;
+    let cancelled = false;
+    Promise.all(
+      missing.map(async (m) => {
+        try {
+          const snap = await db.collection('users').doc(m.id).get();
+          const u: any = snap.data() || {};
+          const name =
+            [u.firstName, u.lastName].filter(Boolean).join(' ').trim() ||
+            u.displayName || '';
+          return [m.id, name || m.invitedEmail || 'Member'] as const;
+        } catch {
+          return [m.id, m.invitedEmail || 'Member'] as const;
+        }
+      }),
+    ).then((pairs) => {
+      if (cancelled) return;
+      setMemberNames((prev) => {
+        const next = { ...prev };
+        for (const [id, name] of pairs) next[id] = name;
+        return next;
+      });
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teamMembers]);
+  const memberLabel = (m: any) =>
+    m.displayName || memberNames[m.id] || m.invitedEmail || 'Member';
 
   const linkedPlayers = useMemo(() => {
     if (!isParent || !uid) return [];
@@ -1316,7 +1351,7 @@ export default function TeamDetailScreen() {
                     <View style={S.row}>
                       <View style={{ flex: 1 }}>
                         <Text style={{ fontSize: 15, fontWeight: '600', color: '#111' }}>
-                          {isInvite ? m.invitedEmail || 'Invited' : (m.displayName || m.invitedEmail || m.id)}
+                          {isInvite ? m.invitedEmail || 'Invited' : memberLabel(m)}
                         </Text>
                         <Text style={{ marginTop: 2, fontSize: 13, color: '#9ca3af' }}>
                           {m.role || 'assistant'}{isInvite ? ' · Pending' : ' · Active'}
@@ -1377,7 +1412,7 @@ export default function TeamDetailScreen() {
                     <View style={S.row}>
                       <View style={{ flex: 1 }}>
                         <Text style={{ fontSize: 15, fontWeight: '600', color: '#111' }}>
-                          {isInvite ? m.invitedEmail || 'Invited' : (m.displayName || m.invitedEmail || m.id)}
+                          {isInvite ? m.invitedEmail || 'Invited' : memberLabel(m)}
                         </Text>
                         <Text style={{ marginTop: 2, fontSize: 13, color: '#9ca3af' }}>
                           Parent of {

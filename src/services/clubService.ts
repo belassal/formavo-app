@@ -334,7 +334,9 @@ export async function acceptClubStaffInvite(params: {
         role: teamRole,
         status: 'active',
         joinedAt: serverTimestamp(),
+        invitedEmail: email,
         invitedEmailLower: email,
+        ...(displayName ? { displayName } : {}),
       },
       { merge: true },
     );
