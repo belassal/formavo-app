@@ -1,10 +1,12 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onTrainingAttendanceUpdated = exports.onTrainingCreated = exports.onRsvpUpdated = exports.onMatchCreated = exports.onAnnouncementCreated = void 0;
-const admin = require("firebase-admin");
-const functions = require("firebase-functions");
-admin.initializeApp();
-const db = admin.firestore();
+exports.onTrainingAttendanceUpdated = exports.onMessageSent = exports.onTrainingCreated = exports.onRsvpUpdated = exports.onMatchCreated = exports.onAnnouncementCreated = void 0;
+const app_1 = require("firebase-admin/app");
+const firestore_1 = require("firebase-admin/firestore");
+const messaging_1 = require("firebase-admin/messaging");
+const functions = require("firebase-functions/v1");
+(0, app_1.initializeApp)();
+const db = (0, firestore_1.getFirestore)();
 // ─── Helper: send FCM to all tokens of a user ────────────────────────────────
 async function sendToUser(uid, notification, data) {
     var _a;
@@ -19,16 +21,17 @@ async function sendToUser(uid, notification, data) {
         apns: { payload: { aps: { sound: 'default' } } },
         android: { notification: { sound: 'default' } },
     }));
-    const results = await admin.messaging().sendEach(messages);
+    const results = await (0, messaging_1.getMessaging)().sendEach(messages);
     // Remove stale tokens
     const staleTokens = tokens.filter((_, i) => results.responses[i].error);
     if (staleTokens.length) {
         await db.collection('users').doc(uid).update({
-            fcmTokens: admin.firestore.FieldValue.arrayRemove(...staleTokens),
+            fcmTokens: firestore_1.FieldValue.arrayRemove(...staleTokens),
         });
     }
 }
 // ─── Helper: get all member UIDs for a team ──────────────────────────────────
+// Member docs are keyed by uid (teams/{teamId}/members/{uid}); there is no uid field.
 async function getTeamMemberUids(teamId) {
     const snap = await db
         .collection('teams')
@@ -36,18 +39,19 @@ async function getTeamMemberUids(teamId) {
         .collection('members')
         .where('status', '==', 'active')
         .get();
-    return snap.docs.map((d) => d.data().uid).filter(Boolean);
+    return snap.docs.map((d) => d.id);
 }
 // ─── Helper: get coach UIDs for a team ───────────────────────────────────────
+// TeamRole values are 'coach' | 'assistant' | 'parent' (src/services/teamService.ts).
 async function getTeamCoachUids(teamId) {
     const snap = await db
         .collection('teams')
         .doc(teamId)
         .collection('members')
         .where('status', '==', 'active')
-        .where('role', 'in', ['owner', 'coach', 'head_coach', 'assistant_coach'])
+        .where('role', 'in', ['coach', 'assistant'])
         .get();
-    return snap.docs.map((d) => d.data().uid).filter(Boolean);
+    return snap.docs.map((d) => d.id);
 }
 // ─── 1. New announcement → notify all team members ───────────────────────────
 exports.onAnnouncementCreated = functions.firestore
@@ -149,7 +153,29 @@ exports.onTrainingCreated = functions.firestore
     const targets = uids.filter((uid) => uid !== data.createdBy);
     await Promise.all(targets.map((uid) => sendToUser(uid, { title: `🏃 ${teamName} — New training session`, body }, { type: 'training_created', teamId, trainingId })));
 });
-// ─── 5. Training attendance confirmed → notify coaches ────────────────────────
+// ─── 5. New chat message → notify all team members ───────────────────────────
+exports.onMessageSent = functions.firestore
+    .document('teams/{teamId}/messages/{messageId}')
+    .onCreate(async (snap, context) => {
+    var _a;
+    const { teamId } = context.params;
+    const data = snap.data();
+    if (!data)
+        return;
+    const teamDoc = await db.collection('teams').doc(teamId).get();
+    const teamName = ((_a = teamDoc.data()) === null || _a === void 0 ? void 0 : _a.name) || 'Your team';
+    const senderName = data.senderName || 'Someone';
+    const text = data.text || '';
+    const body = text.length > 100 ? text.substring(0, 97) + '…' : text;
+    const uids = await getTeamMemberUids(teamId);
+    // Don't notify the sender
+    const targets = uids.filter((uid) => uid !== data.senderId);
+    await Promise.all(targets.map((uid) => sendToUser(uid, {
+        title: `${senderName} (${teamName})`,
+        body,
+    }, { type: 'team_message', teamId, messageId: context.params.messageId })));
+});
+// ─── 6. Training attendance confirmed → notify coaches ────────────────────────
 exports.onTrainingAttendanceUpdated = functions.firestore
     .document('teams/{teamId}/trainings/{trainingId}/attendance/{playerId}')
     .onWrite(async (change, context) => {

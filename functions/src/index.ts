@@ -1,9 +1,11 @@
-import * as admin from 'firebase-admin';
-import * as functions from 'firebase-functions';
+import { initializeApp } from 'firebase-admin/app';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getMessaging } from 'firebase-admin/messaging';
+import * as functions from 'firebase-functions/v1';
 
-admin.initializeApp();
+initializeApp();
 
-const db = admin.firestore();
+const db = getFirestore();
 
 // ─── Helper: send FCM to all tokens of a user ────────────────────────────────
 async function sendToUser(
@@ -23,17 +25,18 @@ async function sendToUser(
     android: { notification: { sound: 'default' } },
   }));
 
-  const results = await admin.messaging().sendEach(messages);
+  const results = await getMessaging().sendEach(messages);
   // Remove stale tokens
   const staleTokens = tokens.filter((_, i) => results.responses[i].error);
   if (staleTokens.length) {
     await db.collection('users').doc(uid).update({
-      fcmTokens: admin.firestore.FieldValue.arrayRemove(...staleTokens),
+      fcmTokens: FieldValue.arrayRemove(...staleTokens),
     });
   }
 }
 
 // ─── Helper: get all member UIDs for a team ──────────────────────────────────
+// Member docs are keyed by uid (teams/{teamId}/members/{uid}); there is no uid field.
 async function getTeamMemberUids(teamId: string): Promise<string[]> {
   const snap = await db
     .collection('teams')
@@ -41,19 +44,20 @@ async function getTeamMemberUids(teamId: string): Promise<string[]> {
     .collection('members')
     .where('status', '==', 'active')
     .get();
-  return snap.docs.map((d) => d.data().uid).filter(Boolean);
+  return snap.docs.map((d) => d.id);
 }
 
 // ─── Helper: get coach UIDs for a team ───────────────────────────────────────
+// TeamRole values are 'coach' | 'assistant' | 'parent' (src/services/teamService.ts).
 async function getTeamCoachUids(teamId: string): Promise<string[]> {
   const snap = await db
     .collection('teams')
     .doc(teamId)
     .collection('members')
     .where('status', '==', 'active')
-    .where('role', 'in', ['owner', 'coach', 'head_coach', 'assistant_coach'])
+    .where('role', 'in', ['coach', 'assistant'])
     .get();
-  return snap.docs.map((d) => d.data().uid).filter(Boolean);
+  return snap.docs.map((d) => d.id);
 }
 
 // ─── 1. New announcement → notify all team members ───────────────────────────
