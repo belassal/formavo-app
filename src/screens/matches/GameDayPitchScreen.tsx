@@ -24,6 +24,8 @@ import { COL } from '../../models/collections';
 import { setMatchRosterSlotKey, setMatchSlotPos, setMatchFormation } from '../../services/matchService';
 import FormationPickerModal, { type FormationPickerResult } from './components/FormationPickerModal';
 import { buildSlots } from '../../services/formation';
+import { assignByPositions } from '../../services/positionMatch';
+import { listenTeamMemberships } from '../../services/playerService';
 import MatchHeader from './MatchHeader'; // adjust path if needed
 import type { MatchState } from '../../models/match';
 import { computeElapsedSec, computeCappedMinute } from '../../services/matchClock';
@@ -102,41 +104,57 @@ export default function GameDayPitchScreen() {
     }
   };
 
+  // ── Ordered position preferences per player (from team memberships) ──────
+  const [positionsById, setPositionsById] = useState<Record<string, string[]>>({});
+  const [positionsLoaded, setPositionsLoaded] = useState(false);
+  useEffect(() => {
+    const unsub = listenTeamMemberships(teamId, (rows: any[]) => {
+      const map: Record<string, string[]> = {};
+      for (const r of rows) {
+        map[r.id] =
+          Array.isArray(r.positions) && r.positions.length > 0
+            ? r.positions
+            // Legacy: single position, possibly a joined "CM · CDM" display string
+            : r.position
+              ? String(r.position).split('·').map((s: string) => s.trim()).filter(Boolean)
+              : [];
+      }
+      setPositionsById(map);
+      setPositionsLoaded(true);
+    });
+    return () => unsub();
+  }, [teamId]);
+
+  const toMatchable = (players: { id: string }[]) =>
+    players.map((p) => ({ id: p.id, positions: positionsById[p.id] ?? [] }));
+
   // ── Mid-game formation switch ─────────────────────────────────────────────
   const [showFormationPicker, setShowFormationPicker] = useState(false);
   const onFormationChange = async (result: FormationPickerResult) => {
     setShowFormationPicker(false);
     const newFormation = result.formation.name;
-    if (newFormation === formation) return;
+    const changed = newFormation !== formation;
     try {
-      await setMatchFormation({ teamId, matchId, formation: newFormation, format: result.format });
-
-      // Remap everyone currently on pitch into the new slot set (GK stays GK,
-      // the rest re-slot back-to-front, same as the initial auto-assign).
-      const slots = buildSlots(newFormation);
-      const gkSlot = slots.find((sl) => sl.key === 'GK');
-      const others = slots.filter((sl) => sl.key !== 'GK').sort((a, b) => (b.y - a.y) || (a.x - b.x));
-      const currentGkId = slotToPlayerId['GK'];
-      const ordered = [
-        ...(currentGkId ? [currentGkId] : []),
-        ...onPitch.map((p) => p.id).filter((id) => id !== currentGkId),
-      ];
-      let idx = 0;
-      if (gkSlot && ordered[idx]) {
-        await setMatchRosterSlotKey({ teamId, matchId, playerId: ordered[idx], slotKey: gkSlot.key });
-        idx++;
+      if (changed) {
+        await setMatchFormation({ teamId, matchId, formation: newFormation, format: result.format });
       }
-      for (const sl of others) {
-        const id = ordered[idx++];
-        if (!id) break;
-        await setMatchRosterSlotKey({ teamId, matchId, playerId: id, slotKey: sl.key });
+
+      // Remap everyone currently on pitch into the new slot set using ordered
+      // position preferences (re-picking the same formation = reset to natural).
+      const slots = buildSlots(newFormation);
+      const currentGkId = slotToPlayerId['GK'] ?? null;
+      const mapping = assignByPositions(toMatchable(onPitch), slots, newFormation, currentGkId);
+      for (const [playerId, slotKey] of Object.entries(mapping)) {
+        await setMatchRosterSlotKey({ teamId, matchId, playerId, slotKey });
       }
 
       // Custom dragged positions belonged to the old shape.
-      await matchRef.set({ slotPos: firestore.FieldValue.delete() }, { merge: true });
+      if (changed) {
+        await matchRef.set({ slotPos: firestore.FieldValue.delete() }, { merge: true });
+      }
 
       // Record the tactical switch in the event feed once the game has started.
-      if (derivedState.status !== 'draft') {
+      if (changed && derivedState.status !== 'draft') {
         await addMatchEvent({
           teamId,
           matchId,
@@ -411,29 +429,24 @@ const derivedState = useMemo(() => {
     const assignedCount = Object.keys(playerToSlotKey).length;
     if (!starters.length) return;
     if (assignedCount > 0) return; // <- prevents re-shuffling later
+    if (!positionsLoaded) return;  // wait for position prefs so first assign is smart
 
-    // Fill slots deterministically and WRITE to Firestore (so it becomes stable)
+    // Fill slots deterministically and WRITE to Firestore (so it becomes stable).
+    // Position-aware: players land in their preferred roles when set.
     const slots = buildSlots(formation);
-    const gk = slots.find((s) => s.key === 'GK');
-    const others = slots.filter((s) => s.key !== 'GK').sort((a, b) => (b.y - a.y) || (a.x - b.x));
+    const mapping = assignByPositions(toMatchable(starters), slots, formation, null);
 
     (async () => {
       try {
-        let idx = 0;
-        if (gk && starters[idx]) {
-          await setMatchRosterSlotKey({ teamId, matchId, playerId: starters[idx].id, slotKey: gk.key });
-          idx++;
-        }
-        for (const s of others) {
-          const p = starters[idx++];
-          if (!p) break;
-          await setMatchRosterSlotKey({ teamId, matchId, playerId: p.id, slotKey: s.key });
+        for (const [playerId, slotKey] of Object.entries(mapping)) {
+          await setMatchRosterSlotKey({ teamId, matchId, playerId, slotKey });
         }
       } catch (e) {
         console.log('[GameDayPitchScreen] auto-assign failed', e);
       }
     })();
-  }, [teamId, matchId, formation, starters, playerToSlotKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teamId, matchId, formation, starters, playerToSlotKey, positionsById]);
 
   const closeAssign = () => setAssignSlotKey(null);
 

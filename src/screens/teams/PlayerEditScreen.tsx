@@ -265,15 +265,19 @@ export default function PlayerEditScreen() {
 
             {/* Position picker row — multi-select */}
             <View style={{ borderTopWidth: 1, borderTopColor: '#f3f4f6', paddingHorizontal: 16, paddingVertical: 12 }}>
-              <Text style={{ fontSize: 14, fontWeight: '500', color: '#6b7280', marginBottom: 10 }}>
+              <Text style={{ fontSize: 14, fontWeight: '500', color: '#6b7280', marginBottom: 4 }}>
                 Position{positions.length > 1 ? 's' : ''}
                 {positions.length > 0 ? (
                   <Text style={{ color: '#9ca3af', fontWeight: '400' }}>  {positions.join(' · ')}</Text>
                 ) : null}
               </Text>
+              <Text style={{ fontSize: 12, color: '#9ca3af', marginBottom: 10 }}>
+                Tap in order of preference — ① is their natural position. Lineups auto-place by this.
+              </Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                 {POSITIONS.map((pos) => {
-                  const selected = positions.includes(pos);
+                  const rank = positions.indexOf(pos);
+                  const selected = rank >= 0;
                   return (
                     <TouchableOpacity
                       key={pos}
@@ -288,8 +292,17 @@ export default function PlayerEditScreen() {
                         backgroundColor: selected ? '#111' : '#f3f4f6',
                         borderWidth: 1,
                         borderColor: selected ? '#111' : '#e5e7eb',
+                        flexDirection: 'row', alignItems: 'center', gap: 6,
                       }}
                     >
+                      {selected && (
+                        <View style={{
+                          width: 16, height: 16, borderRadius: 8, backgroundColor: '#4ade80',
+                          alignItems: 'center', justifyContent: 'center',
+                        }}>
+                          <Text style={{ fontSize: 10, fontWeight: '900', color: '#0a1628' }}>{rank + 1}</Text>
+                        </View>
+                      )}
                       <Text style={{ fontSize: 13, fontWeight: '600', color: selected ? '#fff' : '#374151' }}>
                         {pos}
                       </Text>

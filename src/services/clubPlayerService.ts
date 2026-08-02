@@ -163,6 +163,7 @@ export async function syncClubPlayerToMemberships(params: {
     playerName: name,
     number,
     position: positions.join(' · '), // joined for display in roster views
+    positions,                       // ordered array — used for lineup auto-assignment
     updatedAt: serverTimestamp(),
   };
   if (avatarUrl !== undefined) patch.avatarUrl = avatarUrl ?? null;
