@@ -35,6 +35,7 @@ import { createMatch, listenMatches } from '../../services/matchService';
 import { inviteCoach, inviteParent, resendParentInvite, listenTeamMembers } from '../../services/teamService';
 import { pickPlayerPhoto, uploadPlayerAvatar, storageReady, imagePickerReady } from '../../services/storageService';
 import FormationPickerModal, { FormationPickerResult } from '../matches/components/FormationPickerModal';
+import { listenCustomFormations } from '../../services/formationConfigService';
 import DateTimePickerModal, { formatDateISO } from '../../components/DateTimePickerModal';
 import {
   listenAnnouncements,
@@ -238,6 +239,11 @@ export default function TeamDetailScreen() {
 
   // Club state
   const [clubId, setClubId] = useState<string | null>(null);
+  const [customFormations, setCustomFormations] = useState<Record<string, string[]>>({});
+  useEffect(() => {
+    if (!clubId) return;
+    return listenCustomFormations(clubId, setCustomFormations);
+  }, [clubId]);
 
   // Season state
   const [seasons, setSeasons] = useState<Season[]>([]);
@@ -1662,6 +1668,7 @@ export default function TeamDetailScreen() {
       {/* ===== FORMATION PICKER MODAL ===== */}
       <FormationPickerModal
         visible={showFormationPicker}
+        customFormations={customFormations}
         onClose={() => setShowFormationPicker(false)}
         onConfirm={onFormationPicked}
       />

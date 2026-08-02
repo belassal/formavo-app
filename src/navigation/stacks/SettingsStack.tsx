@@ -3,11 +3,13 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import SettingsScreen from '../../screens/settings/SettingsScreen';
 import ProfileScreen from '../../screens/profile/ProfileScreen';
 import LocationsScreen from '../../screens/settings/LocationsScreen';
+import FormationsScreen from '../../screens/settings/FormationsScreen';
 
 export type SettingsStackParamList = {
   SettingsHome: undefined;
   Profile: undefined;
   Locations: undefined;
+  Formations: undefined;
 };
 
 const Stack = createNativeStackNavigator<SettingsStackParamList>();
@@ -18,6 +20,7 @@ export default function SettingsStack() {
       <Stack.Screen name="SettingsHome" component={SettingsScreen} options={{ title: 'Settings' }} />
       <Stack.Screen name="Profile" component={ProfileScreen} options={{ title: 'Profile' }} />
       <Stack.Screen name="Locations" component={LocationsScreen} options={{ title: 'Locations' }} />
+      <Stack.Screen name="Formations" component={FormationsScreen} options={{ title: 'Formations' }} />
     </Stack.Navigator>
   );
 }

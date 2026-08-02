@@ -27,6 +27,7 @@ import {
   View,
 } from 'react-native';
 import { DEFAULT_FORMATS, FormationDef } from '../../../services/formationDefaults';
+import { customFormationDef } from '../../../services/formationConfigService';
 
 // ─── Mini pitch preview ────────────────────────────────────────────────────
 const PITCH_W = 80;
@@ -85,9 +86,11 @@ type Props = {
   onConfirm: (result: FormationPickerResult) => void;
   /** Skip step 1 and lock to this format (e.g. mid-game formation switch). */
   initialFormat?: string;
+  /** Club custom formations per format key, merged after the built-ins. */
+  customFormations?: Record<string, string[]>;
 };
 
-export default function FormationPickerModal({ visible, onClose, onConfirm, initialFormat }: Props) {
+export default function FormationPickerModal({ visible, onClose, onConfirm, initialFormat, customFormations }: Props) {
   const [step, setStep] = useState<1 | 2>(initialFormat ? 2 : 1);
   const [selectedFormat, setSelectedFormat] = useState<string | null>(initialFormat ?? null);
   const [selectedFormation, setSelectedFormation] = useState<FormationDef | null>(null);
@@ -102,7 +105,11 @@ export default function FormationPickerModal({ visible, onClose, onConfirm, init
   const enabledFormats = Object.entries(DEFAULT_FORMATS).filter(([, v]) => v.enabled);
 
   const availableFormations = selectedFormat
-    ? (DEFAULT_FORMATS[selectedFormat]?.formations ?? []).filter(f => !f.disabled)
+    ? [
+        ...(DEFAULT_FORMATS[selectedFormat]?.formations ?? []).filter(f => !f.disabled),
+        ...((customFormations?.[selectedFormat] ?? []).map(name =>
+          customFormationDef(name, selectedFormat))),
+      ]
     : [];
 
   const handleFormatPress = (key: string) => {

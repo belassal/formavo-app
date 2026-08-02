@@ -25,6 +25,7 @@ import { setMatchRosterSlotKey, setMatchSlotPos, setMatchFormation } from '../..
 import FormationPickerModal, { type FormationPickerResult } from './components/FormationPickerModal';
 import { buildSlots } from '../../services/formation';
 import { assignByPositions } from '../../services/positionMatch';
+import { listenCustomFormations } from '../../services/formationConfigService';
 import { listenTeamMemberships } from '../../services/playerService';
 import MatchHeader from './MatchHeader'; // adjust path if needed
 import type { MatchState } from '../../models/match';
@@ -130,6 +131,15 @@ export default function GameDayPitchScreen() {
 
   // ── Mid-game formation switch ─────────────────────────────────────────────
   const [showFormationPicker, setShowFormationPicker] = useState(false);
+  const [customFormations, setCustomFormations] = useState<Record<string, string[]>>({});
+  useEffect(() => {
+    let unsub: (() => void) | undefined;
+    db.collection(COL.teams).doc(teamId).get().then((snap) => {
+      const clubId = (snap.data() as any)?.clubId;
+      if (clubId) unsub = listenCustomFormations(clubId, setCustomFormations);
+    }).catch(() => {});
+    return () => { if (unsub) unsub(); };
+  }, [teamId]);
   const onFormationChange = async (result: FormationPickerResult) => {
     setShowFormationPicker(false);
     const newFormation = result.formation.name;
@@ -1272,6 +1282,7 @@ const onEnd = async () => {
       <FormationPickerModal
         visible={showFormationPicker}
         initialFormat={match?.format}
+        customFormations={customFormations}
         onClose={() => setShowFormationPicker(false)}
         onConfirm={onFormationChange}
       />

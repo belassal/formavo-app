@@ -273,6 +273,11 @@ service cloud.firestore {
       match /players/{playerId} {
         allow read, write: if isClubMember(clubId);
       }
+
+      // Club configuration (e.g. custom formations)
+      match /config/{docId} {
+        allow read, write: if isClubMember(clubId);
+      }
     }
 
     // ── Legacy top-level players collection (fallback path in playerService) ─

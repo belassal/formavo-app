@@ -164,6 +164,8 @@ export default function SettingsScreen() {
           </Text>
           <View style={{ backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#e5e7eb', overflow: 'hidden' }}>
             <Row label="Locations" icon="📍" onPress={() => navigation.navigate('Locations')} />
+            <Divider />
+            <Row label="Formations" icon="⚽" onPress={() => navigation.navigate('Formations')} />
           </View>
         </View>
 
