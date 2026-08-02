@@ -9,6 +9,7 @@ import firestore from '@react-native-firebase/firestore';
 import { db, serverTimestamp } from './firebase';
 import { COL } from '../models/collections';
 import { buildSlots } from './formation';
+import { slotRoles } from './positionMatch';
 import { DEFAULT_FORMATS, type FormationDef } from './formationDefaults';
 
 export type CustomFormationsByFormat = Record<string, string[]>;
@@ -45,7 +46,12 @@ export function customFormationDef(name: string, formatKey: string): FormationDe
   return {
     id: `custom-${formatKey}-${name}`,
     name,
-    positions: buildSlots(name).map((s) => ({ role: s.label, x: s.x, y: s.y })),
+    // Label each slot with its best-fit role (LB/CM/ST…) from the geometry heuristic
+    positions: buildSlots(name).map((s) => ({
+      role: slotRoles(s, name)[0] ?? s.label,
+      x: s.x,
+      y: s.y,
+    })),
   };
 }
 

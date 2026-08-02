@@ -11,9 +11,12 @@ export function parseFormation(formation: string): number[] {
   return parts.length ? parts : [4, 4, 2]; // sensible fallback
 }
 
-function spreadAcrossLine(count: number, margin = 0.08): number[] {
+function spreadAcrossLine(count: number): number[] {
   // returns x positions 0..1
   if (count <= 1) return [0.5];
+  // Tighter spread for small lines so wide players don't hug the touchline
+  // (2 players → 0.28/0.72 like the hand-tuned defaults, not 0.08/0.92).
+  const margin = count === 2 ? 0.28 : count === 3 ? 0.2 : count === 4 ? 0.14 : 0.08;
   const usable = 1 - margin * 2;
   const step = usable / (count - 1);
   return Array.from({ length: count }, (_, i) => margin + i * step);

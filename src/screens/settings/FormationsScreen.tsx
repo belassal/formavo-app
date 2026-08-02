@@ -9,6 +9,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   SafeAreaView,
   ScrollView,
@@ -19,9 +20,10 @@ import {
 } from 'react-native';
 import auth from '@react-native-firebase/auth';
 import { listenMyClubId } from '../../services/clubService';
-import { DEFAULT_FORMATS } from '../../services/formationDefaults';
+import { DEFAULT_FORMATS, type FormationPosition } from '../../services/formationDefaults';
 import {
   addCustomFormation,
+  customFormationDef,
   listenCustomFormations,
   removeCustomFormation,
   validateFormationName,
@@ -29,11 +31,54 @@ import {
   type CustomFormationsByFormat,
 } from '../../services/formationConfigService';
 
+// ── Full-size vertical pitch preview ─────────────────────────────────────────
+const PW = 280;
+const PH = 380;
+
+function FormationPitch({ positions }: { positions: FormationPosition[] }) {
+  const L = 'rgba(255,255,255,0.45)';
+  return (
+    <View style={{
+      width: PW, height: PH, backgroundColor: '#1a8c42', borderRadius: 14,
+      borderWidth: 2, borderColor: 'rgba(255,255,255,0.5)', overflow: 'hidden', alignSelf: 'center',
+    }}>
+      {/* Halfway line + centre circle */}
+      <View style={{ position: 'absolute', top: PH / 2 - 1, left: 0, right: 0, height: 2, backgroundColor: L }} />
+      <View style={{
+        position: 'absolute', width: 76, height: 76, borderRadius: 38, borderWidth: 1.5,
+        borderColor: L, left: PW / 2 - 38, top: PH / 2 - 38,
+      }} />
+      {/* Penalty boxes */}
+      <View style={{ position: 'absolute', top: -2, left: PW * 0.22, width: PW * 0.56, height: 52, borderWidth: 1.5, borderColor: L }} />
+      <View style={{ position: 'absolute', bottom: -2, left: PW * 0.22, width: PW * 0.56, height: 52, borderWidth: 1.5, borderColor: L }} />
+
+      {/* Player dots */}
+      {positions.map((p, i) => (
+        <View
+          key={i}
+          style={{
+            position: 'absolute',
+            left: p.x * PW - 14,
+            top: p.y * PH - 14,
+            width: 28, height: 28, borderRadius: 14,
+            backgroundColor: p.role === 'GK' ? '#f59e0b' : '#fff',
+            alignItems: 'center', justifyContent: 'center',
+            borderWidth: 1.5, borderColor: 'rgba(0,0,0,0.15)',
+          }}
+        >
+          <Text style={{ fontSize: 9, fontWeight: '800', color: '#0a1628' }}>{p.role}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 export default function FormationsScreen() {
   const uid = auth().currentUser?.uid ?? null;
   const [clubId, setClubId] = useState<string | null>(null);
   const [customs, setCustoms] = useState<CustomFormationsByFormat>({});
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [preview, setPreview] = useState<{ title: string; positions: FormationPosition[] } | null>(null);
 
   useEffect(() => {
     if (!uid) return;
@@ -112,27 +157,35 @@ export default function FormationsScreen() {
                   {/* Built-in + custom chips */}
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                     {def.formations.filter((f) => !f.disabled).map((f) => (
-                      <View
+                      <TouchableOpacity
                         key={f.id}
+                        onPress={() => setPreview({ title: `${def.label} · ${f.name}`, positions: f.positions })}
                         style={{
                           paddingVertical: 7, paddingHorizontal: 12, borderRadius: 10,
                           backgroundColor: '#f3f4f6', borderWidth: 1, borderColor: '#e5e7eb',
                         }}
                       >
                         <Text style={{ fontSize: 13, fontWeight: '700', color: '#6b7280' }}>{f.name}</Text>
-                      </View>
+                      </TouchableOpacity>
                     ))}
                     {customList.map((name) => (
                       <TouchableOpacity
                         key={name}
-                        onPress={() => onRemove(formatKey, name)}
+                        onPress={() =>
+                          setPreview({ title: `${def.label} · ${name}`, positions: customFormationDef(name, formatKey).positions })
+                        }
                         style={{
                           paddingVertical: 7, paddingHorizontal: 12, borderRadius: 10,
-                          backgroundColor: '#111', flexDirection: 'row', alignItems: 'center', gap: 7,
+                          backgroundColor: '#111', flexDirection: 'row', alignItems: 'center', gap: 8,
                         }}
                       >
                         <Text style={{ fontSize: 13, fontWeight: '700', color: '#fff' }}>{name}</Text>
-                        <Text style={{ fontSize: 12, fontWeight: '800', color: '#f87171' }}>✕</Text>
+                        <TouchableOpacity
+                          onPress={() => onRemove(formatKey, name)}
+                          hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
+                        >
+                          <Text style={{ fontSize: 12, fontWeight: '800', color: '#f87171' }}>✕</Text>
+                        </TouchableOpacity>
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -172,6 +225,28 @@ export default function FormationsScreen() {
           })}
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* ── Formation preview ── */}
+      <Modal visible={!!preview} transparent animationType="fade" onRequestClose={() => setPreview(null)}>
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={() => setPreview(null)}
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', padding: 24 }}
+        >
+          <TouchableOpacity activeOpacity={1} style={{ backgroundColor: '#fff', borderRadius: 20, padding: 20 }}>
+            <Text style={{ fontSize: 18, fontWeight: '900', color: '#111', textAlign: 'center', marginBottom: 14 }}>
+              {preview?.title}
+            </Text>
+            {preview && <FormationPitch positions={preview.positions} />}
+            <TouchableOpacity
+              onPress={() => setPreview(null)}
+              style={{ backgroundColor: '#111', borderRadius: 12, paddingVertical: 13, alignItems: 'center', marginTop: 16 }}
+            >
+              <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>Close</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
