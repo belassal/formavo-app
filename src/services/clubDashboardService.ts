@@ -40,12 +40,14 @@ function getTodayISO(): string {
 export async function fetchClubDashboard(clubId: string): Promise<ClubDashboardData> {
   const today = getTodayISO();
 
-  // 1) Load all teams tagged with this clubId
+  // 1) Load all teams tagged with this clubId.
+  // Deleted-filtering happens client-side: a second where('isDeleted','!=',…)
+  // would need a composite index AND would drop docs missing the field.
   const teamsSnap = await db
     .collection(COL.teams)
     .where('clubId', '==', clubId)
-    .where('isDeleted', '!=', true)
     .get();
+  const teamDocs = teamsSnap.docs.filter((d) => !(d.data() as any).isDeleted);
 
   // 2) Load all club staff members
   const staffSnap = await db
@@ -78,7 +80,7 @@ export async function fetchClubDashboard(clubId: string): Promise<ClubDashboardD
 
   // 3) For each team, load roster count + matches + next training in parallel
   const teamSummaries = await Promise.all(
-    teamsSnap.docs.map(async (teamDoc) => {
+    teamDocs.map(async (teamDoc) => {
       const teamId = teamDoc.id;
       const teamData = teamDoc.data() as any;
       const teamName = teamData.name || 'Team';
@@ -86,15 +88,16 @@ export async function fetchClubDashboard(clubId: string): Promise<ClubDashboardD
       const [rosterSnap, matchesSnap, trainingsSnap] = await Promise.all([
         db.collection(COL.teams).doc(teamId).collection(COL.playerMemberships)
           .where('status', '==', 'active').get(),
-        db.collection(COL.teams).doc(teamId).collection(COL.matches)
-          .where('isDeleted', '!=', true).get(),
+        db.collection(COL.teams).doc(teamId).collection(COL.matches).get(),
         db.collection(COL.teams).doc(teamId).collection(COL.trainings)
           .orderBy('startISO').startAt(today).limit(1).get(),
       ]);
 
       const rosterCount = rosterSnap.size;
 
-      const matches = matchesSnap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+      const matches = matchesSnap.docs
+        .map((d) => ({ id: d.id, ...(d.data() as any) }))
+        .filter((m) => !m.isDeleted);
 
       // Next upcoming match
       const upcoming = matches

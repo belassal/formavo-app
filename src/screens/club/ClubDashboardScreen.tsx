@@ -253,7 +253,24 @@ export default function ClubDashboardScreen() {
     );
   }
 
-  if (!data) return null;
+  if (!data) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#f2f2f7', justifyContent: 'center', alignItems: 'center', padding: 40 }}>
+        <Text style={{ fontSize: 15, fontWeight: '700', color: '#111', marginBottom: 6 }}>
+          Couldn't load the dashboard
+        </Text>
+        <Text style={{ fontSize: 13, color: '#9ca3af', textAlign: 'center', marginBottom: 18 }}>
+          Check your connection and try again.
+        </Text>
+        <TouchableOpacity
+          onPress={() => load()}
+          style={{ backgroundColor: '#111', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 28 }}
+        >
+          <Text style={{ color: '#fff', fontWeight: '800', fontSize: 14 }}>Retry</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
 
   const { teams, staff, clubRecord } = data;
   const played = clubRecord.w + clubRecord.d + clubRecord.l;
