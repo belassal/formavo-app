@@ -82,6 +82,49 @@ export default function SettingsScreen() {
       .catch(console.warn);
   };
 
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete account',
+      'This permanently deletes your login and personal profile. Team records you created (matches, rosters) stay with the team. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            const user = auth().currentUser;
+            if (!user) return;
+            try {
+              const token = await messaging().getToken().catch(() => null);
+              if (token) await removeFCMToken(user.uid, token).catch(() => {});
+              // Remove personal data the user owns
+              const userRef = db.collection('users').doc(user.uid);
+              const [teamRefs, clubRef] = await Promise.all([
+                userRef.collection('teamRefs').get(),
+                userRef.collection('clubRef').get(),
+              ]);
+              const batch = db.batch();
+              teamRefs.docs.forEach((d) => batch.delete(d.ref));
+              clubRef.docs.forEach((d) => batch.delete(d.ref));
+              batch.delete(userRef);
+              await batch.commit();
+              await user.delete();
+            } catch (e: any) {
+              if (e?.code === 'auth/requires-recent-login') {
+                Alert.alert(
+                  'Please sign in again',
+                  'For security, deleting your account requires a recent sign-in. Sign out, sign back in, then try again.',
+                );
+              } else {
+                Alert.alert('Delete failed', e?.message ?? 'Unknown error');
+              }
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const handleSignOut = () => {
     Alert.alert('Sign out', 'Are you sure you want to sign out?', [
       { text: 'Cancel', style: 'cancel' },
@@ -152,9 +195,11 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {/* Sign Out */}
+        {/* Sign Out / Delete */}
         <View style={{ backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#e5e7eb', overflow: 'hidden' }}>
           <Row label="Sign Out" icon="🚪" onPress={handleSignOut} destructive />
+          <Divider />
+          <Row label="Delete Account" icon="🗑️" onPress={handleDeleteAccount} destructive />
         </View>
 
       </ScrollView>

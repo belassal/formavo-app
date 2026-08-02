@@ -111,6 +111,8 @@ service cloud.firestore {
       // Profiles (name/photo/bio) are shown to teammates and club staff.
       allow read: if isSignedIn();
       allow create, update: if isSignedIn() && userId == uid();
+      // Account deletion (Settings → Delete Account)
+      allow delete: if isSignedIn() && userId == uid();
 
       match /{sub=**} {
         allow read, write: if isSignedIn() && userId == uid();
