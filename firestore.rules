@@ -221,6 +221,14 @@ service cloud.firestore {
         allow read: if canReadTeam(teamId);
         allow write: if canWriteTeam(teamId);
       }
+
+      // Maintained by Cloud Functions (admin) — clients read only.
+      match /aggregates/{aggId} {
+        allow read: if canReadTeam(teamId);
+      }
+      match /playerAggregates/{aggId} {
+        allow read: if canReadTeam(teamId);
+      }
     }
 
     // ── Clubs ───────────────────────────────────────────────────────────────

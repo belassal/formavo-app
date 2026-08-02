@@ -7,13 +7,19 @@ initializeApp();
 
 const db = getFirestore();
 
+// Notification preference keys. users/{uid}.notificationPrefs = { [key]: boolean }.
+// Missing key or missing map means ON (opt-out model).
+export type NotifPref = 'announcements' | 'schedule' | 'rsvp' | 'chat' | 'live' | 'digest';
+
 // ─── Helper: send FCM to all tokens of a user ────────────────────────────────
 async function sendToUser(
   uid: string,
   notification: { title: string; body: string },
-  data?: Record<string, string>
+  data?: Record<string, string>,
+  prefKey?: NotifPref
 ) {
   const userDoc = await db.collection('users').doc(uid).get();
+  if (prefKey && userDoc.data()?.notificationPrefs?.[prefKey] === false) return;
   const tokens: string[] = userDoc.data()?.fcmTokens || [];
   if (!tokens.length) return;
 
@@ -83,7 +89,8 @@ export const onAnnouncementCreated = functions.firestore
             title: `📣 ${teamName}`,
             body: data.text.length > 100 ? data.text.substring(0, 97) + '…' : data.text,
           },
-          { type: 'announcement', teamId }
+          { type: 'announcement', teamId },
+          'announcements'
         )
       )
     );
@@ -111,7 +118,8 @@ export const onMatchCreated = functions.firestore
             title: `⚽ New match scheduled`,
             body: `${teamName} vs ${opponent}${dateLabel ? ` · ${dateLabel}` : ''}`,
           },
-          { type: 'match_created', teamId, matchId: context.params.matchId }
+          { type: 'match_created', teamId, matchId: context.params.matchId },
+          'schedule'
         )
       )
     );
@@ -145,7 +153,8 @@ export const onRsvpUpdated = functions.firestore
             title: `${playerName} is ${statusLabel}${confirmedBy}`,
             body: `vs ${opponent}`,
           },
-          { type: 'rsvp_updated', teamId, matchId }
+          { type: 'rsvp_updated', teamId, matchId },
+          'rsvp'
         )
       )
     );
@@ -196,7 +205,8 @@ export const onTrainingCreated = functions.firestore
         sendToUser(
           uid,
           { title: `🏃 ${teamName} — New training session`, body },
-          { type: 'training_created', teamId, trainingId }
+          { type: 'training_created', teamId, trainingId },
+          'schedule'
         )
       )
     );
@@ -229,7 +239,8 @@ export const onMessageSent = functions.firestore
             title: `${senderName} (${teamName})`,
             body,
           },
-          { type: 'team_message', teamId, messageId: context.params.messageId }
+          { type: 'team_message', teamId, messageId: context.params.messageId },
+          'chat'
         )
       )
     );
@@ -264,8 +275,283 @@ export const onTrainingAttendanceUpdated = functions.firestore
             title: `${playerName} ${statusLabel} attendance`,
             body: trainingTitle,
           },
-          { type: 'training_attendance', teamId, trainingId }
+          { type: 'training_attendance', teamId, trainingId },
+          'rsvp'
         )
       )
     );
+  });
+
+// ─── 7. Goal logged → live score push to the whole team ──────────────────────
+export const onMatchEventCreated = functions.firestore
+  .document('teams/{teamId}/matches/{matchId}/events/{eventId}')
+  .onCreate(async (snap, context) => {
+    const { teamId, matchId } = context.params;
+    const event = snap.data();
+    if (!event || event.type !== 'goal') return;
+
+    const [teamDoc, matchDoc] = await Promise.all([
+      db.collection('teams').doc(teamId).get(),
+      db.collection('teams').doc(teamId).collection('matches').doc(matchId).get(),
+    ]);
+    const match = matchDoc.data();
+    if (!match || match.isDeleted) return;
+
+    const teamName = teamDoc.data()?.name || 'Your team';
+    const opponent = match.opponent || 'Opponent';
+    // The score increment happens in the same transaction as the event write,
+    // so by the time this trigger reads the match doc it reflects this goal.
+    const score = `${match.homeScore ?? 0}-${match.awayScore ?? 0}`;
+    const minute = typeof event.minute === 'number' && event.minute > 0 ? ` ${event.minute}'` : '';
+
+    const side = event.side || 'home';
+    const title = side === 'home' ? `⚽ GOAL — ${teamName}!` : `⚽ ${opponent} score`;
+    const scorer = side === 'home'
+      ? (event.scorerName && event.scorerName !== 'Team' ? `${event.scorerName}${minute} · ` : '')
+      : '';
+    const body = `${scorer}${score} vs ${opponent}`;
+
+    const uids = await getTeamMemberUids(teamId);
+    await Promise.all(
+      uids.map((uid) =>
+        sendToUser(uid, { title, body }, { type: 'goal', teamId, matchId }, 'live')
+      )
+    );
+  });
+
+// ─── 8. Aggregates: match summary + season stats ─────────────────────────────
+//
+// On match completion (or post-completion score/event edits):
+//   1. Build match.summary from events + roster (scorers, cards, per-player lines
+//      with minutes) so recaps and digests read one doc.
+//   2. Recompute teams/{teamId}/aggregates/{seasonId|none} (W/D/L, GF/GA, form,
+//      clean sheets) and teams/{teamId}/playerAggregates/{playerId}_{seasonId|none}
+//      from completed matches' summaries — recompute-on-write keeps it idempotent.
+
+type RosterLine = { playerId: string; playerName: string; role?: string; attendance?: string };
+type EventLine = {
+  type: string; minute: number; side?: string;
+  scorerId?: string; scorerName?: string; assistId?: string; assistName?: string;
+  playerId?: string; playerName?: string; cardColor?: string;
+  inPlayerId?: string; outPlayerId?: string;
+};
+
+// Port of src/services/minutesService.calculateMatchMinutes
+function calcMinutes(roster: RosterLine[], events: EventLine[], matchDuration: number) {
+  const subs = events.filter((e) => e.type === 'sub').sort((a, b) => a.minute - b.minute);
+  const out: Record<string, { minutes: number; started: boolean }> = {};
+  for (const p of roster) {
+    if (p.attendance === 'absent' || p.attendance === 'injured') continue;
+    const started = (p.role || 'bench') === 'starter';
+    const on = subs.find((e) => e.inPlayerId === p.playerId);
+    const off = subs.find((e) => e.outPlayerId === p.playerId);
+    const minuteOn = started ? 0 : on ? on.minute : null;
+    if (minuteOn === null) continue;
+    const minutes = Math.max(0, (off ? off.minute : matchDuration) - minuteOn);
+    out[p.playerId] = { minutes, started };
+  }
+  return out;
+}
+
+async function buildMatchSummary(teamId: string, matchId: string, match: FirebaseFirestore.DocumentData) {
+  const matchRef = db.collection('teams').doc(teamId).collection('matches').doc(matchId);
+  const [eventsSnap, rosterSnap] = await Promise.all([
+    matchRef.collection('events').get(),
+    matchRef.collection('roster').get(),
+  ]);
+  const events = eventsSnap.docs.map((d) => d.data() as EventLine);
+  const roster: RosterLine[] = rosterSnap.docs.map((d) => ({
+    playerId: d.id,
+    playerName: (d.data() as any).playerName || 'Unknown',
+    role: (d.data() as any).role,
+    attendance: (d.data() as any).attendance,
+  }));
+
+  const homeScore = match.homeScore ?? 0;
+  const awayScore = match.awayScore ?? 0;
+  const result = homeScore > awayScore ? 'W' : homeScore < awayScore ? 'L' : 'D';
+  const matchDuration = (match.halfDuration ?? 45) * 2;
+  const minutes = calcMinutes(roster, events, matchDuration);
+
+  const lines: Record<string, any> = {};
+  const line = (id: string, name: string) => {
+    if (!lines[id]) {
+      lines[id] = {
+        playerId: id, playerName: name,
+        goals: 0, assists: 0, yellow: 0, red: 0,
+        minutes: minutes[id]?.minutes ?? 0,
+        started: minutes[id]?.started ?? false,
+        appeared: (minutes[id]?.minutes ?? 0) > 0,
+      };
+    }
+    return lines[id];
+  };
+  // Seed lines for everyone who played, even without events
+  for (const p of roster) {
+    if (minutes[p.playerId]) line(p.playerId, p.playerName);
+  }
+  const scorers: any[] = [];
+  for (const e of events) {
+    if (e.type === 'goal' && (e.side || 'home') === 'home') {
+      scorers.push({ playerId: e.scorerId || '', name: e.scorerName || 'Team', minute: e.minute ?? 0 });
+      if (e.scorerId) line(e.scorerId, e.scorerName || 'Unknown').goals++;
+      if (e.assistId) line(e.assistId, e.assistName || 'Unknown').assists++;
+    }
+    if (e.type === 'card' && e.playerId) {
+      const l = line(e.playerId, e.playerName || 'Unknown');
+      if (e.cardColor === 'red') l.red++; else l.yellow++;
+    }
+  }
+
+  const summary = {
+    result,
+    homeScore,
+    awayScore,
+    opponent: match.opponent || 'Opponent',
+    dateISO: match.dateISO || '',
+    seasonId: match.seasonId ?? null,
+    scorers,
+    playerLines: Object.values(lines),
+    cleanSheet: awayScore === 0,
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+  await matchRef.set({ summary }, { merge: true });
+  return summary;
+}
+
+async function recomputeSeasonAggregates(teamId: string, seasonId: string | null) {
+  const seasonKey = seasonId || 'none';
+  const matchesSnap = await db
+    .collection('teams').doc(teamId).collection('matches')
+    .where('status', '==', 'completed')
+    .get();
+
+  const matches = matchesSnap.docs
+    .map((d) => d.data())
+    .filter((m) => !m.isDeleted && (m.seasonId ?? null) === seasonId && m.summary);
+
+  const team = {
+    played: 0, wins: 0, draws: 0, losses: 0,
+    goalsFor: 0, goalsAgainst: 0, cleanSheets: 0,
+    form: [] as string[],
+  };
+  const players: Record<string, any> = {};
+
+  const ordered = [...matches].sort((a, b) =>
+    String(a.summary.dateISO).localeCompare(String(b.summary.dateISO)));
+
+  for (const m of ordered) {
+    const s = m.summary;
+    team.played++;
+    if (s.result === 'W') team.wins++;
+    else if (s.result === 'D') team.draws++;
+    else team.losses++;
+    team.goalsFor += s.homeScore;
+    team.goalsAgainst += s.awayScore;
+    if (s.cleanSheet) team.cleanSheets++;
+    team.form.push(s.result);
+
+    for (const l of s.playerLines || []) {
+      const p = players[l.playerId] || (players[l.playerId] = {
+        playerId: l.playerId, playerName: l.playerName, seasonId: seasonKey,
+        goals: 0, assists: 0, yellow: 0, red: 0,
+        appearances: 0, starts: 0, minutes: 0,
+      });
+      p.playerName = l.playerName || p.playerName;
+      p.goals += l.goals; p.assists += l.assists;
+      p.yellow += l.yellow; p.red += l.red;
+      if (l.appeared) p.appearances++;
+      if (l.started) p.starts++;
+      p.minutes += l.minutes;
+    }
+  }
+
+  const batch = db.batch();
+  batch.set(
+    db.collection('teams').doc(teamId).collection('aggregates').doc(seasonKey),
+    { ...team, form: team.form.slice(-5), seasonId: seasonKey, updatedAt: FieldValue.serverTimestamp() },
+  );
+  for (const p of Object.values(players)) {
+    batch.set(
+      db.collection('teams').doc(teamId).collection('playerAggregates').doc(`${p.playerId}_${seasonKey}`),
+      { ...p, updatedAt: FieldValue.serverTimestamp() },
+    );
+  }
+  await batch.commit();
+}
+
+export const onMatchCompletedAggregates = functions.firestore
+  .document('teams/{teamId}/matches/{matchId}')
+  .onUpdate(async (change, context) => {
+    const before = change.before.data();
+    const after = change.after.data();
+    if (!after) return;
+
+    const becameCompleted = after.status === 'completed' && before?.status !== 'completed';
+    const editedWhileCompleted =
+      after.status === 'completed' &&
+      (before?.homeScore !== after.homeScore ||
+        before?.awayScore !== after.awayScore ||
+        before?.isDeleted !== after.isDeleted);
+
+    if (!becameCompleted && !editedWhileCompleted) return;
+
+    const { teamId, matchId } = context.params;
+    await buildMatchSummary(teamId, matchId, after);
+    await recomputeSeasonAggregates(teamId, after.seasonId ?? null);
+  });
+
+// Post-completion event edits (undo, corrections) refresh the summary too.
+export const onEventWriteRecompute = functions.firestore
+  .document('teams/{teamId}/matches/{matchId}/events/{eventId}')
+  .onWrite(async (_change, context) => {
+    const { teamId, matchId } = context.params;
+    const matchDoc = await db.collection('teams').doc(teamId).collection('matches').doc(matchId).get();
+    const match = matchDoc.data();
+    if (!match || match.status !== 'completed' || match.isDeleted) return;
+    await buildMatchSummary(teamId, matchId, match);
+    await recomputeSeasonAggregates(teamId, match.seasonId ?? null);
+  });
+
+// ─── 9. Sweep: auto-finalize matches left live for 6+ hours ──────────────────
+export const sweepStaleLiveMatches = functions.pubsub
+  .schedule('every 60 minutes')
+  .onRun(async () => {
+    const cutoffMs = Date.now() - 6 * 3600 * 1000;
+    const snap = await db.collectionGroup('matches').where('status', '==', 'live').get();
+
+    for (const doc of snap.docs) {
+      const m = doc.data();
+      const state = m.state || {};
+      // Latest sign of life: clock timestamps (epoch ms) or the doc's updatedAt.
+      const lastActivity = Math.max(
+        state.resumedAt ?? 0,
+        state.startedAt ?? 0,
+        m.updatedAt?.toMillis?.() ?? 0,
+        m.startedAt?.toMillis?.() ?? 0,
+      );
+      if (lastActivity === 0 || lastActivity > cutoffMs) continue;
+
+      const halfDuration = m.halfDuration ?? 45;
+      const cappedElapsed = Math.min(
+        (state.elapsedSec ?? 0) + Math.max(0, (cutoffMs - (state.resumedAt ?? cutoffMs)) / 1000),
+        halfDuration * 2 * 60 + 20 * 60,
+      );
+
+      await doc.ref.set(
+        {
+          status: 'completed',
+          completedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+          autoFinalized: true,
+          state: {
+            status: 'final',
+            elapsedSec: Math.floor(cappedElapsed),
+            resumedAt: FieldValue.delete(),
+          },
+        },
+        { merge: true },
+      );
+      console.log(`Auto-finalized stale live match ${doc.ref.path}`);
+    }
   });

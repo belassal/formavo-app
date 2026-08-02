@@ -15,7 +15,7 @@ import type { HomeStackParamList } from '../../navigation/stacks/HomeStack';
 import { openMaps } from '../../utils/openMaps';
 import { B } from '../../constants/brand';
 import { listenMyTeams, getLinkedPlayers } from '../../services/teamService';
-import { listenMatches } from '../../services/matchService';
+import { listenMatches, listenMatchRoster } from '../../services/matchService';
 import { listenTrainings, type Training } from '../../services/trainingService';
 import { formatDateISO } from '../../components/DateTimePickerModal';
 
@@ -68,6 +68,28 @@ function getMondayKey(dateKey: string): string {
   const offset = dow === 0 ? -6 : 1 - dow;
   date.setDate(date.getDate() + offset);
   return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+}
+
+// "LIVE NOW" / "Today · 5:00 PM" / "Tomorrow · 9:00 AM" / "Sat · in 5 days"
+function countdownLabel(dateISO: string, todayKey: string, isLive: boolean): string {
+  if (isLive) return 'LIVE NOW';
+  const [datePart, timePart] = (dateISO || '').split(' ');
+  if (!datePart) return '';
+  let timeLabel = '';
+  if (timePart) {
+    const [hh, mm] = timePart.split(':').map(Number);
+    const ampm = hh >= 12 ? 'PM' : 'AM';
+    timeLabel = `${hh % 12 || 12}:${pad2(mm)} ${ampm}`;
+  }
+  if (datePart === todayKey) return timeLabel ? `Today · ${timeLabel}` : 'Today';
+  const days = Math.round(
+    (new Date(datePart + 'T00:00:00').getTime() - new Date(todayKey + 'T00:00:00').getTime()) /
+      (24 * 3600 * 1000),
+  );
+  if (days === 1) return timeLabel ? `Tomorrow · ${timeLabel}` : 'Tomorrow';
+  const weekday = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date(datePart + 'T00:00:00').getDay()];
+  if (days > 1) return `${weekday} · in ${days} days`;
+  return formatDateISO(dateISO);
 }
 
 function getWeekLabel(mondayKey: string, thisMondayKey: string): string {
@@ -228,6 +250,60 @@ export default function HomeScreen() {
     }));
   }, [teams, matchesByTeam, trainingsByTeam, todayKey, thisMondayKey, selectedChild]);
 
+  // ── Hero: next up + last result ──────────────────────────────────────────
+  const nowStr = useMemo(() => {
+    const n = new Date();
+    return `${todayKey} ${pad2(n.getHours())}:${pad2(n.getMinutes())}`;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todayKey, sections]);
+
+  const nextEvent = useMemo(() => {
+    const flat = sections.flatMap((s) => s.data);
+    const live = flat.find((e) => e.status === 'live');
+    if (live) return live;
+    return flat
+      .filter((e) => e.dateISO >= nowStr && e.status !== 'completed' && e.status !== 'cancelled')
+      .sort((a, b) => a.dateISO.localeCompare(b.dateISO))[0] ?? null;
+  }, [sections, nowStr]);
+
+  const lastResult = useMemo(() => {
+    const filteredTeams = selectedChild
+      ? teams.filter((team) => getLinkedPlayers(team).some((c) => c.id === selectedChild.id))
+      : teams;
+    const done: any[] = [];
+    for (const team of filteredTeams) {
+      for (const m of (matchesByTeam[team.id] || [])) {
+        if (m.status === 'completed' || m?.state?.status === 'final') {
+          done.push({ ...m, teamId: team.id, teamName: team.teamName || 'Team', role: team.role || 'member' });
+        }
+      }
+    }
+    return done.sort((a, b) => String(b.dateISO).localeCompare(String(a.dateISO)))[0] ?? null;
+  }, [teams, matchesByTeam, selectedChild]);
+
+  // RSVP glance for the next match (single-doc-collection listener, next match only)
+  const [nextRoster, setNextRoster] = useState<any[]>([]);
+  useEffect(() => {
+    setNextRoster([]);
+    if (!nextEvent || nextEvent.type !== 'match' || !nextEvent.matchId) return;
+    const unsub = listenMatchRoster(nextEvent.teamId, nextEvent.matchId, setNextRoster);
+    return () => unsub();
+  }, [nextEvent?.teamId, nextEvent?.matchId, nextEvent?.type]);
+
+  const rsvpGlance = useMemo(() => {
+    if (!nextEvent || nextEvent.type !== 'match') return null;
+    if (nextEvent.role === 'parent') {
+      const row = nextRoster.find((r) => r.id === nextEvent.linkedPlayerId);
+      const status = row?.rsvpStatus;
+      if (status === 'attending') return { label: '✅ Going', done: true };
+      if (status === 'absent') return { label: "❌ Can't make it", done: true };
+      return { label: 'RSVP now →', done: false };
+    }
+    if (nextRoster.length === 0) return null;
+    const going = nextRoster.filter((r) => r.rsvpStatus === 'attending').length;
+    return { label: `${going}/${nextRoster.length} confirmed`, done: going === nextRoster.length };
+  }, [nextEvent, nextRoster]);
+
   const handleEventPress = (event: ScheduleEvent) => {
     if (event.type === 'match') {
       navigation.navigate('MatchDetail', {
@@ -312,6 +388,93 @@ export default function HomeScreen() {
                 })}
               </ScrollView>
             )}
+
+            {/* ── Next up hero ── */}
+            {nextEvent && (
+              <TouchableOpacity
+                onPress={() => handleEventPress(nextEvent)}
+                activeOpacity={0.85}
+                style={{
+                  backgroundColor: '#0b1220',
+                  borderRadius: 16,
+                  padding: 16,
+                  marginTop: 10,
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: 'rgba(255,255,255,0.55)', letterSpacing: 1 }}>
+                    {nextEvent.status === 'live' ? 'HAPPENING NOW' : 'NEXT UP'}
+                  </Text>
+                  <View style={{
+                    backgroundColor: nextEvent.status === 'live' ? '#dc2626' : 'rgba(255,255,255,0.12)',
+                    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10,
+                  }}>
+                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#fff' }}>
+                      {countdownLabel(nextEvent.dateISO, todayKey, nextEvent.status === 'live')}
+                    </Text>
+                  </View>
+                </View>
+
+                <Text style={{ fontSize: 21, fontWeight: '900', color: '#fff', marginTop: 8 }}>
+                  {nextEvent.type === 'match' ? `${nextEvent.teamName} ${nextEvent.title}` : nextEvent.title}
+                </Text>
+                <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)', marginTop: 3 }}>
+                  {nextEvent.type === 'match' ? 'Match' : `Training · ${nextEvent.teamName}`}
+                  {nextEvent.subtitle ? ` · 📍 ${nextEvent.subtitle}` : ''}
+                </Text>
+
+                {rsvpGlance && (
+                  <View style={{
+                    marginTop: 12, alignSelf: 'flex-start',
+                    backgroundColor: rsvpGlance.done ? 'rgba(34,197,94,0.25)' : 'rgba(255,255,255,0.14)',
+                    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12,
+                  }}>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#fff' }}>{rsvpGlance.label}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            )}
+
+            {/* ── Last result ── */}
+            {lastResult && (() => {
+              const home = lastResult.homeScore ?? lastResult?.state?.homeScore ?? 0;
+              const away = lastResult.awayScore ?? lastResult?.state?.awayScore ?? 0;
+              const letter = home > away ? 'W' : home < away ? 'L' : 'D';
+              const color = letter === 'W' ? '#16a34a' : letter === 'L' ? '#dc2626' : '#6b7280';
+              return (
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() =>
+                    navigation.navigate('MatchDetail', {
+                      teamId: lastResult.teamId,
+                      matchId: lastResult.id,
+                      title: `${lastResult.teamName} vs ${lastResult.opponent || 'Opponent'}`,
+                      role: lastResult.role,
+                    })
+                  }
+                  style={{
+                    backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: B.border,
+                    padding: 14, marginTop: 10, flexDirection: 'row', alignItems: 'center', gap: 12,
+                  }}
+                >
+                  <View style={{
+                    width: 34, height: 34, borderRadius: 17, backgroundColor: color,
+                    alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <Text style={{ color: '#fff', fontWeight: '900', fontSize: 15 }}>{letter}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: B.ink }}>
+                      {home}-{away} vs {lastResult.opponent || 'Opponent'}
+                    </Text>
+                    <Text style={{ fontSize: 12, color: B.inkFaint, marginTop: 1 }}>
+                      Last result · {lastResult.teamName}
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 16, color: B.inkFaint }}>›</Text>
+                </TouchableOpacity>
+              );
+            })()}
           </View>
         }
         renderSectionHeader={({ section }) => (
