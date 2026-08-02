@@ -25,7 +25,7 @@ import { setMatchRosterSlotKey, setMatchSlotPos } from '../../services/matchServ
 import { buildSlots } from '../../services/formation';
 import MatchHeader from './MatchHeader'; // adjust path if needed
 import type { MatchState } from '../../models/match';
-import { computeElapsedSec, computeMinute } from '../../services/matchClock';
+import { computeElapsedSec, computeCappedMinute } from '../../services/matchClock';
 import EventWizard from '../gameDay/components/EventWizard';
 
 import {
@@ -49,6 +49,7 @@ type MatchDoc = {
   dateISO?: string;
   status?: 'scheduled' | 'live' | 'completed'; // you can keep this if you want
   formation?: string;
+  format?: string;
   halfDuration?: number;
   slotPos?: Record<string, SlotPos>;
   state?: MatchState;
@@ -215,7 +216,7 @@ export default function GameDayPitchScreen() {
   const slotPos = useMemo(() => match?.slotPos || {}, [match?.slotPos]);
 
   const getCurrentMatchSec = () => computeElapsedSec(state, Date.now());
-  const currentMinute = () => computeMinute(state, Date.now());
+  const currentMinute = () => computeCappedMinute(state, Date.now(), match?.halfDuration ?? 45);
 
   // For auto-assign: original starters by role
   const starters = useMemo(() => {
@@ -312,14 +313,14 @@ const derivedState = useMemo(() => {
   return { ...state, homeScore: score.home, awayScore: score.away };
 }, [state, score]);
 
-  const updateState = async (patch: Partial<MatchState>) => {
+  const updateState = async (patch: Partial<MatchState>, topLevel?: Record<string, any>) => {
     // Firestore cannot store undefined; use delete() to remove fields.
     const clean: any = {};
     Object.entries(patch).forEach(([k, v]) => {
       clean[k] = v === undefined ? firestore.FieldValue.delete() : v;
     });
 
-    await matchRef.set({ state: clean }, { merge: true });
+    await matchRef.set({ ...(topLevel || {}), state: clean }, { merge: true });
   };
   // One-time auto-assign (ONLY when nobody has any slotKey yet)
   useEffect(() => {
@@ -412,12 +413,16 @@ const derivedState = useMemo(() => {
 
 const onStart = async () => {
   const now = Date.now();
-  await updateState({
-    status: 'live',
-    half: 1,
-    startedAt: state.startedAt ?? now,
-    resumedAt: now,
-  });
+  await updateState(
+    {
+      status: 'live',
+      half: 1,
+      startedAt: state.startedAt ?? now,
+      resumedAt: now,
+    },
+    // Keep the top-level match status in sync so schedule/dashboard LIVE badges work.
+    { status: 'live', startedAt: firestore.FieldValue.serverTimestamp(), updatedAt: firestore.FieldValue.serverTimestamp() },
+  );
 };
 
 const onHalfTime = async () => {
@@ -468,21 +473,30 @@ const onResume = async () => {
 
 const onEnd = async () => {
   const now = Date.now();
+  // Full time also completes the match at the top level so it leaves LIVE lists and counts in stats.
+  const completedFields = {
+    status: 'completed',
+    completedAt: firestore.FieldValue.serverTimestamp(),
+    updatedAt: firestore.FieldValue.serverTimestamp(),
+  };
 
   // if live, accumulate time first
   if (state.status === 'live') {
     const resumedAt = state.resumedAt ?? state.startedAt ?? now;
     const add = Math.max(0, (now - resumedAt) / 1000);
 
-    await updateState({
-      status: 'final',
-      elapsedSec: (state.elapsedSec || 0) + add,
-      resumedAt: undefined,
-    });
+    await updateState(
+      {
+        status: 'final',
+        elapsedSec: (state.elapsedSec || 0) + add,
+        resumedAt: undefined,
+      },
+      completedFields,
+    );
     return;
   }
 
-  await updateState({ status: 'final' });
+  await updateState({ status: 'final' }, completedFields);
 };
 
 
@@ -656,7 +670,7 @@ const onEnd = async () => {
             </TouchableOpacity>
 
             {/* Minutes tracker */}
-            {(derivedState.status === 'live' || derivedState.status === 'completed' || derivedState.status === 'halftime' || derivedState.status === 'second_half') && (
+            {derivedState.status !== 'draft' && (
               <TouchableOpacity
                 onPress={() => setShowMinutes(true)}
                 style={styles.modeBtn}
@@ -903,7 +917,7 @@ const onEnd = async () => {
             const minute = currentMinute();
 
             if (p.type === 'goal') {
-              const scorerName = p.scorerId ? getPlayerName(p.scorerId) : 'Team';
+              const scorerName = p.scorerName ?? (p.scorerId ? getPlayerName(p.scorerId) : 'Team');
               const assistName = p.assistId ? getPlayerName(p.assistId) : '';
               await addMatchEvent({
                 teamId,
@@ -972,9 +986,9 @@ const onEnd = async () => {
             </View>
 
             {(() => {
-              const matchDuration = derivedState.status === 'completed'
+              const matchDuration = derivedState.status === 'final'
                 ? (match?.halfDuration ?? 45) * 2
-                : computeMinute(state, Date.now());
+                : computeCappedMinute(state, Date.now(), match?.halfDuration ?? 45);
               const rosterForCalc = roster.map((r) => ({
                 playerId: r.playerId || r.id,
                 playerName: r.playerName || 'Unknown',

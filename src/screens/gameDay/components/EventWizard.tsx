@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, Modal, TouchableOpacity, StyleSheet, Pressable, FlatList, ScrollView } from 'react-native';
+import { View, Text, Modal, TouchableOpacity, StyleSheet, Pressable, FlatList, ScrollView, TextInput } from 'react-native';
 import type { PlayerLite } from '../../../services/lineupMapping';
 import type { GoalSide, PitchPos } from '../../../models/matchEvent';
 
@@ -20,6 +20,7 @@ type Props = {
     pos?: PitchPos;
     assistPos?: PitchPos;
     scorerId?: string;
+    scorerName?: string; // free-text opponent scorer for away goals
     assistId?: string;
     playerId?: string;
     cardColor?: 'yellow' | 'red';
@@ -152,10 +153,13 @@ export default function EventWizard({ visible, preset, starters, bench, onCancel
   const isGoal = preset?.type === 'goal';
   const isCard = preset?.type === 'card';
   const isSub = preset?.type === 'sub';
+  // Away goals are scored by the opponent — no roster pick, optional free-text scorer.
+  const isAwayGoal = preset?.type === 'goal' && preset.side === 'away';
 
   const [goalPos, setGoalPos] = useState<PitchPos | undefined>(undefined);
   const [assistPos, setAssistPos] = useState<PitchPos | undefined>(undefined);
 
+  const [oppScorer, setOppScorer] = useState<string>('');
   const [scorerId, setScorerId] = useState<string>('');
   const [assistId, setAssistId] = useState<string>('');
   const [cardPlayerId, setCardPlayerId] = useState<string>('');
@@ -168,6 +172,7 @@ export default function EventWizard({ visible, preset, starters, bench, onCancel
     if (!visible) return;
     setGoalPos(undefined);
     setAssistPos(undefined);
+    setOppScorer('');
     setScorerId('');
     setAssistId('');
     setCardPlayerId('');
@@ -184,7 +189,7 @@ export default function EventWizard({ visible, preset, starters, bench, onCancel
   }, [preset]);
 
   const canSave =
-    (isGoal && !!scorerId) ||
+    (isGoal && (isAwayGoal || !!scorerId)) ||
     (isCard && !!cardPlayerId) ||
     (isSub && !!subOutId && !!subInId);
 
@@ -216,7 +221,20 @@ export default function EventWizard({ visible, preset, starters, bench, onCancel
               </>
             )}
 
-            {isGoal && (
+            {isAwayGoal && (
+              <>
+                <Text style={s.section}>Opponent scorer (optional)</Text>
+                <TextInput
+                  value={oppScorer}
+                  onChangeText={setOppScorer}
+                  placeholder="e.g. #9 or a name"
+                  placeholderTextColor="#9ca3af"
+                  style={s.input}
+                />
+              </>
+            )}
+
+            {isGoal && !isAwayGoal && (
               <>
                 <Text style={s.section}>Scorer</Text>
                 <FlatList
@@ -369,7 +387,8 @@ export default function EventWizard({ visible, preset, starters, bench, onCancel
                     side: preset.side,
                     pos: goalPos,
                     assistPos: assistId ? assistPos : undefined,
-                    scorerId,
+                    scorerId: isAwayGoal ? '' : scorerId,
+                    scorerName: isAwayGoal ? (oppScorer.trim() || 'Opponent') : undefined,
                     assistId: assistId || undefined,
                   });
                 } else if (preset.type === 'card') {
@@ -405,6 +424,7 @@ const s = StyleSheet.create({
   section: { marginTop: 12, fontWeight: '900' },
   emptyHint: { marginTop: 8, color: '#9ca3af', fontSize: 13 },
   pickRow: { borderWidth: 1, borderColor: '#ddd', borderRadius: 12, padding: 12, marginTop: 10 },
+  input: { backgroundColor: '#f3f4f6', borderRadius: 12, padding: 12, marginTop: 10, fontSize: 15, color: '#111' },
   pickRowActive: { backgroundColor: '#111', borderColor: '#111' },
   pickText: { fontWeight: '900', color: '#111' },
   footer: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 14 },

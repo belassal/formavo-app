@@ -141,20 +141,43 @@ export async function softDeleteMatch(params: { teamId: string; matchId: string 
     });
 }
 
-/** Mark match as completed */
+/** Mark match as completed. Also finalizes the game-day clock (state.status → 'final'). */
 export async function markMatchCompleted(params: { teamId: string; matchId: string }) {
   const { teamId, matchId } = params;
 
-  await db
+  const matchRef = db
     .collection(COL.teams)
     .doc(teamId)
     .collection(COL.matches)
-    .doc(matchId)
-    .update({
+    .doc(matchId);
+
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(matchRef);
+    const state: any = snap.data()?.state;
+    const now = Date.now();
+
+    const update: any = {
       status: 'completed' as MatchStatus,
       completedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-    });
+    };
+
+    if (state && state.status && state.status !== 'final') {
+      let elapsedSec = state.elapsedSec || 0;
+      // If the clock is running, bank the current segment before finalizing.
+      if (state.status === 'live') {
+        const resumedAt = state.resumedAt ?? state.startedAt ?? now;
+        elapsedSec += Math.max(0, (now - resumedAt) / 1000);
+      }
+      update.state = {
+        status: 'final',
+        elapsedSec,
+        resumedAt: firestore.FieldValue.delete(),
+      };
+    }
+
+    tx.set(matchRef, update, { merge: true });
+  });
 }
 
 // ===== Match roster (players for this match) =====
@@ -535,20 +558,41 @@ export function buildSubEvent(p: {
   };
 }
 
-/** Mark match as live (start game) */
+/** Mark match as live (start game). Also kicks off the game-day clock if it hasn't started. */
 export async function markMatchLive(params: { teamId: string; matchId: string }) {
   const { teamId, matchId } = params;
 
-  await db
+  const matchRef = db
     .collection(COL.teams)
     .doc(teamId)
     .collection(COL.matches)
-    .doc(matchId)
-    .update({
+    .doc(matchId);
+
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(matchRef);
+    const state: any = snap.data()?.state;
+    const now = Date.now();
+
+    const update: any = {
       status: 'live' as MatchStatus,
       startedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-    });
+    };
+
+    if (!state?.status || state.status === 'draft') {
+      update.state = {
+        status: 'live',
+        half: state?.half ?? 1,
+        startedAt: state?.startedAt ?? now,
+        resumedAt: now,
+        elapsedSec: state?.elapsedSec ?? 0,
+        homeScore: state?.homeScore ?? 0,
+        awayScore: state?.awayScore ?? 0,
+      };
+    }
+
+    tx.set(matchRef, update, { merge: true });
+  });
 }
 
 /** Mark match as scheduled again (optional "undo start") */
