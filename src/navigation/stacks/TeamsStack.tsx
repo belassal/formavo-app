@@ -3,6 +3,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import TeamsScreen from '../../screens/TeamsScreen';
 import TeamDetailScreen from '../../screens/teams/TeamDetailScreen';
 import MatchDetailScreen from '../../screens/matches/MatchDetailScreen';
+import MatchRecapScreen from '../../screens/matches/MatchRecapScreen';
 import GameDayPitchScreen from '../../screens/matches/GameDayPitchScreen';
 import StatsScreen from '../../screens/teams/StatsScreen';
 import PlayerProfileScreen from '../../screens/teams/PlayerProfileScreen';
@@ -23,6 +24,7 @@ export type TeamsStackParamList = {
   TeamsHome: undefined;
   TeamDetail: { teamId: string; teamName?: string; role?: string; parentTeams?: { id: string; teamName: string }[] };
   MatchDetail: { teamId: string; matchId: string; title?: string; role?: string; linkedPlayerId?: string };
+  MatchRecap: { teamId: string; matchId: string; teamName?: string };
   GameDayPitch: { teamId: string; matchId: string; role?: string };
   TeamStats: { teamId: string; teamName?: string };
   PlayerProfile: {
@@ -63,6 +65,11 @@ export default function TeamsStack() {
         name="MatchDetail"
         component={MatchDetailScreen}
         options={({ route }) => ({ title: route.params.title || 'Match' })}
+      />
+      <Stack.Screen
+        name="MatchRecap"
+        component={MatchRecapScreen}
+        options={{ title: 'Match Recap' }}
       />
       <Stack.Screen
         name="GameDayPitch"

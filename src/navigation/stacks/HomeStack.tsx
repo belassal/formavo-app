@@ -2,12 +2,14 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import HomeScreen from '../../screens/home/HomeScreen';
 import MatchDetailScreen from '../../screens/matches/MatchDetailScreen';
+import MatchRecapScreen from '../../screens/matches/MatchRecapScreen';
 import GameDayPitchScreen from '../../screens/matches/GameDayPitchScreen';
 import TrainingDetailScreen from '../../screens/teams/TrainingDetailScreen';
 
 export type HomeStackParamList = {
   HomeRoot: undefined;
   MatchDetail: { teamId: string; matchId: string; title?: string; role?: string; linkedPlayerId?: string };
+  MatchRecap: { teamId: string; matchId: string; teamName?: string };
   GameDayPitch: { teamId: string; matchId: string; role?: string };
   TrainingDetail: { teamId: string; trainingId?: string; role?: string };
 };
@@ -22,6 +24,11 @@ export default function HomeStack() {
         name="MatchDetail"
         component={MatchDetailScreen}
         options={({ route }) => ({ title: route.params.title || 'Match' })}
+      />
+      <Stack.Screen
+        name="MatchRecap"
+        component={MatchRecapScreen}
+        options={{ title: 'Match Recap' }}
       />
       <Stack.Screen
         name="GameDayPitch"

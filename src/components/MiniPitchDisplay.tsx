@@ -9,6 +9,8 @@ import type { PitchPos } from '../models/matchEvent';
 type Props = {
   goalPos?: PitchPos;
   assistPos?: PitchPos;
+  /** Additional goal markers (e.g. all goals of a match on one pitch). */
+  markers?: PitchPos[];
 };
 
 const W = 300;
@@ -21,7 +23,7 @@ const POST_W = 32;   const POST_H = 7;    const POST_L = (W - POST_W) / 2;
 const SPOT_Y = 23;
 const CX = W / 2;   const CY = H / 2;   const CR = 30;
 
-export default function MiniPitchDisplay({ goalPos, assistPos }: Props) {
+export default function MiniPitchDisplay({ goalPos, assistPos, markers }: Props) {
   const L  = 'rgba(255,255,255,0.40)';
   const LB = 'rgba(255,255,255,0.70)';
 
@@ -76,6 +78,17 @@ export default function MiniPitchDisplay({ goalPos, assistPos }: Props) {
             <Text style={{ fontSize: 12, lineHeight: 14 }}>⚽</Text>
           </View>
         )}
+
+        {/* ── Extra markers (multi-goal shot map) ── */}
+        {(markers || []).map((m, i) => (
+          <View
+            key={i}
+            pointerEvents="none"
+            style={[s.goalMarker, { left: m.x * W - 9, top: m.y * H - 9 }]}
+          >
+            <Text style={{ fontSize: 12, lineHeight: 14 }}>⚽</Text>
+          </View>
+        ))}
       </View>
 
       {/* Legend */}
@@ -86,7 +99,7 @@ export default function MiniPitchDisplay({ goalPos, assistPos }: Props) {
         </View>
       )}
 
-      {!goalPos && !assistPos && (
+      {!goalPos && !assistPos && (!markers || markers.length === 0) && (
         <Text style={s.noLocation}>No location recorded</Text>
       )}
     </View>

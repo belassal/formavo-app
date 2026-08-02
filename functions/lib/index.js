@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sweepStaleLiveMatches = exports.onEventWriteRecompute = exports.onMatchCompletedAggregates = exports.onMatchEventCreated = exports.onTrainingAttendanceUpdated = exports.onMessageSent = exports.onTrainingCreated = exports.onRsvpUpdated = exports.onMatchCreated = exports.onAnnouncementCreated = void 0;
+exports.sweepStaleLiveMatches = exports.rsvpReminders = exports.weeklyDigest = exports.onEventWriteRecompute = exports.onMatchCompletedAggregates = exports.onMatchEventCreated = exports.onTrainingAttendanceUpdated = exports.onMessageSent = exports.onTrainingCreated = exports.onRsvpUpdated = exports.onMatchCreated = exports.onAnnouncementCreated = void 0;
 const app_1 = require("firebase-admin/app");
 const firestore_1 = require("firebase-admin/firestore");
 const messaging_1 = require("firebase-admin/messaging");
@@ -407,6 +407,110 @@ exports.onEventWriteRecompute = functions.firestore
         return;
     await buildMatchSummary(teamId, matchId, match);
     await recomputeSeasonAggregates(teamId, (_a = match.seasonId) !== null && _a !== void 0 ? _a : null);
+});
+// ─── Weekly digest: Sunday evening results + top scorer per team ─────────────
+exports.weeklyDigest = functions.pubsub
+    .schedule('every sunday 18:00')
+    .timeZone('America/Halifax')
+    .onRun(async () => {
+    const weekAgo = new Date(Date.now() - 7 * 24 * 3600 * 1000);
+    const weekAgoKey = weekAgo.toISOString().substring(0, 10);
+    const teamsSnap = await db.collection('teams').get();
+    for (const teamDoc of teamsSnap.docs) {
+        const team = teamDoc.data();
+        if (team.isDeleted)
+            continue;
+        const matchesSnap = await teamDoc.ref
+            .collection('matches')
+            .where('status', '==', 'completed')
+            .get();
+        const thisWeek = matchesSnap.docs
+            .map((d) => d.data())
+            .filter((m) => !m.isDeleted && m.summary && String(m.summary.dateISO).substring(0, 10) >= weekAgoKey)
+            .sort((a, b) => String(a.summary.dateISO).localeCompare(String(b.summary.dateISO)));
+        if (thisWeek.length === 0)
+            continue;
+        const results = thisWeek
+            .map((m) => `${m.summary.result} ${m.summary.homeScore}-${m.summary.awayScore} vs ${m.summary.opponent}`)
+            .join(' · ');
+        // Top scorer across the week
+        const goals = {};
+        for (const m of thisWeek) {
+            for (const s of m.summary.scorers || []) {
+                if (!s.playerId)
+                    continue;
+                goals[s.playerId] = goals[s.playerId] || { name: s.name, count: 0 };
+                goals[s.playerId].count++;
+            }
+        }
+        const top = Object.values(goals).sort((a, b) => b.count - a.count)[0];
+        const topLine = top ? ` · Top scorer: ${top.name} (${top.count})` : '';
+        const teamName = team.name || 'Your team';
+        const uids = await getTeamMemberUids(teamDoc.id);
+        await Promise.all(uids.map((uid) => sendToUser(uid, { title: `📅 ${teamName} — week in review`, body: `${results}${topLine}` }, { type: 'weekly_digest', teamId: teamDoc.id }, 'digest')));
+    }
+});
+// ─── RSVP reminders: daily, for matches inside the next 48h ──────────────────
+exports.rsvpReminders = functions.pubsub
+    .schedule('every day 17:00')
+    .timeZone('America/Halifax')
+    .onRun(async () => {
+    var _a;
+    const now = new Date();
+    const in48h = new Date(now.getTime() + 48 * 3600 * 1000);
+    const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    const nowKey = fmt(now);
+    const in48Key = fmt(in48h);
+    const snap = await db.collectionGroup('matches').where('status', '==', 'scheduled').get();
+    for (const matchDoc of snap.docs) {
+        const m = matchDoc.data();
+        if (m.isDeleted)
+            continue;
+        const dateISO = String(m.dateISO || '');
+        if (!dateISO || dateISO < nowKey || dateISO > in48Key)
+            continue;
+        if (m.rsvpReminderSent)
+            continue;
+        const teamRef = matchDoc.ref.parent.parent;
+        if (!teamRef)
+            continue;
+        const teamId = teamRef.id;
+        const [rosterSnap, membersSnap, teamDoc] = await Promise.all([
+            matchDoc.ref.collection('roster').get(),
+            teamRef.collection('members').where('status', '==', 'active').get(),
+            teamRef.get(),
+        ]);
+        const teamName = ((_a = teamDoc.data()) === null || _a === void 0 ? void 0 : _a.name) || 'Your team';
+        const opponent = m.opponent || 'Opponent';
+        const pendingIds = new Set(rosterSnap.docs
+            .filter((r) => {
+            const s = r.data().rsvpStatus;
+            return !s || s === 'pending';
+        })
+            .map((r) => r.id));
+        if (rosterSnap.size === 0 || pendingIds.size === 0) {
+            await matchDoc.ref.set({ rsvpReminderSent: true }, { merge: true });
+            continue;
+        }
+        // Parents whose linked children haven't responded
+        const parentTargets = [];
+        for (const memberDoc of membersSnap.docs) {
+            const member = memberDoc.data();
+            if (member.role !== 'parent')
+                continue;
+            const linked = Array.isArray(member.linkedPlayers)
+                ? member.linkedPlayers
+                : member.linkedPlayerId ? [{ id: member.linkedPlayerId }] : [];
+            if (linked.some((c) => pendingIds.has(c.id)))
+                parentTargets.push(memberDoc.id);
+        }
+        const dayLabel = dateISO.substring(0, 10) === nowKey.substring(0, 10) ? 'today' : 'soon';
+        await Promise.all([
+            ...parentTargets.map((uid) => sendToUser(uid, { title: `⏰ RSVP needed — ${teamName}`, body: `Match vs ${opponent} is ${dayLabel === 'today' ? 'today' : 'coming up'}. Tap to confirm attendance.` }, { type: 'rsvp_reminder', teamId, matchId: matchDoc.id }, 'rsvp')),
+            ...(await getTeamCoachUids(teamId)).map((uid) => sendToUser(uid, { title: `⏰ ${teamName} vs ${opponent}`, body: `${pendingIds.size} player${pendingIds.size === 1 ? ' hasn\'t' : 's haven\'t'} confirmed yet.` }, { type: 'rsvp_reminder', teamId, matchId: matchDoc.id }, 'rsvp')),
+        ]);
+        await matchDoc.ref.set({ rsvpReminderSent: true }, { merge: true });
+    }
 });
 // ─── 9. Sweep: auto-finalize matches left live for 6+ hours ──────────────────
 exports.sweepStaleLiveMatches = functions.pubsub
