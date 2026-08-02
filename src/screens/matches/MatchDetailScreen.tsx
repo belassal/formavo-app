@@ -893,6 +893,10 @@ const addSelectedToRoster = async () => {
                     {pillBtn('Game Day', () => navigation.navigate('GameDayPitch', { teamId, matchId, role: route.params.role }))}
                     {status === 'completed' &&
                       pillBtn('📊 Recap', () => navigation.navigate('MatchRecap' as any, { teamId, matchId }))}
+                    {status === 'completed' && !isParent &&
+                      pillBtn('⭐ Rate', () => navigation.navigate('RatePlayers' as any, {
+                        teamId, matchId, opponent: match?.opponent, matchDateISO: match?.dateISO,
+                      }))}
                   </View>
                   {!isParent && status === 'scheduled' && (
                     <TouchableOpacity

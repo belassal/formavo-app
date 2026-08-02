@@ -82,6 +82,43 @@ export default function GameDayPitchScreen() {
   const { teamId, matchId } = route.params;
   const isParent = route.params.role === 'parent';
 
+  // ── Undo toast for just-logged events ─────────────────────────────────────
+  const [undoInfo, setUndoInfo] = useState<{ id: string; label: string } | null>(null);
+  const undoTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showUndo = (id: string, label: string) => {
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+    setUndoInfo({ id, label });
+    undoTimer.current = setTimeout(() => setUndoInfo(null), 6000);
+  };
+  const onUndoEvent = async () => {
+    if (!undoInfo) return;
+    const id = undoInfo.id;
+    setUndoInfo(null);
+    try {
+      await deleteMatchEvent({ teamId, matchId, eventId: id });
+    } catch (e: any) {
+      Alert.alert('Undo failed', e?.message ?? 'Unknown error');
+    }
+  };
+
+  // ── One-time Game Day intro for coaches ───────────────────────────────────
+  const [showIntro, setShowIntro] = useState(false);
+  useEffect(() => {
+    const uid = auth().currentUser?.uid;
+    if (!uid || isParent) return;
+    db.collection('users').doc(uid).get()
+      .then((s) => { if (!(s.data() as any)?.seenGameDayIntro) setShowIntro(true); })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const dismissIntro = () => {
+    setShowIntro(false);
+    const uid = auth().currentUser?.uid;
+    if (uid) {
+      db.collection('users').doc(uid).set({ seenGameDayIntro: true }, { merge: true }).catch(() => {});
+    }
+  };
+
   const [loading, setLoading] = useState(true);
   const [match, setMatch] = useState<MatchDoc | null>(null);
   const [roster, setRoster] = useState<MatchRosterRow[]>([]);
@@ -531,7 +568,7 @@ const onEnd = async () => {
         const scorerName = getPlayerName(activePlayerId);
         const assistName = assistId ? getPlayerName(assistId) : '';
 
-        await addMatchEvent({
+        const eventId = await addMatchEvent({
           teamId,
           matchId,
           event: buildGoalEvent({
@@ -543,17 +580,20 @@ const onEnd = async () => {
             assistName,
           }),
         });
+        showUndo(eventId, `⚽ ${scorerName}`);
       } else {
-        await addMatchEvent({
+        const playerName = getPlayerName(activePlayerId);
+        const eventId = await addMatchEvent({
           teamId,
           matchId,
           event: buildCardEvent({
             minute: currentMinute(),
             playerId: activePlayerId,
-            playerName: getPlayerName(activePlayerId),
+            playerName,
             cardColor: cardColor,
           }),
         });
+        showUndo(eventId, `${cardColor === 'red' ? '🟥' : '🟨'} ${playerName}`);
       }
 
       setShowPlayerModal(false);
@@ -908,18 +948,19 @@ const onEnd = async () => {
         preset={wizardPreset as any}
         starters={onPitch}
         bench={bench}
+        defaultMinute={currentMinute()}
         onCancel={() => {
           setWizardOpen(false);
           setWizardPreset(null);
         }}
         onSave={async (p) => {
           try {
-            const minute = currentMinute();
+            const minute = p.minute ?? currentMinute();
 
             if (p.type === 'goal') {
               const scorerName = p.scorerName ?? (p.scorerId ? getPlayerName(p.scorerId) : 'Team');
               const assistName = p.assistId ? getPlayerName(p.assistId) : '';
-              await addMatchEvent({
+              const eventId = await addMatchEvent({
                 teamId,
                 matchId,
                 event: buildGoalEvent({
@@ -933,18 +974,21 @@ const onEnd = async () => {
                   assistPos: p.assistPos,
                 }),
               });
+              showUndo(eventId, `⚽ ${p.side === 'away' ? 'Opponent goal' : scorerName}`);
             } else if (p.type === 'card') {
-              await addMatchEvent({
+              const playerName = getPlayerName(p.playerId!);
+              const eventId = await addMatchEvent({
                 teamId,
                 matchId,
                 event: buildCardEvent({
                   minute,
                   playerId: p.playerId!,
-                  playerName: getPlayerName(p.playerId!),
+                  playerName,
                   cardColor: p.cardColor || 'yellow',
                   pos: p.pos,
                 }),
               });
+              showUndo(eventId, `${p.cardColor === 'red' ? '🟥' : '🟨'} ${playerName}`);
             } else if (p.type === 'sub') {
               await addMatchEvent({
                 teamId,
@@ -1148,6 +1192,47 @@ const onEnd = async () => {
               style={{ marginTop: 12, paddingVertical: 13, borderWidth: 1, borderRadius: 12, borderColor: '#d1d5db', alignItems: 'center' }}
             >
               <Text style={{ fontWeight: '700', fontSize: 15, color: '#374151' }}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Undo toast ── */}
+      {undoInfo && (
+        <View style={{
+          position: 'absolute', bottom: 30, left: 20, right: 20,
+          backgroundColor: '#111', borderRadius: 14,
+          paddingVertical: 13, paddingHorizontal: 16,
+          flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+          shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 8, shadowOffset: { width: 0, height: 3 },
+        }}>
+          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>{undoInfo.label} logged</Text>
+          <TouchableOpacity onPress={onUndoEvent} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+            <Text style={{ color: '#4ade80', fontWeight: '900', fontSize: 14, letterSpacing: 0.5 }}>UNDO</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* ── One-time coach intro ── */}
+      <Modal visible={showIntro} transparent animationType="fade" onRequestClose={dismissIntro}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.78)', justifyContent: 'center', padding: 26 }}>
+          <View style={{ backgroundColor: '#fff', borderRadius: 20, padding: 24 }}>
+            <Text style={{ fontSize: 21, fontWeight: '900', color: '#111' }}>Game Day basics</Text>
+            {[
+              ['⚽', 'Fastest way to log a goal: tap the scorer’s bubble on the pitch while the match is live.'],
+              ['🔄', 'Tap an empty slot to assign a player. Use Layout to drag positions around.'],
+              ['🤝', 'Coaching solo is hard — assistants can log events too. Hand them the logging.'],
+            ].map(([icon, tip]) => (
+              <View key={icon} style={{ flexDirection: 'row', gap: 12, marginTop: 16, alignItems: 'flex-start' }}>
+                <Text style={{ fontSize: 22 }}>{icon}</Text>
+                <Text style={{ flex: 1, fontSize: 15, color: '#374151', lineHeight: 21 }}>{tip}</Text>
+              </View>
+            ))}
+            <TouchableOpacity
+              onPress={dismissIntro}
+              style={{ backgroundColor: '#111', borderRadius: 14, paddingVertical: 14, alignItems: 'center', marginTop: 22 }}
+            >
+              <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>Got it</Text>
             </TouchableOpacity>
           </View>
         </View>

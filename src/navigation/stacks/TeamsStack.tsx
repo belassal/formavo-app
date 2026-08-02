@@ -4,6 +4,7 @@ import TeamsScreen from '../../screens/TeamsScreen';
 import TeamDetailScreen from '../../screens/teams/TeamDetailScreen';
 import MatchDetailScreen from '../../screens/matches/MatchDetailScreen';
 import MatchRecapScreen from '../../screens/matches/MatchRecapScreen';
+import RatePlayersScreen from '../../screens/matches/RatePlayersScreen';
 import GameDayPitchScreen from '../../screens/matches/GameDayPitchScreen';
 import StatsScreen from '../../screens/teams/StatsScreen';
 import PlayerProfileScreen from '../../screens/teams/PlayerProfileScreen';
@@ -26,6 +27,7 @@ export type TeamsStackParamList = {
   TeamDetail: { teamId: string; teamName?: string; role?: string; parentTeams?: { id: string; teamName: string }[] };
   MatchDetail: { teamId: string; matchId: string; title?: string; role?: string; linkedPlayerId?: string };
   MatchRecap: { teamId: string; matchId: string; teamName?: string };
+  RatePlayers: { teamId: string; matchId: string; opponent?: string; matchDateISO?: string };
   GameDayPitch: { teamId: string; matchId: string; role?: string };
   TeamStats: { teamId: string; teamName?: string };
   PlayerProfile: {
@@ -72,6 +74,11 @@ export default function TeamsStack() {
         name="MatchRecap"
         component={MatchRecapScreen}
         options={{ title: 'Match Recap' }}
+      />
+      <Stack.Screen
+        name="RatePlayers"
+        component={RatePlayersScreen}
+        options={{ title: 'Rate Players' }}
       />
       <Stack.Screen
         name="GameDayPitch"

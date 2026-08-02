@@ -13,9 +13,12 @@ type Props = {
   preset: WizardPreset | null;
   starters: PlayerLite[];
   bench: PlayerLite[];
+  /** Current clock minute — seeds the adjustable minute stepper. */
+  defaultMinute?: number;
   onCancel: () => void;
   onSave: (payload: {
     type: 'goal' | 'card' | 'sub';
+    minute?: number;
     side?: GoalSide;
     pos?: PitchPos;
     assistPos?: PitchPos;
@@ -28,6 +31,43 @@ type Props = {
     outPlayerId?: string;
   }) => void;
 };
+
+function shortName(name: string) {
+  const parts = (name || '').trim().split(/\s+/);
+  if (parts.length <= 1) return parts[0] || '?';
+  return `${parts[0]} ${parts[parts.length - 1][0]}.`;
+}
+
+/** Big-tap jersey-number chips — the fast path for picking a player. */
+function PlayerChips(props: {
+  players: PlayerLite[];
+  selectedId: string;
+  onSelect: (id: string) => void;
+  toggle?: boolean;
+}) {
+  if (props.players.length === 0) {
+    return <Text style={s.emptyHint}>No players on pitch.</Text>;
+  }
+  return (
+    <View style={s.chipWrap}>
+      {props.players.map((p) => {
+        const active = props.selectedId === p.id;
+        return (
+          <TouchableOpacity
+            key={p.id}
+            onPress={() => props.onSelect(active && props.toggle ? '' : p.id)}
+            style={[s.chip, active ? s.chipActive : null]}
+          >
+            {p.number ? (
+              <Text style={[s.chipNum, active ? { color: '#a3e635' } : null]}>#{p.number}</Text>
+            ) : null}
+            <Text style={[s.chipText, active ? { color: 'white' } : null]}>{shortName(p.name)}</Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
 
 function clamp01(v: number) {
   return Math.max(0, Math.min(1, v));
@@ -149,7 +189,7 @@ const CX       = 150;  // center x
 const CY       = 110;  // center y (220/2)
 const CR       = 30;   // center circle radius (visual)
 
-export default function EventWizard({ visible, preset, starters, bench, onCancel, onSave }: Props) {
+export default function EventWizard({ visible, preset, starters, bench, defaultMinute, onCancel, onSave }: Props) {
   const isGoal = preset?.type === 'goal';
   const isCard = preset?.type === 'card';
   const isSub = preset?.type === 'sub';
@@ -166,6 +206,7 @@ export default function EventWizard({ visible, preset, starters, bench, onCancel
   const [cardColor, setCardColor] = useState<'yellow' | 'red'>('yellow');
   const [subOutId, setSubOutId] = useState<string>('');
   const [subInId, setSubInId] = useState<string>('');
+  const [minute, setMinute] = useState<number>(0);
 
   // reset when opening/preset changes
   React.useEffect(() => {
@@ -179,7 +220,8 @@ export default function EventWizard({ visible, preset, starters, bench, onCancel
     setCardColor('yellow');
     setSubOutId('');
     setSubInId('');
-  }, [visible, preset?.type, (preset as any)?.side]);
+    setMinute(defaultMinute ?? 0);
+  }, [visible, preset?.type, (preset as any)?.side, defaultMinute]);
 
   const title = useMemo(() => {
     if (!preset) return 'Log Event';
@@ -200,24 +242,19 @@ export default function EventWizard({ visible, preset, starters, bench, onCancel
           <Text style={s.title}>{title}</Text>
 
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-            {isGoal && (
+            {/* ── Who — first, biggest, required ── */}
+            {isGoal && !isAwayGoal && (
               <>
-                <Text style={s.section}>Goal location</Text>
-                <MiniPitchPicker pos={goalPos} onPick={setGoalPos} />
+                <Text style={s.section}>Who scored?</Text>
+                <PlayerChips players={starters} selectedId={scorerId} onSelect={setScorerId} />
 
-                {!!assistId && (
-                  <>
-                    <Text style={s.section}>Assist origin</Text>
-                    <MiniPitchPicker pos={assistPos} onPick={setAssistPos} />
-                  </>
-                )}
-              </>
-            )}
-
-            {isCard && (
-              <>
-                <Text style={s.section}>Card location (optional)</Text>
-                <MiniPitchPicker pos={goalPos} onPick={setGoalPos} />
+                <Text style={s.section}>Assist (optional)</Text>
+                <PlayerChips
+                  players={starters.filter((p) => p.id !== scorerId)}
+                  selectedId={assistId}
+                  onSelect={setAssistId}
+                  toggle
+                />
               </>
             )}
 
@@ -234,71 +271,10 @@ export default function EventWizard({ visible, preset, starters, bench, onCancel
               </>
             )}
 
-            {isGoal && !isAwayGoal && (
-              <>
-                <Text style={s.section}>Scorer</Text>
-                <FlatList
-                  data={starters}
-                  keyExtractor={(p) => p.id}
-                  scrollEnabled={false}
-                  renderItem={({ item }) => {
-                    const active = scorerId === item.id;
-                    return (
-                      <TouchableOpacity
-                        onPress={() => setScorerId(item.id)}
-                        style={[s.pickRow, active ? s.pickRowActive : null]}
-                      >
-                        <Text style={[s.pickText, active ? { color: 'white' } : null]}>
-                          {item.name}{item.number ? `  #${item.number}` : ''}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  }}
-                />
-
-                <Text style={s.section}>Assist (optional)</Text>
-                <FlatList
-                  data={starters.filter(p => p.id !== scorerId)}
-                  keyExtractor={(p) => p.id}
-                  scrollEnabled={false}
-                  renderItem={({ item }) => {
-                    const active = assistId === item.id;
-                    return (
-                      <TouchableOpacity
-                        onPress={() => setAssistId(active ? '' : item.id)}
-                        style={[s.pickRow, active ? s.pickRowActive : null]}
-                      >
-                        <Text style={[s.pickText, active ? { color: 'white' } : null]}>
-                          {item.name}{item.number ? `  #${item.number}` : ''}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  }}
-                />
-              </>
-            )}
-
             {isCard && (
               <>
                 <Text style={s.section}>Player</Text>
-                <FlatList
-                  data={starters}
-                  keyExtractor={(p) => p.id}
-                  scrollEnabled={false}
-                  renderItem={({ item }) => {
-                    const active = cardPlayerId === item.id;
-                    return (
-                      <TouchableOpacity
-                        onPress={() => setCardPlayerId(item.id)}
-                        style={[s.pickRow, active ? s.pickRowActive : null]}
-                      >
-                        <Text style={[s.pickText, active ? { color: 'white' } : null]}>
-                          {item.name}{item.number ? `  #${item.number}` : ''}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  }}
-                />
+                <PlayerChips players={starters} selectedId={cardPlayerId} onSelect={setCardPlayerId} />
 
                 <Text style={s.section}>Card</Text>
                 <View style={{ flexDirection: 'row', gap: 10 }}>
@@ -315,6 +291,28 @@ export default function EventWizard({ visible, preset, starters, bench, onCancel
                     <Text style={[s.btnText, cardColor === 'red' ? { color: 'white' } : null]}>Red</Text>
                   </TouchableOpacity>
                 </View>
+              </>
+            )}
+
+            {/* ── Where — optional detail, below the fast path ── */}
+            {isGoal && (
+              <>
+                <Text style={s.section}>Goal location (optional)</Text>
+                <MiniPitchPicker pos={goalPos} onPick={setGoalPos} />
+
+                {!!assistId && (
+                  <>
+                    <Text style={s.section}>Assist origin</Text>
+                    <MiniPitchPicker pos={assistPos} onPick={setAssistPos} />
+                  </>
+                )}
+              </>
+            )}
+
+            {isCard && (
+              <>
+                <Text style={s.section}>Card location (optional)</Text>
+                <MiniPitchPicker pos={goalPos} onPick={setGoalPos} />
               </>
             )}
 
@@ -369,6 +367,20 @@ export default function EventWizard({ visible, preset, starters, bench, onCancel
                 )}
               </>
             )}
+
+            {/* ── Minute — defaults to the live clock, adjustable for late logging ── */}
+            <Text style={s.section}>Minute</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 8, marginBottom: 4 }}>
+              <TouchableOpacity onPress={() => setMinute((m) => Math.max(0, m - 1))} style={s.stepBtn}>
+                <Text style={s.stepBtnText}>−</Text>
+              </TouchableOpacity>
+              <Text style={{ fontSize: 20, fontWeight: '900', color: '#111', minWidth: 48, textAlign: 'center' }}>
+                {minute}'
+              </Text>
+              <TouchableOpacity onPress={() => setMinute((m) => m + 1)} style={s.stepBtn}>
+                <Text style={s.stepBtnText}>+</Text>
+              </TouchableOpacity>
+            </View>
           </ScrollView>
 
           <View style={s.footer}>
@@ -384,6 +396,7 @@ export default function EventWizard({ visible, preset, starters, bench, onCancel
                 if (preset.type === 'goal') {
                   onSave({
                     type: 'goal',
+                    minute,
                     side: preset.side,
                     pos: goalPos,
                     assistPos: assistId ? assistPos : undefined,
@@ -394,6 +407,7 @@ export default function EventWizard({ visible, preset, starters, bench, onCancel
                 } else if (preset.type === 'card') {
                   onSave({
                     type: 'card',
+                    minute,
                     pos: goalPos,
                     playerId: cardPlayerId,
                     cardColor,
@@ -401,6 +415,7 @@ export default function EventWizard({ visible, preset, starters, bench, onCancel
                 } else {
                   onSave({
                     type: 'sub',
+                    minute,
                     outPlayerId: subOutId,
                     inPlayerId: subInId,
                   });
@@ -425,6 +440,19 @@ const s = StyleSheet.create({
   emptyHint: { marginTop: 8, color: '#9ca3af', fontSize: 13 },
   pickRow: { borderWidth: 1, borderColor: '#ddd', borderRadius: 12, padding: 12, marginTop: 10 },
   input: { backgroundColor: '#f3f4f6', borderRadius: 12, padding: 12, marginTop: 10, fontSize: 15, color: '#111' },
+  chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
+  chip: {
+    paddingVertical: 12, paddingHorizontal: 14, borderRadius: 12,
+    backgroundColor: '#f3f4f6', alignItems: 'center', minWidth: 76,
+  },
+  chipActive: { backgroundColor: '#111' },
+  chipNum: { fontSize: 16, fontWeight: '900', color: '#111' },
+  chipText: { fontSize: 12, fontWeight: '600', color: '#374151', marginTop: 2 },
+  stepBtn: {
+    width: 42, height: 42, borderRadius: 21, backgroundColor: '#f3f4f6',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  stepBtnText: { fontSize: 22, fontWeight: '800', color: '#111' },
   pickRowActive: { backgroundColor: '#111', borderColor: '#111' },
   pickText: { fontWeight: '900', color: '#111' },
   footer: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 14 },
