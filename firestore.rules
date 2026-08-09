@@ -274,9 +274,12 @@ service cloud.firestore {
         allow read, write: if isClubMember(clubId);
       }
 
-      // Club configuration (e.g. custom formations)
+      // Club configuration (e.g. custom formations + layouts).
+      // Read is open to signed-in users: parents and assistants render match
+      // pitches from these layouts and are not club members.
       match /config/{docId} {
-        allow read, write: if isClubMember(clubId);
+        allow read: if isSignedIn();
+        allow write: if isClubMember(clubId);
       }
     }
 
