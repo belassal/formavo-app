@@ -34,7 +34,9 @@
 		<true/>
 	</dict>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string></string>
+	<string>Formavo shows your location on venue maps to help you find match and training fields.
+
+</string>
 	<key>RCTNewArchEnabled</key>
 	<true/>
 	<key>UIBackgroundModes</key>
@@ -60,5 +62,13 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<false/>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Formavo needs access to your photo library so you can choose player photos, team pictures, and your club logo.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Formavo can save match recaps and season cards you share to your photo library.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Formavo uses the camera so you can take player and team photos.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>The microphone may be accessed if you record video for team photos.</string>
 </dict>
 </plist>
