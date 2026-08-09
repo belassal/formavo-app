@@ -27,6 +27,8 @@ type Props = {
   onQuickEvent: (preset: { type: 'goal'|'card'|'sub'; side?: 'home'|'away' }) => void;
   /** Tap the scoreline to open the match events sheet. */
   onScorePress?: () => void;
+  /** Read-only mode: latest event line shown instead of the coach quick buttons. */
+  latestEvent?: string | null;
 };
 
 function fmt(sec: number) {
@@ -48,6 +50,7 @@ export default function MatchHeader({
   onEnd,
   onQuickEvent,
   onScorePress,
+  latestEvent,
 }: Props) {
   const [now, setNow] = useState(() => Date.now());
 
@@ -127,27 +130,36 @@ export default function MatchHeader({
         {state.status === 'final'    && 'Full Time'}
       </Text>
 
-      <View style={styles.quickRow}>
-        <Pressable style={styles.quickBtn} onPress={() => onQuickEvent({ type: 'goal', side: 'home' })}>
-          <Text style={styles.quickEmoji}>⚽</Text>
-          <Text style={styles.quickText}>Home Goal</Text>
-        </Pressable>
+      {canEdit ? (
+        <View style={styles.quickRow}>
+          <Pressable style={styles.quickBtn} onPress={() => onQuickEvent({ type: 'goal', side: 'home' })}>
+            <Text style={styles.quickEmoji}>⚽</Text>
+            <Text style={styles.quickText}>Home Goal</Text>
+          </Pressable>
 
-        <Pressable style={styles.quickBtn} onPress={() => onQuickEvent({ type: 'goal', side: 'away' })}>
-          <Text style={styles.quickEmoji}>⚽</Text>
-          <Text style={styles.quickText}>Away Goal</Text>
-        </Pressable>
+          <Pressable style={styles.quickBtn} onPress={() => onQuickEvent({ type: 'goal', side: 'away' })}>
+            <Text style={styles.quickEmoji}>⚽</Text>
+            <Text style={styles.quickText}>Away Goal</Text>
+          </Pressable>
 
-        <Pressable style={styles.quickBtn} onPress={() => onQuickEvent({ type: 'card' })}>
-          <Text style={styles.quickEmoji}>🟨</Text>
-          <Text style={styles.quickText}>Card</Text>
-        </Pressable>
+          <Pressable style={styles.quickBtn} onPress={() => onQuickEvent({ type: 'card' })}>
+            <Text style={styles.quickEmoji}>🟨</Text>
+            <Text style={styles.quickText}>Card</Text>
+          </Pressable>
 
-        <Pressable style={styles.quickBtn} onPress={() => onQuickEvent({ type: 'sub' })}>
-          <Text style={styles.quickEmoji}>↕</Text>
-          <Text style={styles.quickText}>Sub</Text>
+          <Pressable style={styles.quickBtn} onPress={() => onQuickEvent({ type: 'sub' })}>
+            <Text style={styles.quickEmoji}>↕</Text>
+            <Text style={styles.quickText}>Sub</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <Pressable style={styles.tickerRow} onPress={onScorePress} disabled={!onScorePress}>
+          <Text style={styles.tickerText} numberOfLines={1}>
+            {latestEvent ? latestEvent : 'No events yet'}
+          </Text>
+          <Text style={styles.tickerChevron}>›</Text>
         </Pressable>
-      </View>
+      )}
     </View>
   );
 }
@@ -196,6 +208,27 @@ dash: {
   fontWeight: '800',
 },
 
+tickerRow: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  marginTop: 10,
+  backgroundColor: 'rgba(255,255,255,0.08)',
+  borderRadius: 12,
+  paddingHorizontal: 14,
+  paddingVertical: 10,
+  gap: 8,
+},
+tickerText: {
+  flex: 1,
+  color: 'rgba(255,255,255,0.85)',
+  fontSize: 14,
+  fontWeight: '600',
+},
+tickerChevron: {
+  color: 'rgba(255,255,255,0.45)',
+  fontSize: 18,
+  fontWeight: '700',
+},
 quickRow: {
   flexDirection: 'row',
   gap: 8,

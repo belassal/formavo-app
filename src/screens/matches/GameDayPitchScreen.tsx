@@ -910,6 +910,13 @@ const onEnd = async () => {
           state={derivedState}
           canEdit={!isParent}
           onScorePress={() => setShowEvents(true)}
+          latestEvent={(() => {
+            const latest = [...(events as any[])].sort(
+              (a, b) => (b.minute ?? 0) - (a.minute ?? 0) ||
+                (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0),
+            )[0];
+            return latest ? `${latest.minute ?? '–'}'  ${eventLabel(latest)}` : null;
+          })()}
           halfDuration={match?.halfDuration ?? 45}
           onStart={onStart}
           onHalfTime={onHalfTime}
