@@ -356,18 +356,28 @@ type EventLine = {
   inPlayerId?: string; outPlayerId?: string;
 };
 
-// Port of src/services/minutesService.calculateMatchMinutes
+// Port of src/services/minutesService.calculateMatchMinutes (stint-based:
+// supports rolling subs and ignores orphan off-events).
 function calcMinutes(roster: RosterLine[], events: EventLine[], matchDuration: number) {
   const subs = events.filter((e) => e.type === 'sub').sort((a, b) => a.minute - b.minute);
   const out: Record<string, { minutes: number; started: boolean }> = {};
   for (const p of roster) {
     if (p.attendance === 'absent' || p.attendance === 'injured') continue;
     const started = (p.role || 'bench') === 'starter';
-    const on = subs.find((e) => e.inPlayerId === p.playerId);
-    const off = subs.find((e) => e.outPlayerId === p.playerId);
-    const minuteOn = started ? 0 : on ? on.minute : null;
-    if (minuteOn === null) continue;
-    const minutes = Math.max(0, (off ? off.minute : matchDuration) - minuteOn);
+    const stints: Array<[number, number]> = [];
+    let on: number | null = started ? 0 : null;
+    for (const e of subs) {
+      if (e.outPlayerId === p.playerId && on !== null) {
+        stints.push([on, Math.max(on, e.minute)]);
+        on = null;
+      }
+      if (e.inPlayerId === p.playerId && on === null) {
+        on = e.minute;
+      }
+    }
+    if (on !== null) stints.push([on, matchDuration]);
+    if (!started && stints.length === 0) continue;
+    const minutes = stints.reduce((sum, [a, b]) => sum + Math.max(0, b - a), 0);
     out[p.playerId] = { minutes, started };
   }
   return out;

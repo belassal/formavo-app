@@ -39,22 +39,41 @@ export function calculateMatchMinutes(
     if (player.attendance === 'absent' || player.attendance === 'injured') continue;
 
     const started = (player.role || 'bench') === 'starter';
-    const subbedOnEvent = subEvents.find((e) => e.inPlayerId === player.playerId);
-    const subbedOffEvent = subEvents.find((e) => e.outPlayerId === player.playerId);
 
-    const minuteOn: number | null = started ? 0 : subbedOnEvent ? subbedOnEvent.minute : null;
-    if (minuteOn === null) continue; // bench player who never came on
+    // Walk sub events chronologically building stints — supports rolling subs
+    // (off and back on again) and ignores orphan events (an "off" while the
+    // player wasn't on pitch, e.g. from corrected mistakes).
+    const stints: Array<[number, number]> = [];
+    let on: number | null = started ? 0 : null;
+    let cameOnBySub = false;
+    let currentlyOff = false;
+    for (const e of subEvents) {
+      if (e.outPlayerId === player.playerId && on !== null) {
+        stints.push([on, Math.max(on, e.minute)]);
+        on = null;
+        currentlyOff = true;
+      }
+      if (e.inPlayerId === player.playerId && on === null) {
+        on = e.minute;
+        cameOnBySub = true;
+        currentlyOff = false;
+      }
+    }
+    if (on !== null) stints.push([on, matchDuration]);
 
-    const minuteOff = subbedOffEvent ? subbedOffEvent.minute : null;
-    const minutesPlayed = Math.max(0, (minuteOff ?? matchDuration) - minuteOn);
+    if (!started && stints.length === 0) continue; // bench player who never came on
+
+    const minutesPlayed = stints.reduce((sum, [a, b]) => sum + Math.max(0, b - a), 0);
+    const minuteOn = stints.length > 0 ? stints[0][0] : 0;
+    const minuteOff = currentlyOff && stints.length > 0 ? stints[stints.length - 1][1] : null;
 
     result.push({
       playerId: player.playerId,
       playerName: player.playerName,
       minutesPlayed,
       startedMatch: started,
-      subbedOn: !!subbedOnEvent,
-      subbedOff: !!subbedOffEvent,
+      subbedOn: cameOnBySub,
+      subbedOff: currentlyOff,
       minuteOn,
       minuteOff,
     });
