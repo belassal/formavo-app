@@ -30,7 +30,10 @@ src/
   services/            # ALL Firebase logic; screens only consume
 firestore.rules        # deployed security rules — see Security below
 storage.rules
-firestore.indexes.json # collection-group index on matches.status (sweep)
+firestore.indexes.json # COMPLETE composite-index inventory — deploying this
+                       # file REPLACES all indexes; never deploy a partial list
+                       # (a partial deploy in Aug 2026 wiped prod indexes and
+                       # broke rosters/photos/invites)
 functions/src/index.ts # all Cloud Functions
 ```
 
