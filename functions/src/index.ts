@@ -288,7 +288,10 @@ export const onMatchEventCreated = functions.firestore
   .onCreate(async (snap, context) => {
     const { teamId, matchId } = context.params;
     const event = snap.data();
-    if (!event || event.type !== 'goal') return;
+    if (!event) return;
+    const isGoal = event.type === 'goal';
+    const isDisallowed = event.type === 'note' && event.noteKind === 'disallowed_goal';
+    if (!isGoal && !isDisallowed) return;
 
     const [teamDoc, matchDoc] = await Promise.all([
       db.collection('teams').doc(teamId).get(),
@@ -299,6 +302,23 @@ export const onMatchEventCreated = functions.firestore
 
     const teamName = teamDoc.data()?.name || 'Your team';
     const opponent = match.opponent || 'Opponent';
+
+    if (isDisallowed) {
+      // The goal was already deleted (score corrected) before this note was written.
+      const score = `${match.homeScore ?? 0}-${match.awayScore ?? 0}`;
+      const uidsD = await getTeamMemberUids(teamId);
+      await Promise.all(
+        uidsD.map((uid) =>
+          sendToUser(
+            uid,
+            { title: `❌ Goal disallowed — ${teamName}`, body: `${event.text || 'Goal disallowed'} · now ${score} vs ${opponent}` },
+            { type: 'goal_disallowed', teamId, matchId },
+            'live'
+          )
+        )
+      );
+      return;
+    }
     // The score increment happens in the same transaction as the event write,
     // so by the time this trigger reads the match doc it reflects this goal.
     const score = `${match.homeScore ?? 0}-${match.awayScore ?? 0}`;

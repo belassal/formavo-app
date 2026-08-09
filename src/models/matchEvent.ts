@@ -39,8 +39,9 @@ export type MatchEvent = {
   outPlayerId?: string;
   outPlayerName?: string;
 
-  // note (e.g. "Formation → 3-2-1")
+  // note (e.g. "Formation → 3-2-1", "❌ Goal disallowed — …")
   text?: string;
+  noteKind?: string; // 'disallowed_goal' notes trigger a family push
 
   // bookkeeping
   createdAt?: any;

@@ -206,10 +206,14 @@ exports.onTrainingAttendanceUpdated = functions.firestore
 exports.onMatchEventCreated = functions.firestore
     .document('teams/{teamId}/matches/{matchId}/events/{eventId}')
     .onCreate(async (snap, context) => {
-    var _a, _b, _c;
+    var _a, _b, _c, _d, _e;
     const { teamId, matchId } = context.params;
     const event = snap.data();
-    if (!event || event.type !== 'goal')
+    if (!event)
+        return;
+    const isGoal = event.type === 'goal';
+    const isDisallowed = event.type === 'note' && event.noteKind === 'disallowed_goal';
+    if (!isGoal && !isDisallowed)
         return;
     const [teamDoc, matchDoc] = await Promise.all([
         db.collection('teams').doc(teamId).get(),
@@ -220,9 +224,16 @@ exports.onMatchEventCreated = functions.firestore
         return;
     const teamName = ((_a = teamDoc.data()) === null || _a === void 0 ? void 0 : _a.name) || 'Your team';
     const opponent = match.opponent || 'Opponent';
+    if (isDisallowed) {
+        // The goal was already deleted (score corrected) before this note was written.
+        const score = `${(_b = match.homeScore) !== null && _b !== void 0 ? _b : 0}-${(_c = match.awayScore) !== null && _c !== void 0 ? _c : 0}`;
+        const uidsD = await getTeamMemberUids(teamId);
+        await Promise.all(uidsD.map((uid) => sendToUser(uid, { title: `❌ Goal disallowed — ${teamName}`, body: `${event.text || 'Goal disallowed'} · now ${score} vs ${opponent}` }, { type: 'goal_disallowed', teamId, matchId }, 'live')));
+        return;
+    }
     // The score increment happens in the same transaction as the event write,
     // so by the time this trigger reads the match doc it reflects this goal.
-    const score = `${(_b = match.homeScore) !== null && _b !== void 0 ? _b : 0}-${(_c = match.awayScore) !== null && _c !== void 0 ? _c : 0}`;
+    const score = `${(_d = match.homeScore) !== null && _d !== void 0 ? _d : 0}-${(_e = match.awayScore) !== null && _e !== void 0 ? _e : 0}`;
     const minute = typeof event.minute === 'number' && event.minute > 0 ? ` ${event.minute}'` : '';
     const side = event.side || 'home';
     const title = side === 'home' ? `⚽ GOAL — ${teamName}!` : `⚽ ${opponent} score`;

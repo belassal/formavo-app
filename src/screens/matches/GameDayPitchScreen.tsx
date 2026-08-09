@@ -185,6 +185,84 @@ export default function GameDayPitchScreen() {
     }
   };
 
+  // ── Match events sheet (tap the score) ────────────────────────────────────
+  const [showEvents, setShowEvents] = useState(false);
+  const eventLabel = (e: any) => {
+    if (e.type === 'goal') {
+      return (e.side || 'home') === 'home'
+        ? `⚽ ${e.scorerName || 'Goal'}${e.assistName ? `  ·  assist: ${e.assistName}` : ''}`
+        : `⚽ Opponent${e.scorerName && e.scorerName !== 'Opponent' ? ` (${e.scorerName})` : ''}`;
+    }
+    if (e.type === 'card') return `${e.cardColor === 'red' ? '🟥' : '🟨'} ${e.playerName || 'Card'}`;
+    if (e.type === 'sub') return `↕ ${e.outPlayerName || '?'} → ${e.inPlayerName || '?'}`;
+    return `📋 ${e.text || 'Note'}`;
+  };
+  const disallowGoal = async (e: any, reason: string | null) => {
+    try {
+      await deleteMatchEvent({ teamId, matchId, eventId: e.id });
+      const who = (e.side || 'home') === 'home' ? (e.scorerName || 'Goal') : 'Opponent goal';
+      await addMatchEvent({
+        teamId,
+        matchId,
+        event: {
+          type: 'note',
+          minute: e.minute ?? currentMinute(),
+          text: `❌ Goal disallowed — ${who}${reason ? ` (${reason})` : ''}`,
+          noteKind: 'disallowed_goal',
+        } as any,
+      });
+    } catch (err: any) {
+      Alert.alert('Failed', err?.message ?? 'Unknown error');
+    }
+  };
+
+  const pickDisallowReason = (e: any) => {
+    Alert.alert('Why was it disallowed?', undefined, [
+      { text: 'Offside', onPress: () => disallowGoal(e, 'offside') },
+      { text: 'Foul', onPress: () => disallowGoal(e, 'foul') },
+      { text: 'Handball', onPress: () => disallowGoal(e, 'handball') },
+      { text: 'No reason given', onPress: () => disallowGoal(e, null) },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+  const confirmRemoveEvent = (e: any) => {
+    if (e.type === 'goal') {
+      Alert.alert(
+        'Remove this goal?',
+        `${e.minute ?? '–'}'  ${eventLabel(e)}\n\nThe score corrects for everyone either way.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Disallowed by referee', onPress: () => pickDisallowReason(e) },
+          {
+            text: 'Logged by mistake',
+            style: 'destructive',
+            onPress: () =>
+              deleteMatchEvent({ teamId, matchId, eventId: e.id }).catch((err: any) =>
+                Alert.alert('Remove failed', err?.message ?? 'Unknown error'),
+              ),
+          },
+        ],
+      );
+      return;
+    }
+    Alert.alert(
+      'Remove this event?',
+      `${e.minute ?? '–'}'  ${eventLabel(e)}`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () =>
+            deleteMatchEvent({ teamId, matchId, eventId: e.id }).catch((err: any) =>
+              Alert.alert('Remove failed', err?.message ?? 'Unknown error'),
+            ),
+        },
+      ],
+    );
+  };
+
   // ── One-time Game Day intro for coaches ───────────────────────────────────
   const [showIntro, setShowIntro] = useState(false);
   useEffect(() => {
@@ -831,6 +909,7 @@ const onEnd = async () => {
         <MatchHeader
           state={derivedState}
           canEdit={!isParent}
+          onScorePress={() => setShowEvents(true)}
           halfDuration={match?.halfDuration ?? 45}
           onStart={onStart}
           onHalfTime={onHalfTime}
@@ -1313,6 +1392,58 @@ const onEnd = async () => {
         onClose={() => setShowFormationPicker(false)}
         onConfirm={onFormationChange}
       />
+
+      {/* ── Match events sheet ── */}
+      <Modal visible={showEvents} animationType="slide" transparent onRequestClose={() => setShowEvents(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalSheet, { maxHeight: '75%' }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={styles.modalTitle}>Match events</Text>
+              <TouchableOpacity onPress={() => setShowEvents(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Text style={{ fontSize: 20, color: '#9ca3af' }}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            {!isParent && (
+              <Text style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>
+                Referee changed the call? Remove the event — scores update for everyone.
+              </Text>
+            )}
+            <FlatList
+              data={[...(events as any[])].sort(
+                (a, b) => (b.minute ?? 0) - (a.minute ?? 0) ||
+                  (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0),
+              )}
+              keyExtractor={(e: any) => e.id}
+              style={{ marginTop: 12 }}
+              ListEmptyComponent={
+                <Text style={{ color: '#9ca3af', fontSize: 14, marginTop: 16 }}>No events logged yet.</Text>
+              }
+              renderItem={({ item }: { item: any }) => (
+                <View style={{
+                  flexDirection: 'row', alignItems: 'center', gap: 10,
+                  paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f3f4f6',
+                }}>
+                  <Text style={{ width: 34, fontSize: 13, fontWeight: '800', color: '#9ca3af' }}>
+                    {item.minute ?? '–'}'
+                  </Text>
+                  <Text style={{ flex: 1, fontSize: 15, fontWeight: '600', color: '#111' }}>
+                    {eventLabel(item)}
+                  </Text>
+                  {!isParent && (
+                    <TouchableOpacity
+                      onPress={() => confirmRemoveEvent(item)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      style={{ width: 30, height: 30, alignItems: 'center', justifyContent: 'center' }}
+                    >
+                      <Text style={{ fontSize: 18, fontWeight: '700', color: '#ef4444' }}>×</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+            />
+          </View>
+        </View>
+      </Modal>
 
       {/* ── Undo toast ── */}
       {undoInfo && (

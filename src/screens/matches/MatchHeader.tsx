@@ -25,6 +25,8 @@ type Props = {
   onStartSecondHalf: () => void;
   onEnd: () => void;
   onQuickEvent: (preset: { type: 'goal'|'card'|'sub'; side?: 'home'|'away' }) => void;
+  /** Tap the scoreline to open the match events sheet. */
+  onScorePress?: () => void;
 };
 
 function fmt(sec: number) {
@@ -45,6 +47,7 @@ export default function MatchHeader({
   onStartSecondHalf,
   onEnd,
   onQuickEvent,
+  onScorePress,
 }: Props) {
   const [now, setNow] = useState(() => Date.now());
 
@@ -91,11 +94,16 @@ export default function MatchHeader({
       <View style={styles.topRow}>
         <Text style={styles.clock}>{clockText}</Text>
 
-        <View style={styles.scoreBox}>
+        <Pressable
+          style={styles.scoreBox}
+          onPress={onScorePress}
+          disabled={!onScorePress}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
           <Text style={styles.score}>{state.homeScore}</Text>
           <Text style={styles.dash}>-</Text>
           <Text style={styles.score}>{state.awayScore}</Text>
-        </View>
+        </Pressable>
 
         <View style={styles.actions}>
           {leftBtn && (
