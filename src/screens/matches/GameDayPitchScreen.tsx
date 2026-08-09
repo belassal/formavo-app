@@ -962,7 +962,7 @@ const onEnd = async () => {
         <View style={styles.modalOverlay}>
           <View style={styles.modalSheet}>
             <Text style={styles.modalTitle}>{activePlayerId ? getPlayerName(activePlayerId) : 'Player'}</Text>
-            <Text style={styles.modalSub}>Log an event</Text>
+            <Text style={styles.modalSub}>Log an event or move the player</Text>
 
             {/* Pick type */}
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
@@ -970,14 +970,27 @@ const onEnd = async () => {
                 onPress={() => setActionType('goal')}
                 style={[styles.modalBtn, actionType === 'goal' ? { backgroundColor: '#111' } : null]}
               >
-                <Text style={[styles.modalBtnText, actionType === 'goal' ? { color: 'white' } : null]}>Goal</Text>
+                <Text style={[styles.modalBtnText, actionType === 'goal' ? { color: 'white' } : null]}>⚽ Goal</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 onPress={() => setActionType('card')}
                 style={[styles.modalBtn, actionType === 'card' ? { backgroundColor: '#111' } : null]}
               >
-                <Text style={[styles.modalBtnText, actionType === 'card' ? { color: 'white' } : null]}>Card</Text>
+                <Text style={[styles.modalBtnText, actionType === 'card' ? { color: 'white' } : null]}>🟨 Card</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => {
+                  const slotKey = activePlayerId ? playerToSlotKey[activePlayerId] : null;
+                  setShowPlayerModal(false);
+                  setActivePlayerId(null);
+                  setAssistId('');
+                  if (slotKey) setAssignSlotKey(slotKey);
+                }}
+                style={styles.modalBtn}
+              >
+                <Text style={styles.modalBtnText}>↔ Swap</Text>
               </TouchableOpacity>
             </View>
 
@@ -1323,7 +1336,7 @@ const onEnd = async () => {
           <View style={{ backgroundColor: '#fff', borderRadius: 20, padding: 24 }}>
             <Text style={{ fontSize: 21, fontWeight: '900', color: '#111' }}>Game Day basics</Text>
             {[
-              ['⚽', 'Fastest way to log a goal: tap the scorer’s bubble on the pitch while the match is live.'],
+              ['⚽', 'Tap a player during a live match to log their goal or card — or to swap their position.'],
               ['🔄', 'Tap an empty slot to assign a player. Use Layout to drag positions around.'],
               ['🤝', 'Coaching solo is hard — assistants can log events too. Hand them the logging.'],
             ].map(([icon, tip]) => (
