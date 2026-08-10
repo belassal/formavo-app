@@ -18,6 +18,7 @@ import { listenMyTeams, getLinkedPlayers } from '../../services/teamService';
 import { listenMatches, listenMatchRoster } from '../../services/matchService';
 import { listenTrainings, type Training } from '../../services/trainingService';
 import { formatDateISO } from '../../components/DateTimePickerModal';
+import WeatherChip from '../../components/WeatherChip';
 
 type TeamRow = {
   id: string;
@@ -426,6 +427,9 @@ export default function HomeScreen() {
                   {nextEvent.type === 'match' ? 'Match' : `Training · ${nextEvent.teamName}`}
                   {nextEvent.subtitle ? ` · 📍 ${nextEvent.subtitle}` : ''}
                 </Text>
+                {nextEvent.status !== 'live' && (
+                  <WeatherChip address={nextEvent.subtitle} dateISO={nextEvent.dateISO} dark />
+                )}
 
                 {rsvpGlance && (
                   <View style={{

@@ -47,6 +47,7 @@ import { listenTeamMembers } from '../../services/teamService';
 import auth from '@react-native-firebase/auth';
 import DateTimePickerModal, { formatDateISO } from '../../components/DateTimePickerModal';
 import MiniPitchDisplay from '../../components/MiniPitchDisplay';
+import WeatherChip from '../../components/WeatherChip';
 import { listenMatchRatings, setPlayerMatchRating, type PlayerRating } from '../../services/ratingService';
 import { openMaps } from '../../utils/openMaps';
 import LocationMapPreview from '../../components/LocationMapPreview';
@@ -886,6 +887,9 @@ const addSelectedToRoster = async () => {
                     {match?.dateISO ? formatDateISO(match.dateISO) : ''}
                     {!match?.location && match?.fieldName ? ` · ${match.fieldName}` : ''}
                   </Text>
+                  {status === 'scheduled' && (
+                    <WeatherChip address={match?.location} dateISO={match?.dateISO} />
+                  )}
                   <View style={{ flexDirection: 'row', gap: 6, marginTop: 10, flexWrap: 'wrap', alignItems: 'center' }}>
                     {pill(scoreLabel)}
                     {match?.format ? pill(match.format) : null}
