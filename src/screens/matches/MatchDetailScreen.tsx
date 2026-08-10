@@ -100,10 +100,12 @@ export default function MatchDetailScreen() {
   const [loading, setLoading] = useState(true);
 
   // section collapse state (open by default)
-  const [statsOpen, setStatsOpen] = useState(true);
-  const [availabilityOpen, setAvailabilityOpen] = useState(true);
-  const [rosterOpen, setRosterOpen] = useState(true);
-  const [lineupOpen, setLineupOpen] = useState(true);
+  // Sections start collapsed — the summary card is the page's face; details
+  // are one tap away.
+  const [statsOpen, setStatsOpen] = useState(false);
+  const [availabilityOpen, setAvailabilityOpen] = useState(false);
+  const [rosterOpen, setRosterOpen] = useState(false);
+  const [lineupOpen, setLineupOpen] = useState(false);
 
   // Player rating modal
   const [ratings, setRatings] = useState<Record<string, PlayerRating>>({});
@@ -1217,8 +1219,10 @@ const addSelectedToRoster = async () => {
               </View>
             )}
 
-            {/* ===== Lineup (parent read-only view) ===== */}
-            {isParent && (
+            {/* ===== Lineup (parent read-only view) =====
+                Teamsheet rule: parents see the lineup only from kickoff —
+                pre-match selections stay in the coach's hands. */}
+            {isParent && (status === 'live' || status === 'completed') && (
               <View style={SC.container}>
                 <TouchableOpacity style={SC.header} onPress={() => setLineupOpen((v) => !v)} activeOpacity={0.7}>
                   <View style={SC.titleRow}>
