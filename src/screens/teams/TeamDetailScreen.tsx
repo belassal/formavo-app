@@ -16,6 +16,7 @@ import {
   View,
 } from 'react-native';
 import Avatar from '../../components/Avatar';
+import LocationPickerModal from '../../components/LocationPickerModal';
 import { B } from '../../constants/brand';
 import auth from '@react-native-firebase/auth';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
@@ -363,6 +364,7 @@ export default function TeamDetailScreen() {
 
   // Create Match modal
   const [showCreateMatch, setShowCreateMatch] = useState(false);
+  const [showMatchLocPicker, setShowMatchLocPicker] = useState(false);
   const [creatingMatch, setCreatingMatch] = useState(false);
   const [opponent, setOpponent] = useState('');
   const [dateISO, setDateISO] = useState('');
@@ -1743,7 +1745,29 @@ export default function TeamDetailScreen() {
               </Text>
               <Text style={{ fontSize: 16 }}>📅</Text>
             </TouchableOpacity>
-            <TextInput placeholder="Location (optional)" value={location} onChangeText={setLocation} style={S.input} />
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TextInput
+                placeholder="Location (optional)"
+                value={location}
+                onChangeText={setLocation}
+                style={[S.input, { flex: 1 }]}
+              />
+              <TouchableOpacity
+                onPress={() => setShowMatchLocPicker(true)}
+                style={{
+                  backgroundColor: '#f3f4f6', borderRadius: 10, paddingHorizontal: 14,
+                  alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                <Text style={{ fontSize: 16 }}>📍</Text>
+              </TouchableOpacity>
+            </View>
+
+            <LocationPickerModal
+              visible={showMatchLocPicker}
+              onClose={() => setShowMatchLocPicker(false)}
+              onSelect={(loc) => { setLocation(loc.address); setShowMatchLocPicker(false); }}
+            />
 
             <View>
               <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 8 }}>Half duration</Text>
