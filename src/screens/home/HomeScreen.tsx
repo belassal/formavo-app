@@ -42,6 +42,8 @@ type ScheduleEvent = {
   matchId?: string;
   trainingId?: string;
   linkedPlayerId?: string; // for parent RSVP scoping
+  homeScore?: number;
+  awayScore?: number;
 };
 
 type ChildFilter = { id: string; name: string } | null; // null = All
@@ -208,6 +210,8 @@ export default function HomeScreen() {
           status: m.status,
           matchId: m.id,
           linkedPlayerId: childForTeam?.id,
+          homeScore: m.homeScore ?? m?.state?.homeScore,
+          awayScore: m.awayScore ?? m?.state?.awayScore,
         };
         if (!byWeek[weekKey]) byWeek[weekKey] = [];
         byWeek[weekKey].push(event);
@@ -558,17 +562,39 @@ export default function HomeScreen() {
 
               {/* Right badges */}
               <View style={{ alignItems: 'flex-end', gap: 4 }}>
-                <View style={{
-                  backgroundColor: isMatch ? '#eff6ff' : '#f0fdf4',
-                  paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8,
-                }}>
-                  <Text style={{
-                    fontSize: 11, fontWeight: '700',
-                    color: isMatch ? '#1d4ed8' : '#15803d',
+                {isMatch && item.status === 'completed' && item.homeScore != null ? (
+                  (() => {
+                    const h = item.homeScore ?? 0;
+                    const a = item.awayScore ?? 0;
+                    const letter = h > a ? 'W' : h < a ? 'L' : 'D';
+                    const color = letter === 'W' ? '#16a34a' : letter === 'L' ? '#dc2626' : '#6b7280';
+                    return (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <View style={{
+                          width: 22, height: 22, borderRadius: 11, backgroundColor: color,
+                          alignItems: 'center', justifyContent: 'center',
+                        }}>
+                          <Text style={{ color: '#fff', fontWeight: '900', fontSize: 11 }}>{letter}</Text>
+                        </View>
+                        <Text style={{ fontSize: 15, fontWeight: '800', color: B.ink, fontVariant: ['tabular-nums'] }}>
+                          {h}–{a}
+                        </Text>
+                      </View>
+                    );
+                  })()
+                ) : (
+                  <View style={{
+                    backgroundColor: isMatch ? '#eff6ff' : '#f0fdf4',
+                    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8,
                   }}>
-                    {isMatch ? 'MATCH' : 'TRAINING'}
-                  </Text>
-                </View>
+                    <Text style={{
+                      fontSize: 11, fontWeight: '700',
+                      color: isMatch ? '#1d4ed8' : '#15803d',
+                    }}>
+                      {isMatch ? 'MATCH' : 'TRAINING'}
+                    </Text>
+                  </View>
+                )}
                 {isLive && (
                   <View style={{ backgroundColor: '#dcfce7', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
                     <Text style={{ fontSize: 11, fontWeight: '700', color: '#15803d' }}>LIVE</Text>
