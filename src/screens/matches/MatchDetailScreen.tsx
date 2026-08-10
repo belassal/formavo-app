@@ -1008,7 +1008,11 @@ const addSelectedToRoster = async () => {
                           <View style={{ flex: 1 }}>
                             {item.type === 'sub' ? (
                               <Text style={{ fontSize: 14, fontWeight: '600', color: '#111' }}>
-                                ↕ {item.outPlayerName || '?'} → {item.inPlayerName || '?'}
+                                {item.inPlayerName && item.outPlayerName
+                                  ? `↕ ${item.outPlayerName} → ${item.inPlayerName}`
+                                  : item.inPlayerName
+                                  ? `↕ On: ${item.inPlayerName}`
+                                  : `↕ Off: ${item.outPlayerName || '?'}`}
                               </Text>
                             ) : item.type === 'note' ? (
                               <Text style={{ fontSize: 14, fontWeight: '600', color: '#6b7280' }}>

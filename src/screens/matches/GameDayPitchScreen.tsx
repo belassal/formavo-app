@@ -194,7 +194,11 @@ export default function GameDayPitchScreen() {
         : `⚽ Opponent${e.scorerName && e.scorerName !== 'Opponent' ? ` (${e.scorerName})` : ''}`;
     }
     if (e.type === 'card') return `${e.cardColor === 'red' ? '🟥' : '🟨'} ${e.playerName || 'Card'}`;
-    if (e.type === 'sub') return `↕ ${e.outPlayerName || '?'} → ${e.inPlayerName || '?'}`;
+    if (e.type === 'sub') {
+      if (e.inPlayerName && e.outPlayerName) return `↕ ${e.outPlayerName} → ${e.inPlayerName}`;
+      if (e.inPlayerName) return `↕ On: ${e.inPlayerName}`;
+      return `↕ Off: ${e.outPlayerName || '?'}`;
+    }
     return `📋 ${e.text || 'Note'}`;
   };
   const disallowGoal = async (e: any, reason: string | null) => {
@@ -552,6 +556,22 @@ const derivedState = useMemo(() => {
 
   const closeAssign = () => setAssignSlotKey(null);
 
+  // Slot changes while the match is underway are real substitutions — log them
+  // so the minutes tracker and the pitch never disagree. Position swaps between
+  // two on-pitch players log nothing; pre-kickoff lineup building logs nothing.
+  const matchUnderway = ['live', 'paused', 'halftime'].includes(derivedState.status);
+  const logSlotSub = async (inId: string | null, outId: string | null) => {
+    if (!matchUnderway || (!inId && !outId)) return;
+    const ev: any = { type: 'sub', minute: currentMinute() };
+    if (inId) { ev.inPlayerId = inId; ev.inPlayerName = getPlayerName(inId); }
+    if (outId) { ev.outPlayerId = outId; ev.outPlayerName = getPlayerName(outId); }
+    try {
+      await addMatchEvent({ teamId, matchId, event: ev });
+    } catch (e) {
+      console.warn('[GameDay] slot sub log failed', e);
+    }
+  };
+
   // Swap logic (stable): only touched slots change.
   const assignPlayerToSlot = async (playerId: string) => {
     if (!assignSlotKey) return;
@@ -577,16 +597,20 @@ const derivedState = useMemo(() => {
         return;
       }
 
-      // If slot has someone but picked is unassigned => clear occupant, place picked
+      // If slot has someone but picked is unassigned => a real substitution:
+      // occupant off, picked on
       if (occupantId && !pickedCurrentSlot) {
         await setMatchRosterSlotKey({ teamId, matchId, playerId: occupantId, slotKey: null });
         await setMatchRosterSlotKey({ teamId, matchId, playerId, slotKey: targetSlot });
+        await logSlotSub(playerId, occupantId);
         closeAssign();
         return;
       }
 
-      // If slot is empty and picked is in another slot => move picked
+      // Slot is empty: picked either moves position (no event) or comes on from
+      // the bench (log an "on" event)
       await setMatchRosterSlotKey({ teamId, matchId, playerId, slotKey: targetSlot });
+      if (!pickedCurrentSlot) await logSlotSub(playerId, null);
       closeAssign();
     } catch (e: any) {
       Alert.alert('Assign failed', e?.message ?? 'Unknown error');
@@ -711,6 +735,7 @@ const onEnd = async () => {
     try {
       setSavingAssign(true);
       await setMatchRosterSlotKey({ teamId, matchId, playerId: occupantId, slotKey: null });
+      await logSlotSub(null, occupantId);
       closeAssign();
     } catch (e: any) {
       Alert.alert('Clear failed', e?.message ?? 'Unknown error');
@@ -1234,8 +1259,10 @@ const onEnd = async () => {
                 attendance: r.attendance,
               }));
               const minutes = calculateMatchMinutes(rosterForCalc, events as any, matchDuration);
-              const onPitchNow = minutes.filter((p) => !p.subbedOff);
-              const subbedOff = minutes.filter((p) => p.subbedOff);
+              // Group by ACTUAL slot occupancy so the tracker always matches
+              // the pitch, even if historical events are incomplete.
+              const onPitchNow = minutes.filter((p) => !!playerToSlotKey[p.playerId]);
+              const subbedOff = minutes.filter((p) => !playerToSlotKey[p.playerId]);
 
               return (
                 <ScrollView showsVerticalScrollIndicator={false}>
