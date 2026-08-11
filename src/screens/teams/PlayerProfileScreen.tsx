@@ -10,6 +10,8 @@ import {
 import { useFocusEffect, useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { db } from '../../services/firebase';
+import auth from '@react-native-firebase/auth';
+import AssessmentSection from '../../components/AssessmentSection';
 import { COL } from '../../models/collections';
 import Avatar from '../../components/Avatar';
 import type { TeamsStackParamList } from '../../navigation/stacks/TeamsStack';
@@ -173,6 +175,17 @@ export default function PlayerProfileScreen() {
   const [devLog, setDevLog] = useState<PlayerRating[]>([]);
   const [loadingLog, setLoadingLog] = useState(true);
   const [trainingStats, setTrainingStats] = useState<{ attended: number; total: number }>({ attended: 0, total: 0 });
+  const [viewerIsStaff, setViewerIsStaff] = useState(false);
+  useEffect(() => {
+    const uid = auth().currentUser?.uid;
+    if (!uid || !teamId) return;
+    db.collection('teams').doc(teamId).collection('members').doc(uid).get()
+      .then((snap) => {
+        const role = (snap.data() as any)?.role;
+        setViewerIsStaff(role === 'coach' || role === 'assistant');
+      })
+      .catch(() => setViewerIsStaff(false));
+  }, [teamId]);
   const [seasonMinutes, setSeasonMinutes] = useState<PlayerSeasonMinutes | null>(null);
 
   // Edit button + live title in header
@@ -488,6 +501,16 @@ export default function PlayerProfileScreen() {
             )}
           </>
         )}
+
+        {/* ── Structured assessments (four-corner) ── */}
+        {teamId ? (
+          <AssessmentSection
+            teamId={teamId}
+            playerId={playerId}
+            playerName={playerData?.name ?? playerName}
+            canEdit={viewerIsStaff}
+          />
+        ) : null}
 
         {/* ── Development Log ── */}
         {!loadingLog && (

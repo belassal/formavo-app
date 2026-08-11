@@ -232,6 +232,12 @@ service cloud.firestore {
         allow write: if canWriteTeam(teamId);
       }
 
+      // Structured player assessments (four-corner rubric)
+      match /playerAssessments/{assessmentId} {
+        allow read: if canReadTeam(teamId);
+        allow write: if canWriteTeam(teamId);
+      }
+
       // Maintained by Cloud Functions (admin) — clients read only.
       match /aggregates/{aggId} {
         allow read: if canReadTeam(teamId);
