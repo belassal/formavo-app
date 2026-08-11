@@ -244,6 +244,39 @@ exports.onMatchEventCreated = functions.firestore
     const uids = await getTeamMemberUids(teamId);
     await Promise.all(uids.map((uid) => sendToUser(uid, { title, body }, { type: 'goal', teamId, matchId }, 'live')));
 });
+// Compact port of the app's slot-role heuristic: slot key (GK / L{line}-{i})
+// plus the formation string yields the position a player occupied.
+function roleForSlot(slotKey, formation) {
+    var _a;
+    if (!slotKey)
+        return null;
+    if (slotKey === 'GK')
+        return 'GK';
+    const m = slotKey.match(/^L(\d+)-(\d+)$/);
+    if (!m)
+        return null;
+    const lines = (formation || '').split('-').map((n) => parseInt(n, 10)).filter((n) => !isNaN(n));
+    if (!lines.length)
+        return null;
+    const L = lines.length;
+    const lineIndex = parseInt(m[1], 10);
+    const pos = parseInt(m[2], 10);
+    const count = (_a = lines[lineIndex - 1]) !== null && _a !== void 0 ? _a : 0;
+    const margin = count === 2 ? 0.28 : count === 3 ? 0.2 : count === 4 ? 0.14 : 0.08;
+    const x = count <= 1 ? 0.5 : margin + (pos - 1) * ((1 - 2 * margin) / (count - 1));
+    const band = L <= 1 ? 1 : (lineIndex - 1) / (L - 1);
+    const left = x < 0.35;
+    const right = x > 0.65;
+    if (band <= 0.001)
+        return count <= 2 ? 'CB' : left ? 'LB' : right ? 'RB' : 'CB';
+    if (band >= 0.999)
+        return count <= 2 ? 'ST' : left ? 'LW' : right ? 'RW' : 'ST';
+    if (band < 0.45)
+        return left ? 'LW' : right ? 'RW' : 'CDM';
+    if (band > 0.55)
+        return left ? 'LW' : right ? 'RW' : 'CAM';
+    return left ? 'LW' : right ? 'RW' : 'CM';
+}
 // Port of src/services/minutesService.calculateMatchMinutes (stint-based:
 // supports rolling subs and ignores orphan off-events).
 function calcMinutes(roster, events, matchDuration) {
@@ -286,12 +319,16 @@ async function buildMatchSummary(teamId, matchId, match) {
         playerName: d.data().playerName || 'Unknown',
         role: d.data().role,
         attendance: d.data().attendance,
+        slotKey: d.data().slotKey,
     }));
     const homeScore = (_a = match.homeScore) !== null && _a !== void 0 ? _a : 0;
     const awayScore = (_b = match.awayScore) !== null && _b !== void 0 ? _b : 0;
     const result = homeScore > awayScore ? 'W' : homeScore < awayScore ? 'L' : 'D';
     const matchDuration = ((_c = match.halfDuration) !== null && _c !== void 0 ? _c : 45) * 2;
     const minutes = calcMinutes(roster, events, matchDuration);
+    const slotByPlayer = {};
+    for (const p of roster)
+        slotByPlayer[p.playerId] = p.slotKey;
     const lines = {};
     const line = (id, name) => {
         var _a, _b, _c, _d, _e, _f;
@@ -302,6 +339,7 @@ async function buildMatchSummary(teamId, matchId, match) {
                 minutes: (_b = (_a = minutes[id]) === null || _a === void 0 ? void 0 : _a.minutes) !== null && _b !== void 0 ? _b : 0,
                 started: (_d = (_c = minutes[id]) === null || _c === void 0 ? void 0 : _c.started) !== null && _d !== void 0 ? _d : false,
                 appeared: ((_f = (_e = minutes[id]) === null || _e === void 0 ? void 0 : _e.minutes) !== null && _f !== void 0 ? _f : 0) > 0,
+                position: roleForSlot(slotByPlayer[id], match.formation || ''),
             };
         }
         return lines[id];
@@ -389,6 +427,10 @@ async function recomputeSeasonAggregates(teamId, seasonId) {
             if (l.started)
                 p.starts++;
             p.minutes += l.minutes;
+            if (l.appeared && l.position) {
+                p.positions = p.positions || {};
+                p.positions[l.position] = (p.positions[l.position] || 0) + 1;
+            }
         }
     }
     const batch = db.batch();
