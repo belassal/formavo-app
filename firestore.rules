@@ -280,6 +280,14 @@ service cloud.firestore {
         allow read, write: if isClubMember(clubId);
       }
 
+      // Tryout sessions and candidate evaluations (club staff tool)
+      match /tryouts/{tryoutId} {
+        allow read, write: if isClubMember(clubId);
+        match /candidates/{candidateId} {
+          allow read, write: if isClubMember(clubId);
+        }
+      }
+
       // Club configuration (e.g. custom formations + layouts).
       // Read is open to signed-in users: parents and assistants render match
       // pitches from these layouts and are not club members.

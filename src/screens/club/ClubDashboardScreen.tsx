@@ -347,6 +347,25 @@ export default function ClubDashboardScreen() {
           <Text style={{ fontSize: 16, color: '#c7c7cc' }}>›</Text>
         </TouchableOpacity>
 
+        {/* ── Tryouts ── */}
+        <TouchableOpacity
+          onPress={() => navigation.navigate('Tryouts' as any, { clubId, clubName })}
+          activeOpacity={0.8}
+          style={{
+            backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#e5e7eb',
+            padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12,
+          }}
+        >
+          <Text style={{ fontSize: 20 }}>📝</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 15, fontWeight: '700', color: '#111' }}>Tryouts</Text>
+            <Text style={{ fontSize: 12, color: '#9ca3af', marginTop: 1 }}>
+              Evaluate candidates · build shortlists
+            </Text>
+          </View>
+          <Text style={{ fontSize: 16, color: '#c7c7cc' }}>›</Text>
+        </TouchableOpacity>
+
         {/* ── Live matches alert ── */}
         {liveTeams.length > 0 && (
           <View style={{ backgroundColor: '#dcfce7', borderRadius: 14, borderWidth: 1, borderColor: '#86efac', padding: 14, gap: 6 }}>
