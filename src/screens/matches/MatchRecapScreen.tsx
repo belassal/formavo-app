@@ -17,6 +17,7 @@ import { useRoute, type RouteProp } from '@react-navigation/native';
 import { db } from '../../services/firebase';
 import { COL } from '../../models/collections';
 import { listenMatchEvents, listenMatchRoster } from '../../services/matchService';
+import { fetchClubSponsorForTeam, type ClubSponsor } from '../../services/clubService';
 import { calculateMatchMinutes } from '../../services/minutesService';
 import MiniPitchDisplay from '../../components/MiniPitchDisplay';
 import { B } from '../../constants/brand';
@@ -34,6 +35,13 @@ export default function MatchRecapScreen() {
   const [teamName, setTeamName] = useState(teamNameParam || 'Team');
   const [events, setEvents] = useState<MatchEvent[]>([]);
   const [roster, setRoster] = useState<any[]>([]);
+  const [sponsor, setSponsor] = useState<ClubSponsor | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchClubSponsorForTeam(teamId).then((s) => { if (!cancelled) setSponsor(s); });
+    return () => { cancelled = true; };
+  }, [teamId]);
 
   useEffect(() => {
     const unsubMatch = db
@@ -107,6 +115,7 @@ export default function MatchRecapScreen() {
     const message = [
       `FT: ${teamName} ${homeScore}-${awayScore} ${opponent}${dateLabel ? ` · ${dateLabel}` : ''}`,
       scorerLines,
+      sponsor ? `Presented by ${sponsor.name}` : '',
       `Shared from Formavo ⚽`,
     ].filter(Boolean).join('\n\n');
     try { await Share.share({ message }); } catch { /* user cancelled */ }
@@ -132,6 +141,11 @@ export default function MatchRecapScreen() {
           </Text>
           {!!dateLabel && (
             <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, marginTop: 4 }}>{dateLabel}</Text>
+          )}
+          {sponsor && (
+            <Text style={{ color: 'rgba(255,255,255,0.45)', fontSize: 11, fontWeight: '700', letterSpacing: 0.6, marginTop: 12 }}>
+              PRESENTED BY {sponsor.name.toUpperCase()}
+            </Text>
           )}
         </View>
 

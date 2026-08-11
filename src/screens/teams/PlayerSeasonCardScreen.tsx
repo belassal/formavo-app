@@ -2,13 +2,15 @@
  * PlayerSeasonCardScreen — a shareable season summary card for one player.
  * Stats arrive via route params (collected by PlayerProfileScreen).
  */
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { SafeAreaView, ScrollView, Share, Text, TouchableOpacity, View } from 'react-native';
 import { useRoute, type RouteProp } from '@react-navigation/native';
 import Avatar from '../../components/Avatar';
 import { B } from '../../constants/brand';
+import { fetchClubSponsorForTeam, type ClubSponsor } from '../../services/clubService';
 
 export type SeasonCardParams = {
+  teamId?: string;
   playerName: string;
   playerNumber?: string;
   positions?: string[];
@@ -42,7 +44,15 @@ function Stat({ value, label }: { value: string | number; label: string }) {
 
 export default function PlayerSeasonCardScreen() {
   const route = useRoute<RouteProp<Params, 'PlayerSeasonCard'>>();
-  const { playerName, playerNumber, positions, avatarUrl, teamName, seasonLabel, stats } = route.params;
+  const { teamId, playerName, playerNumber, positions, avatarUrl, teamName, seasonLabel, stats } = route.params;
+
+  const [sponsor, setSponsor] = useState<ClubSponsor | null>(null);
+  useEffect(() => {
+    if (!teamId) return;
+    let cancelled = false;
+    fetchClubSponsorForTeam(teamId).then((s) => { if (!cancelled) setSponsor(s); });
+    return () => { cancelled = true; };
+  }, [teamId]);
 
   const onShare = async () => {
     const lines = [
@@ -51,6 +61,7 @@ export default function PlayerSeasonCardScreen() {
       `Goals: ${stats.goals} · Assists: ${stats.assists}`,
       stats.totalMinutes ? `Minutes: ${stats.totalMinutes}'` : '',
       stats.attendancePct != null ? `Training attendance: ${stats.attendancePct}%` : '',
+      sponsor ? `Presented by ${sponsor.name}` : '',
       `Season card from Formavo ⚽`,
     ].filter(Boolean);
     try { await Share.share({ message: lines.join('\n') }); } catch { /* cancelled */ }
@@ -101,7 +112,7 @@ export default function PlayerSeasonCardScreen() {
           </View>
 
           <Text style={{ color: 'rgba(255,255,255,0.35)', fontSize: 11, fontWeight: '700', marginTop: 14, letterSpacing: 1 }}>
-            FORMAVO
+            {sponsor ? `PRESENTED BY ${sponsor.name.toUpperCase()}  ·  FORMAVO` : 'FORMAVO'}
           </Text>
         </View>
 

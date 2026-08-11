@@ -416,10 +416,31 @@ export async function updateClub(params: {
   clubId: string;
   name?: string;
   logoUrl?: string;
+  sponsorName?: string;
+  sponsorLogoUrl?: string;
 }): Promise<void> {
-  const { clubId, name, logoUrl } = params;
+  const { clubId, name, logoUrl, sponsorName, sponsorLogoUrl } = params;
   const update: Record<string, any> = { updatedAt: serverTimestamp() };
   if (name !== undefined) update.name = name;
   if (logoUrl !== undefined) update.logoUrl = logoUrl;
+  if (sponsorName !== undefined) update.sponsorName = sponsorName;
+  if (sponsorLogoUrl !== undefined) update.sponsorLogoUrl = sponsorLogoUrl;
   await db.collection(COL.clubs).doc(clubId).update(update);
+}
+
+export type ClubSponsor = { name: string; logoUrl?: string };
+
+/** Resolve a team's club sponsor (null when the team has no club or no sponsor). */
+export async function fetchClubSponsorForTeam(teamId: string): Promise<ClubSponsor | null> {
+  try {
+    const teamSnap = await db.collection('teams').doc(teamId).get();
+    const clubId = (teamSnap.data() as any)?.clubId;
+    if (!clubId) return null;
+    const clubSnap = await db.collection(COL.clubs).doc(clubId).get();
+    const club: any = clubSnap.data() || {};
+    if (!club.sponsorName) return null;
+    return { name: club.sponsorName, logoUrl: club.sponsorLogoUrl };
+  } catch {
+    return null;
+  }
 }

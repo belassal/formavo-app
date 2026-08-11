@@ -387,6 +387,7 @@ export default function PlayerProfileScreen() {
                         : playerData?.position ? [playerData.position]
                         : playerPosition ? [playerPosition] : [];
                     navigation.navigate('PlayerSeasonCard' as any, {
+                      teamId,
                       playerName: playerData?.name ?? playerName,
                       playerNumber: playerData?.number ?? playerNumber,
                       positions,

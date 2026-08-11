@@ -14,7 +14,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { TeamsStackParamList } from '../../navigation/stacks/TeamsStack';
 import { listenClub, listenClubMembers, updateClub } from '../../services/clubService';
 import type { Club, ClubMember } from '../../services/clubService';
-import { pickPhoto, uploadClubLogo } from '../../services/storageService';
+import { pickPhoto, uploadClubLogo, uploadSponsorLogo } from '../../services/storageService';
 import { B } from '../../constants/brand';
 
 type Props = NativeStackScreenProps<TeamsStackParamList, 'ClubSettings'>;
@@ -29,12 +29,19 @@ export default function ClubSettingsScreen({ route }: Props) {
   const [nameInput, setNameInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [sponsorInput, setSponsorInput] = useState('');
+  const [sponsorTouched, setSponsorTouched] = useState(false);
+  const [savingSponsor, setSavingSponsor] = useState(false);
+  const [uploadingSponsor, setUploadingSponsor] = useState(false);
 
   useEffect(() => {
     const unsubClub = listenClub(clubId, (c) => {
       setClub(c);
       if (c && !nameInput) {
         setNameInput(c.name);
+      }
+      if (c && !sponsorTouched) {
+        setSponsorInput((c as any).sponsorName ?? '');
       }
       setLoadingClub(false);
     });
@@ -193,6 +200,86 @@ export default function ClubSettingsScreen({ route }: Props) {
                 {uploadingLogo ? 'Uploading…' : club?.logoUrl ? 'Change' : 'Upload'}
               </Text>
             </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Sponsor Card */}
+        <View style={cardStyle}>
+          <View style={cardHeaderStyle}>
+            <Text style={cardTitleStyle}>Club Sponsor</Text>
+          </View>
+          <View style={{ height: 1, backgroundColor: '#e5e7eb' }} />
+          <View style={{ padding: 16, gap: 12 }}>
+            <Text style={{ fontSize: 12, color: '#9ca3af', lineHeight: 17 }}>
+              Shown as "Presented by" on shared match recaps and player season cards —
+              visibility your sponsor pays the club for. Leave empty to hide.
+            </Text>
+            <TextInput
+              value={sponsorInput}
+              onChangeText={(t) => { setSponsorTouched(true); setSponsorInput(t); }}
+              placeholder="Sponsor name (e.g. Bedford Hardware)"
+              placeholderTextColor="#9ca3af"
+              style={{
+                borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12,
+                padding: 12, fontSize: 15, color: '#111',
+              }}
+            />
+            <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+              {(club as any)?.sponsorLogoUrl ? (
+                <Image
+                  source={{ uri: (club as any).sponsorLogoUrl }}
+                  style={{ width: 40, height: 40, borderRadius: 8, backgroundColor: '#f3f4f6' }}
+                  resizeMode="contain"
+                />
+              ) : null}
+              <TouchableOpacity
+                onPress={async () => {
+                  const uri = await pickPhoto();
+                  if (!uri) return;
+                  try {
+                    setUploadingSponsor(true);
+                    const url = await uploadSponsorLogo(clubId, uri);
+                    await updateClub({ clubId, sponsorLogoUrl: url });
+                  } catch (e: any) {
+                    Alert.alert('Upload failed', e?.message ?? 'Could not upload logo.');
+                  } finally {
+                    setUploadingSponsor(false);
+                  }
+                }}
+                disabled={uploadingSponsor}
+                style={{
+                  paddingVertical: 8, paddingHorizontal: 14, backgroundColor: '#f3f4f6',
+                  borderRadius: 20, opacity: uploadingSponsor ? 0.6 : 1,
+                }}
+              >
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#374151' }}>
+                  {uploadingSponsor ? 'Uploading…' : (club as any)?.sponsorLogoUrl ? 'Change logo' : 'Sponsor logo (optional)'}
+                </Text>
+              </TouchableOpacity>
+              <View style={{ flex: 1 }} />
+              <TouchableOpacity
+                onPress={async () => {
+                  try {
+                    setSavingSponsor(true);
+                    await updateClub({ clubId, sponsorName: sponsorInput.trim() });
+                    Alert.alert('Saved', sponsorInput.trim() ? 'Sponsor updated.' : 'Sponsor removed.');
+                  } catch (e: any) {
+                    Alert.alert('Error', e?.message ?? 'Could not save.');
+                  } finally {
+                    setSavingSponsor(false);
+                  }
+                }}
+                disabled={savingSponsor}
+                style={{
+                  backgroundColor: '#111', borderRadius: 12,
+                  paddingVertical: 10, paddingHorizontal: 20,
+                }}
+              >
+                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>
+                  {savingSponsor ? 'Saving…' : 'Save'}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
 
