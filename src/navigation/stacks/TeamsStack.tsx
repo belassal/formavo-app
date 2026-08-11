@@ -23,6 +23,7 @@ import PlayerReportScreen from '../../screens/teams/PlayerReportScreen';
 import OpponentHistoryScreen from '../../screens/teams/OpponentHistoryScreen';
 import ClubDashboardScreen from '../../screens/club/ClubDashboardScreen';
 import ClubReportsScreen from '../../screens/club/ClubReportsScreen';
+import FixtureImportScreen from '../../screens/teams/FixtureImportScreen';
 
 export type TeamsStackParamList = {
   TeamsHome: undefined;
@@ -43,6 +44,7 @@ export type TeamsStackParamList = {
   };
   ClubDashboard: { clubId: string; clubName: string; viewerRole?: string };
   ClubReports: { clubId: string; clubName?: string };
+  FixtureImport: { teamId: string; seasonId?: string };
   ClubSettings: { clubId: string; clubName?: string };
   StaffList: { clubId: string; clubName?: string; viewerRole?: string };
   StaffProfile: { clubId: string; memberId: string; memberName?: string; viewerRole?: string };
@@ -108,6 +110,11 @@ export default function TeamsStack() {
         name="ClubReports"
         component={ClubReportsScreen}
         options={{ title: 'Club Reports' }}
+      />
+      <Stack.Screen
+        name="FixtureImport"
+        component={FixtureImportScreen}
+        options={{ title: 'Import Fixtures' }}
       />
       <Stack.Screen
         name="ClubSettings"

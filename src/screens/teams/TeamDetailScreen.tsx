@@ -1011,6 +1011,18 @@ export default function TeamDetailScreen() {
                     </TouchableOpacity>
                   </View>
                 )}
+                {!isParent && (
+                  <View>
+                    <View style={S.divider} />
+                    <TouchableOpacity
+                      onPress={() => navigation.navigate('FixtureImport' as any, { teamId, seasonId: viewingSeasonId ?? undefined })}
+                      style={[S.row, { justifyContent: 'center' }]}
+                      activeOpacity={0.6}
+                    >
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: '#3b82f6' }}>⇪ Import fixtures from league schedule</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
               </>
             )
           )}
