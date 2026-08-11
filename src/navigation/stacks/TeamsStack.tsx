@@ -19,6 +19,7 @@ import TeamScheduleScreen from '../../screens/teams/TeamScheduleScreen';
 import TeamPhotosScreen from '../../screens/teams/TeamPhotosScreen';
 import PlayerAttendanceScreen from '../../screens/teams/PlayerAttendanceScreen';
 import PlayerSeasonCardScreen from '../../screens/teams/PlayerSeasonCardScreen';
+import PlayerReportScreen from '../../screens/teams/PlayerReportScreen';
 import OpponentHistoryScreen from '../../screens/teams/OpponentHistoryScreen';
 import ClubDashboardScreen from '../../screens/club/ClubDashboardScreen';
 import ClubReportsScreen from '../../screens/club/ClubReportsScreen';
@@ -53,6 +54,7 @@ export type TeamsStackParamList = {
   TeamPhotos: { teamId: string; teamName?: string; role?: string };
   PlayerAttendance: { teamId: string; playerId: string; playerName: string };
   PlayerSeasonCard: import('../../screens/teams/PlayerSeasonCardScreen').SeasonCardParams;
+  PlayerReport: import('../../screens/teams/PlayerReportScreen').PlayerReportParams;
   OpponentHistory: { teamId: string; teamName?: string };
 };
 
@@ -165,6 +167,11 @@ export default function TeamsStack() {
         name="PlayerSeasonCard"
         component={PlayerSeasonCardScreen}
         options={{ title: 'Season Card' }}
+      />
+      <Stack.Screen
+        name="PlayerReport"
+        component={PlayerReportScreen}
+        options={{ title: 'Season Report' }}
       />
       <Stack.Screen
         name="OpponentHistory"

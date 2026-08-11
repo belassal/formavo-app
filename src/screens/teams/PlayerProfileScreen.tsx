@@ -402,6 +402,40 @@ export default function PlayerProfileScreen() {
                   <Text style={{ fontSize: 13, fontWeight: '600', color: '#4ade80' }}>View & share ›</Text>
                 </TouchableOpacity>
 
+                {/* Development report card */}
+                <TouchableOpacity
+                  onPress={() =>
+                    navigation.navigate('PlayerReport' as any, {
+                      playerName: playerData?.name ?? playerName,
+                      stats: {
+                        appearances: displayStats?.appearances ?? 0,
+                        goals: displayStats?.goals ?? 0,
+                        assists: displayStats?.assists ?? 0,
+                        yellowCards: displayStats?.yellowCards ?? 0,
+                        redCards: displayStats?.redCards ?? 0,
+                      },
+                      minutes: seasonMinutes,
+                      attendance: trainingStats,
+                      ratings: devLog.map((r: any) => ({
+                        rating: r.rating,
+                        note: r.note,
+                        matchDateISO: r.matchDateISO,
+                        opponent: r.opponent,
+                        coachName: r.coachName,
+                      })),
+                    })
+                  }
+                  style={{
+                    backgroundColor: '#fff', borderRadius: 14,
+                    paddingVertical: 16, paddingHorizontal: 20,
+                    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                    borderWidth: 1, borderColor: '#e5e7eb',
+                  }}
+                >
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#374151' }}>📋 Season Report</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: '#9ca3af' }}>Minutes · attendance · ratings ›</Text>
+                </TouchableOpacity>
+
                 {/* Season Minutes card */}
                 {seasonMinutes && seasonMinutes.appearances > 0 && (
                   <View style={{
