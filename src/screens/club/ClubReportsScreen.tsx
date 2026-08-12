@@ -27,6 +27,11 @@ type PlayerAgg = {
   positions?: Record<string, number>;
 };
 
+type CompRecord = {
+  played: number; wins: number; draws: number; losses: number;
+  goalsFor: number; goalsAgainst: number;
+};
+
 type TeamReport = {
   teamId: string;
   teamName: string;
@@ -36,6 +41,10 @@ type TeamReport = {
   lastMatchISO: string | null;
   pastTrainings: number;
   trainingsWithCheckin: number;
+  record: (CompRecord & {
+    byCompetition?: Record<string, CompRecord>;
+    competitions?: (CompRecord & { name: string; type: string })[];
+  }) | null;
 };
 
 async function fetchReports(clubId: string): Promise<TeamReport[]> {
@@ -48,10 +57,11 @@ async function fetchReports(clubId: string): Promise<TeamReport[]> {
       const team = teamDoc.data() as any;
       const seasonKey = team.activeSeasonId || 'none';
 
-      const [aggsSnap, matchesSnap, trainingsSnap] = await Promise.all([
+      const [aggsSnap, matchesSnap, trainingsSnap, teamAggSnap] = await Promise.all([
         teamDoc.ref.collection('playerAggregates').where('seasonId', '==', seasonKey).get(),
         teamDoc.ref.collection(COL.matches).where('status', '==', 'completed').get(),
         teamDoc.ref.collection(COL.trainings).get(),
+        teamDoc.ref.collection('aggregates').doc(seasonKey).get(),
       ]);
 
       const players: PlayerAgg[] = aggsSnap.docs.map((d) => {
@@ -91,18 +101,43 @@ async function fetchReports(clubId: string): Promise<TeamReport[]> {
         lastMatchISO,
         pastTrainings: past.length,
         trainingsWithCheckin: withCheckin.length,
+        record: teamAggSnap.exists ? (teamAggSnap.data() as any) : null,
       };
     }),
   );
 }
 
-const TABS = ['Equity', 'Positions', 'Adoption'] as const;
+const TABS = ['Records', 'Equity', 'Positions', 'Adoption'] as const;
+
+const COMP_ORDER = ['league', 'cup', 'tournament', 'friendly'];
+const COMP_LABELS: Record<string, string> = {
+  league: 'League', cup: 'Cup', tournament: 'Tournament', friendly: 'Friendlies',
+};
+
+function RecordRow({ label, r, indent }: { label: string; r: CompRecord; indent?: boolean }) {
+  return (
+    <View style={{
+      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+      marginTop: 8, paddingLeft: indent ? 14 : 0,
+    }}>
+      <Text style={{ fontSize: 13, fontWeight: indent ? '500' : '700', color: indent ? '#6b7280' : '#111', flex: 1 }} numberOfLines={1}>
+        {label}
+      </Text>
+      <Text style={{ fontSize: 13, fontWeight: '800', color: '#111', fontVariant: ['tabular-nums'] }}>
+        {r.wins}-{r.draws}-{r.losses}
+      </Text>
+      <Text style={{ fontSize: 12, color: '#9ca3af', width: 74, textAlign: 'right', fontVariant: ['tabular-nums'] }}>
+        {r.goalsFor}:{r.goalsAgainst}
+      </Text>
+    </View>
+  );
+}
 
 export default function ClubReportsScreen() {
   const route = useRoute<RouteProp<Params, 'ClubReports'>>();
   const { clubId } = route.params;
 
-  const [tab, setTab] = useState<(typeof TABS)[number]>('Equity');
+  const [tab, setTab] = useState<(typeof TABS)[number]>('Records');
   const [reports, setReports] = useState<TeamReport[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -123,6 +158,45 @@ export default function ClubReportsScreen() {
     if (!reports) return null;
     if (reports.length === 0) {
       return <Text style={{ color: '#9ca3af', fontSize: 14, marginTop: 24, textAlign: 'center' }}>No team data yet.</Text>;
+    }
+
+    if (tab === 'Records') {
+      return reports.map((r) => {
+        const rec = r.record;
+        if (!rec || !rec.played) {
+          return (
+            <View key={r.teamId} style={s.card}>
+              <Text style={s.cardTitle}>{r.teamName}</Text>
+              <Text style={s.empty}>No completed matches yet.</Text>
+            </View>
+          );
+        }
+        const by = rec.byCompetition || {};
+        const types = COMP_ORDER.filter((t) => by[t]?.played);
+        const named = rec.competitions || [];
+        return (
+          <View key={r.teamId} style={s.card}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
+              <Text style={s.cardTitle}>{r.teamName}</Text>
+              <Text style={{ fontSize: 12, color: '#9ca3af' }}>W-D-L · GF:GA</Text>
+            </View>
+            <RecordRow label={`Overall (${rec.played})`} r={rec} />
+            {types.length > 1 || named.length > 0 ? (
+              <>
+                <View style={{ height: 1, backgroundColor: '#f3f4f6', marginTop: 10 }} />
+                {types.map((t) => (
+                  <View key={t}>
+                    <RecordRow label={COMP_LABELS[t] || t} r={by[t]} />
+                    {named.filter((n) => n.type === t).map((n) => (
+                      <RecordRow key={n.name} label={n.name} r={n} indent />
+                    ))}
+                  </View>
+                ))}
+              </>
+            ) : null}
+          </View>
+        );
+      });
     }
 
     if (tab === 'Equity') {
@@ -267,6 +341,12 @@ export default function ClubReportsScreen() {
           contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}
         >
+          {tab === 'Records' && (
+            <Text style={s.blurb}>
+              Season records per team, split by competition. Tag matches as league, cup,
+              friendly, or tournament when creating them (editable on any match).
+            </Text>
+          )}
           {tab === 'Equity' && (
             <Text style={s.blurb}>
               Minutes this season. ⚠️ flags players under half the team median — your receipts

@@ -5,6 +5,17 @@ import firestore from '@react-native-firebase/firestore';
 export type MatchStatus = 'scheduled' | 'live' | 'completed';
 export type MatchRole = 'starter' | 'bench';
 export type AttendanceStatus = 'present' | 'injured' | 'absent';
+export type CompetitionType = 'league' | 'cup' | 'friendly' | 'tournament';
+
+export const COMPETITION_TYPES: { key: CompetitionType; label: string }[] = [
+  { key: 'league', label: 'League' },
+  { key: 'cup', label: 'Cup' },
+  { key: 'friendly', label: 'Friendly' },
+  { key: 'tournament', label: 'Tournament' },
+];
+
+export const competitionLabel = (t?: string) =>
+  COMPETITION_TYPES.find((c) => c.key === t)?.label ?? 'League';
 import type { MatchEvent, MatchEventType, CardColor, GoalSide } from '../models/matchEvent';
 
 function norm(s: string) {
@@ -36,8 +47,13 @@ export async function createMatch(params: {
   formation?: string;    // e.g. "4-3-3"
   halfDuration?: number; // minutes per half, default 45
   seasonId?: string;     // optional: links match to a specific season
+  competitionType?: CompetitionType; // league (default) | cup | friendly | tournament
+  competitionName?: string;          // e.g. "Nova Scotia Cup" — distinguishes cups/tournaments
 }) {
-  const { teamId, opponent, dateISO, location = '', fieldName = '', format = '', formation = '', halfDuration = 45, seasonId } = params;
+  const {
+    teamId, opponent, dateISO, location = '', fieldName = '', format = '', formation = '',
+    halfDuration = 45, seasonId, competitionType = 'league', competitionName = '',
+  } = params;
 
   if (!opponent.trim()) throw new Error('Opponent is required');
   if (!dateISO.trim()) throw new Error('Date is required');
@@ -54,6 +70,8 @@ export async function createMatch(params: {
     formation: formation.trim(),
     halfDuration,
     status: 'scheduled' as MatchStatus,
+    competitionType,
+    competitionName: competitionName.trim(),
     homeScore: 0,
     awayScore: 0,
     isDeleted: false,
@@ -99,6 +117,8 @@ export async function updateMatch(params: {
   dateISO?: string;
   location?: string;
   fieldName?: string;
+  competitionType?: CompetitionType;
+  competitionName?: string;
 }) {
   const { teamId, matchId } = params;
 
@@ -120,6 +140,12 @@ export async function updateMatch(params: {
   }
   if (params.fieldName != null) {
     patch.fieldName = norm(params.fieldName);
+  }
+  if (params.competitionType != null) {
+    patch.competitionType = params.competitionType;
+  }
+  if (params.competitionName != null) {
+    patch.competitionName = norm(params.competitionName);
   }
 
   await db.collection(COL.teams).doc(teamId).collection(COL.matches).doc(matchId).update(patch);

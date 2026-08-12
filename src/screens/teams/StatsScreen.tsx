@@ -39,6 +39,15 @@ type PlayerStat = {
 };
 
 type SortKey = 'goals' | 'assists' | 'cards';
+type CompFilter = 'all' | 'league' | 'cup' | 'friendly' | 'tournament';
+
+const COMP_FILTERS: { key: CompFilter; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'league', label: 'League' },
+  { key: 'cup', label: 'Cup' },
+  { key: 'friendly', label: 'Friendly' },
+  { key: 'tournament', label: 'Tourn.' },
+];
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -53,7 +62,7 @@ function ensurePlayer(id: string, name: string | undefined, map: Map<string, Pla
 
 // ─── data fetching ────────────────────────────────────────────────────────────
 
-async function fetchStats(teamId: string): Promise<{ team: TeamStat; players: PlayerStat[] }> {
+async function fetchStats(teamId: string, comp: CompFilter): Promise<{ team: TeamStat; players: PlayerStat[] }> {
   const matchSnap = await db
     .collection(COL.teams)
     .doc(teamId)
@@ -62,7 +71,8 @@ async function fetchStats(teamId: string): Promise<{ team: TeamStat; players: Pl
 
   const allMatches = matchSnap.docs
     .map((d) => ({ id: d.id, ...(d.data() as any) }))
-    .filter((m) => !m.isDeleted);
+    .filter((m) => !m.isDeleted)
+    .filter((m) => comp === 'all' || (m.competitionType || 'league') === comp);
 
   const completedMatches = allMatches.filter(
     (m) => m?.state?.status === 'final' || m?.status === 'completed'
@@ -162,12 +172,13 @@ export default function StatsScreen() {
   const [players, setPlayers] = useState<PlayerStat[]>([]);
   const [segment, setSegment] = useState<'team' | 'players'>('team');
   const [sortKey, setSortKey] = useState<SortKey>('goals');
+  const [compFilter, setCompFilter] = useState<CompFilter>('all');
 
   const load = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
     try {
-      const { team, players: p } = await fetchStats(teamId);
+      const { team, players: p } = await fetchStats(teamId, compFilter);
       setTeamStat(team);
       setPlayers(p);
     } catch (e) {
@@ -176,7 +187,7 @@ export default function StatsScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [teamId]);
+  }, [teamId, compFilter]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -185,14 +196,6 @@ export default function StatsScreen() {
     if (sortKey === 'assists') return b.assists - a.assists || b.goals - a.goals;
     return (b.redCards * 2 + b.yellowCards) - (a.redCards * 2 + a.yellowCards);
   });
-
-  if (loading) {
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#f2f2f7', justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#111" />
-      </SafeAreaView>
-    );
-  }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#f2f2f7' }}>
@@ -213,6 +216,30 @@ export default function StatsScreen() {
         </View>
       </View>
 
+      {/* Competition filter */}
+      <View style={{ flexDirection: 'row', gap: 6, paddingHorizontal: 16, paddingTop: 10 }}>
+        {COMP_FILTERS.map((c) => (
+          <TouchableOpacity
+            key={c.key}
+            onPress={() => setCompFilter(c.key)}
+            style={{
+              paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999,
+              backgroundColor: compFilter === c.key ? '#111' : '#fff',
+              borderWidth: 1, borderColor: compFilter === c.key ? '#111' : '#e5e7eb',
+            }}
+          >
+            <Text style={{ fontSize: 12, fontWeight: '700', color: compFilter === c.key ? '#fff' : '#6b7280' }}>
+              {c.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {loading ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color="#111" />
+        </View>
+      ) : (
       <ScrollView
         contentContainerStyle={{ padding: 16, gap: 14 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}
@@ -221,6 +248,7 @@ export default function StatsScreen() {
           ? <TeamStatsView stat={teamStat} />
           : <PlayerStatsView players={sortedPlayers} sortKey={sortKey} onSort={setSortKey} />}
       </ScrollView>
+      )}
     </SafeAreaView>
   );
 }

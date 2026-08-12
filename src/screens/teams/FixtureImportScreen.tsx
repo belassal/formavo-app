@@ -21,7 +21,7 @@ import {
   View,
 } from 'react-native';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
-import { createMatch, listenMatches } from '../../services/matchService';
+import { createMatch, listenMatches, COMPETITION_TYPES, type CompetitionType } from '../../services/matchService';
 import FormationPickerModal, { type FormationPickerResult } from '../matches/components/FormationPickerModal';
 
 type Params = { FixtureImport: { teamId: string; seasonId?: string } };
@@ -112,6 +112,9 @@ export default function FixtureImportScreen() {
   const [formation, setFormation] = useState<{ format: string; name: string } | null>(null);
   const [showFormationPicker, setShowFormationPicker] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [compType, setCompType] = useState<CompetitionType>('league');
+  const [compName, setCompName] = useState('');
+  const showCompName = compType === 'cup' || compType === 'tournament';
 
   useEffect(() => listenMatches(teamId, (rows) => {
     setExisting(rows.filter((m: any) => !m.isDeleted).map((m: any) => ({
@@ -167,6 +170,8 @@ export default function FixtureImportScreen() {
           format: formation?.format ?? '',
           formation: formation?.name ?? '',
           halfDuration: 45,
+          competitionType: compType,
+          competitionName: showCompName ? compName.trim() : '',
           ...(seasonId ? { seasonId } : {}),
         });
       }
@@ -261,6 +266,37 @@ export default function FixtureImportScreen() {
                   </Text>
                 </TouchableOpacity>
               </View>
+
+              {/* Batch competition tag — applies to every created match */}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+                {COMPETITION_TYPES.map((c) => (
+                  <TouchableOpacity
+                    key={c.key}
+                    onPress={() => setCompType(c.key)}
+                    style={{
+                      paddingVertical: 7, paddingHorizontal: 13, borderRadius: 10,
+                      backgroundColor: compType === c.key ? '#111' : '#fff',
+                      borderWidth: 1, borderColor: compType === c.key ? '#111' : '#e5e7eb',
+                    }}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: compType === c.key ? '#fff' : '#374151' }}>
+                      {c.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              {showCompName && (
+                <TextInput
+                  placeholder={compType === 'cup' ? 'Cup name (e.g. Nova Scotia Cup)' : 'Tournament name (optional)'}
+                  placeholderTextColor="#9ca3af"
+                  value={compName}
+                  onChangeText={setCompName}
+                  style={{
+                    backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 10,
+                    padding: 11, fontSize: 14, color: '#111', marginTop: 8,
+                  }}
+                />
+              )}
 
               <View style={{ backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#e5e7eb', marginTop: 10, overflow: 'hidden' }}>
                 {fixtures.map((f, i) => (

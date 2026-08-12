@@ -470,6 +470,8 @@ async function buildMatchSummary(teamId: string, matchId: string, match: Firebas
     opponent: match.opponent || 'Opponent',
     dateISO: match.dateISO || '',
     seasonId: match.seasonId ?? null,
+    competitionType: match.competitionType || 'league',
+    competitionName: match.competitionName || '',
     scorers,
     playerLines: Object.values(lines),
     cleanSheet: awayScore === 0,
@@ -496,6 +498,20 @@ async function recomputeSeasonAggregates(teamId: string, seasonId: string | null
     form: [] as string[],
   };
   const players: Record<string, any> = {};
+  // Records split by competition type (league/cup/friendly/tournament) and,
+  // for named cups/tournaments, per named competition (array — names are
+  // free text and unsafe as Firestore map keys).
+  const byCompetition: Record<string, any> = {};
+  const namedComps: Record<string, any> = {};
+  const tally = (bucket: any, s: any) => {
+    bucket.played++;
+    if (s.result === 'W') bucket.wins++;
+    else if (s.result === 'D') bucket.draws++;
+    else bucket.losses++;
+    bucket.goalsFor += s.homeScore;
+    bucket.goalsAgainst += s.awayScore;
+  };
+  const freshTally = () => ({ played: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0 });
 
   const ordered = [...matches].sort((a, b) =>
     String(a.summary.dateISO).localeCompare(String(b.summary.dateISO)));
@@ -510,6 +526,17 @@ async function recomputeSeasonAggregates(teamId: string, seasonId: string | null
     team.goalsAgainst += s.awayScore;
     if (s.cleanSheet) team.cleanSheets++;
     team.form.push(s.result);
+
+    // Read the tag from the match doc (not the summary) so re-tagging an old
+    // completed match takes effect without a summary rebuild.
+    const compType = m.competitionType || s.competitionType || 'league';
+    const compName = String(m.competitionName ?? s.competitionName ?? '').trim();
+    tally(byCompetition[compType] || (byCompetition[compType] = freshTally()), s);
+    if (compName && (compType === 'cup' || compType === 'tournament')) {
+      const key = `${compType}|${compName.toLowerCase()}`;
+      namedComps[key] = namedComps[key] || { name: compName, type: compType, ...freshTally() };
+      tally(namedComps[key], s);
+    }
 
     for (const l of s.playerLines || []) {
       const p = players[l.playerId] || (players[l.playerId] = {
@@ -533,7 +560,12 @@ async function recomputeSeasonAggregates(teamId: string, seasonId: string | null
   const batch = db.batch();
   batch.set(
     db.collection('teams').doc(teamId).collection('aggregates').doc(seasonKey),
-    { ...team, form: team.form.slice(-5), seasonId: seasonKey, updatedAt: FieldValue.serverTimestamp() },
+    {
+      ...team, form: team.form.slice(-5), seasonId: seasonKey,
+      byCompetition,
+      competitions: Object.values(namedComps),
+      updatedAt: FieldValue.serverTimestamp(),
+    },
   );
   for (const p of Object.values(players)) {
     batch.set(
@@ -556,7 +588,9 @@ export const onMatchCompletedAggregates = functions.firestore
       after.status === 'completed' &&
       (before?.homeScore !== after.homeScore ||
         before?.awayScore !== after.awayScore ||
-        before?.isDeleted !== after.isDeleted);
+        before?.isDeleted !== after.isDeleted ||
+        before?.competitionType !== after.competitionType ||
+        before?.competitionName !== after.competitionName);
 
     if (!becameCompleted && !editedWhileCompleted) return;
 

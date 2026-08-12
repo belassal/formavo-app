@@ -32,7 +32,7 @@ import {
   updatePlayerAvailability,
   type PlayerAvailability,
 } from '../../services/playerService';
-import { createMatch, listenMatches } from '../../services/matchService';
+import { createMatch, listenMatches, COMPETITION_TYPES, competitionLabel, type CompetitionType } from '../../services/matchService';
 import { inviteCoach, inviteParent, resendParentInvite, listenTeamMembers } from '../../services/teamService';
 import { pickPlayerPhoto, uploadPlayerAvatar, storageReady, imagePickerReady } from '../../services/storageService';
 import FormationPickerModal, { FormationPickerResult } from '../matches/components/FormationPickerModal';
@@ -374,6 +374,11 @@ export default function TeamDetailScreen() {
   const [pickedFormation, setPickedFormation] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [halfDuration, setHalfDuration] = useState(45);
+  const [compType, setCompType] = useState<CompetitionType>('league');
+  const [compName, setCompName] = useState('');
+  const showCompName = compType === 'cup' || compType === 'tournament';
+  // Last-used competition, remembered on the team doc so the next match defaults to it.
+  const lastCompRef = useRef<{ type: CompetitionType; name: string }>({ type: 'league', name: '' });
 
   // --- Listeners ---
   useEffect(() => {
@@ -413,6 +418,10 @@ export default function TeamDetailScreen() {
         const existingActiveSeasonId: string | null = teamData?.activeSeasonId ?? null;
         const existingSeasonText: string = teamData?.season ?? '';
         const teamClubId: string | null = teamData?.clubId ?? null;
+        lastCompRef.current = {
+          type: teamData?.lastCompetitionType ?? 'league',
+          name: teamData?.lastCompetitionName ?? '',
+        };
 
         if (teamClubId) {
           setClubId(teamClubId);
@@ -659,6 +668,8 @@ export default function TeamDetailScreen() {
   // --- Match actions ---
   const openCreateMatch = () => {
     setOpponent(''); setDateISO(''); setLocation(''); setPickedFormat(''); setPickedFormation(''); setHalfDuration(45);
+    setCompType(lastCompRef.current.type);
+    setCompName(lastCompRef.current.name);
     setShowFormationPicker(true);
   };
 
@@ -684,8 +695,15 @@ export default function TeamDetailScreen() {
         format: pickedFormat,
         formation: pickedFormation,
         halfDuration,
+        competitionType: compType,
+        competitionName: showCompName ? compName.trim() : '',
         ...(viewingSeasonId ? { seasonId: viewingSeasonId } : {}),
       });
+      // Remember for next time (fire-and-forget; team doc write is coach-only anyway)
+      lastCompRef.current = { type: compType, name: showCompName ? compName.trim() : '' };
+      db.collection('teams').doc(teamId)
+        .update({ lastCompetitionType: compType, lastCompetitionName: lastCompRef.current.name })
+        .catch(() => {});
       setShowCreateMatch(false);
       navigation.navigate('MatchDetail', { teamId, matchId, title: `${teamName} vs ${opp}`, role: route.params.role });
     } catch (e: any) {
@@ -985,11 +1003,20 @@ export default function TeamDetailScreen() {
                             {item.dateISO ? formatDateISO(item.dateISO) : ''}
                             {item.location ? ` · ${item.location}` : ''}
                           </Text>
-                          {item.format ? (
-                            <View style={{ marginTop: 6, alignSelf: 'flex-start', paddingVertical: 2, paddingHorizontal: 8, backgroundColor: '#f3f4f6', borderRadius: 999 }}>
-                              <Text style={{ fontSize: 11, fontWeight: '600', color: '#6b7280' }}>{item.format}</Text>
-                            </View>
-                          ) : null}
+                          <View style={{ marginTop: 6, flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
+                            {item.competitionType && item.competitionType !== 'league' ? (
+                              <View style={{ paddingVertical: 2, paddingHorizontal: 8, backgroundColor: '#f3f4f6', borderRadius: 999 }}>
+                                <Text style={{ fontSize: 11, fontWeight: '600', color: '#6b7280' }}>
+                                  {item.competitionName?.trim() || competitionLabel(item.competitionType)}
+                                </Text>
+                              </View>
+                            ) : null}
+                            {item.format ? (
+                              <View style={{ paddingVertical: 2, paddingHorizontal: 8, backgroundColor: '#f3f4f6', borderRadius: 999 }}>
+                                <Text style={{ fontSize: 11, fontWeight: '600', color: '#6b7280' }}>{item.format}</Text>
+                              </View>
+                            ) : null}
+                          </View>
                         </View>
                         <View style={{ alignItems: 'flex-end', gap: 4 }}>
                           <Text style={{ fontSize: 12, fontWeight: '700', color: labelColor }}>{rightLabel}</Text>
@@ -1780,6 +1807,37 @@ export default function TeamDetailScreen() {
               onClose={() => setShowMatchLocPicker(false)}
               onSelect={(loc) => { setLocation(loc.address); setShowMatchLocPicker(false); }}
             />
+
+            <View>
+              <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 8 }}>Competition</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                {COMPETITION_TYPES.map((c) => (
+                  <TouchableOpacity
+                    key={c.key}
+                    onPress={() => setCompType(c.key)}
+                    style={{
+                      paddingVertical: 8,
+                      paddingHorizontal: 14,
+                      borderRadius: 10,
+                      backgroundColor: compType === c.key ? '#111' : '#f3f4f6',
+                    }}
+                  >
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: compType === c.key ? '#fff' : '#374151' }}>
+                      {c.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              {showCompName && (
+                <TextInput
+                  placeholder={compType === 'cup' ? 'Cup name (e.g. Nova Scotia Cup)' : 'Tournament name (optional)'}
+                  placeholderTextColor="#9ca3af"
+                  value={compName}
+                  onChangeText={setCompName}
+                  style={[S.input, { marginTop: 8 }]}
+                />
+              )}
+            </View>
 
             <View>
               <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 8 }}>Half duration</Text>

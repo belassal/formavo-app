@@ -34,6 +34,9 @@ import {
   softDeleteMatch,
   updateMatch,
   updateMatchEvent,
+  COMPETITION_TYPES,
+  competitionLabel,
+  type CompetitionType,
   type AttendanceStatus,
   type CardColor,
   type MatchEvent,
@@ -147,6 +150,8 @@ export default function MatchDetailScreen() {
   const [editDateISO, setEditDateISO] = useState('');
   const [editLocation, setEditLocation] = useState('');
   const [editLocationName, setEditLocationName] = useState('');
+  const [editCompType, setEditCompType] = useState<CompetitionType>('league');
+  const [editCompName, setEditCompName] = useState('');
   const [editFieldName, setEditFieldName] = useState('');
   const [showEditDatePicker, setShowEditDatePicker] = useState(false);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
@@ -476,6 +481,8 @@ const addSelectedToRoster = async () => {
     setEditLocation(String(match?.location || ''));
     setEditLocationName('');
     setEditFieldName(String(match?.fieldName || ''));
+    setEditCompType((match?.competitionType as CompetitionType) || 'league');
+    setEditCompName(String(match?.competitionName || ''));
     setConfirmDeleteText('');
     setShowEdit(true);
   };
@@ -496,6 +503,8 @@ const addSelectedToRoster = async () => {
         dateISO: dt,
         location: norm(editLocation),
         fieldName: norm(editFieldName),
+        competitionType: editCompType,
+        competitionName: (editCompType === 'cup' || editCompType === 'tournament') ? norm(editCompName) : '',
       });
       setShowEdit(false);
     } catch (e: any) {
@@ -894,6 +903,7 @@ const addSelectedToRoster = async () => {
                   )}
                   <View style={{ flexDirection: 'row', gap: 6, marginTop: 10, flexWrap: 'wrap', alignItems: 'center' }}>
                     {pill(scoreLabel)}
+                    {pill(match?.competitionName?.trim() || competitionLabel(match?.competitionType))}
                     {match?.format ? pill(match.format) : null}
                     {pill(`${playerCount} players`)}
                     {pillBtn('Game Day', () => navigation.navigate('GameDayPitch', { teamId, matchId, role: route.params.role }))}
@@ -1743,6 +1753,31 @@ const addSelectedToRoster = async () => {
                     style={{ backgroundColor: '#f3f4f6', paddingHorizontal: 12, paddingVertical: 11, borderRadius: 10, fontSize: 15, color: '#111' }}
                     placeholderTextColor="#9ca3af"
                   />
+
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                    {COMPETITION_TYPES.map((c) => (
+                      <TouchableOpacity
+                        key={c.key}
+                        onPress={() => setEditCompType(c.key)}
+                        style={{
+                          paddingVertical: 8, paddingHorizontal: 13, borderRadius: 10,
+                          backgroundColor: editCompType === c.key ? '#111' : '#f3f4f6',
+                        }}
+                      >
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: editCompType === c.key ? '#fff' : '#374151' }}>
+                          {c.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  {(editCompType === 'cup' || editCompType === 'tournament') && (
+                    <TextInput
+                      placeholder={editCompType === 'cup' ? 'Cup name (e.g. Nova Scotia Cup)' : 'Tournament name (optional)'}
+                      value={editCompName} onChangeText={setEditCompName}
+                      style={{ backgroundColor: '#f3f4f6', paddingHorizontal: 12, paddingVertical: 11, borderRadius: 10, fontSize: 15, color: '#111' }}
+                      placeholderTextColor="#9ca3af"
+                    />
+                  )}
 
                   {/* Danger zone */}
                   <View style={{ marginTop: 8, backgroundColor: '#fff5f5', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#fecaca' }}>
