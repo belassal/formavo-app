@@ -77,6 +77,11 @@ functions/src/index.ts # all Cloud Functions
 - Clock display and event minutes are capped at scheduled play + 20' stoppage
   (`computeCappedMinute`, `computeDisplayMinute` shows trailing `+`). An hourly
   function auto-finalizes matches left live 6+ hours.
+- `competitionType` (`league | cup | friendly | tournament`, default league) +
+  free-text `competitionName` (cups/tournaments). Last-used remembered on the
+  team doc (`lastCompetitionType/Name`). Aggregates carry a `byCompetition`
+  split + `competitions` array (named cups); ClubReports Records tab and
+  StatsScreen filter chips consume them. Missing field ⇒ treated as league.
 
 ## Cloud Functions (functions/src/index.ts, all deployed)
 - Notifications (all respect `users/{uid}.notificationPrefs` — opt-out; keys:
