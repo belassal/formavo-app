@@ -11,6 +11,7 @@ import {
 import { useRoute } from '@react-navigation/native';
 import { db } from '../../services/firebase';
 import { COL } from '../../models/collections';
+import { fetchSeasonAggregates } from '../../services/aggregatesService';
 
 // Params are identical whether navigated from TeamsStack or StatsStack
 type StatsRouteParams = { teamId: string; teamName?: string };
@@ -63,6 +64,40 @@ function ensurePlayer(id: string, name: string | undefined, map: Map<string, Pla
 // ─── data fetching ────────────────────────────────────────────────────────────
 
 async function fetchStats(teamId: string, comp: CompFilter): Promise<{ team: TeamStat; players: PlayerStat[] }> {
+  // Fast path (unfiltered): function-maintained aggregates — one doc + one
+  // query instead of every match/event/roster doc. Competition filters and
+  // teams without an aggregate doc use the client computation below.
+  if (comp === 'all') {
+    try {
+      const { team, players } = await fetchSeasonAggregates(teamId);
+      if (team) {
+        return {
+          team: {
+            played: team.played || 0,
+            wins: team.wins || 0, draws: team.draws || 0, losses: team.losses || 0,
+            goalsFor: team.goalsFor || 0, goalsAgainst: team.goalsAgainst || 0,
+            cleanSheets: team.cleanSheets || 0,
+            form: [...(team.form || [])].reverse() as FormResult[], // newest first
+          },
+          players: players.map((p) => ({
+            playerId: p.playerId,
+            playerName: p.playerName || p.playerId,
+            gamesPlayed: p.appearances || 0,
+            goals: p.goals || 0,
+            assists: p.assists || 0,
+            yellowCards: p.yellow || 0,
+            redCards: p.red || 0,
+          })),
+        };
+      }
+    } catch (e) {
+      console.warn('[StatsScreen] aggregates read failed, falling back', e);
+    }
+  }
+  return fetchStatsClient(teamId, comp);
+}
+
+async function fetchStatsClient(teamId: string, comp: CompFilter): Promise<{ team: TeamStat; players: PlayerStat[] }> {
   const matchSnap = await db
     .collection(COL.teams)
     .doc(teamId)

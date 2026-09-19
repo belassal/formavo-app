@@ -129,8 +129,10 @@ functions/src/index.ts # all Cloud Functions
 - Trainings: doc-level RSVP arrays (`confirmedPlayerIds`/`declinedPlayerIds`),
   coach check-in via `attendedPlayerIds`. Match RSVPs live on roster docs
   (`rsvpStatus` etc.) — two different mechanisms.
-- Stats screens still aggregate client-side; prefer migrating reads to
-  `aggregates`/`playerAggregates` when touching them.
+- Stats screens read `aggregates`/`playerAggregates` first
+  (`aggregatesService.fetchSeasonAggregates`, active season), falling back to
+  client-side computation for teams without an aggregate doc — and always for
+  competition-filtered views (player aggregates have no per-competition split).
 
 ## Design System
 - Background `#f2f2f7`; white cards `borderRadius: 14`, 1px `#e5e7eb` border

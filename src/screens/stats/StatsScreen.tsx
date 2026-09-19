@@ -15,6 +15,7 @@ import type { StatsStackParamList } from '../../navigation/stacks/StatsStack';
 import { listenMyTeams } from '../../services/teamService';
 import { db } from '../../services/firebase';
 import { COL } from '../../models/collections';
+import { fetchSeasonAggregates } from '../../services/aggregatesService';
 
 type TeamRow = { id: string; teamName?: string; role?: string };
 
@@ -38,6 +39,41 @@ type TopScorer = {
 };
 
 // ─── data helpers ─────────────────────────────────────────────────────────────
+
+type ScorerMap = Map<string, { name: string; team: string; goals: number; assists: number }>;
+
+/**
+ * Fast path: read the function-maintained aggregates (one doc + one query per
+ * team). Returns null when the team has no aggregate doc yet — caller falls
+ * back to the client-side computation.
+ */
+async function fetchTeamStatsFromAggregates(
+  teamId: string,
+  teamName: string,
+): Promise<{ record: TeamRecord; scorers: ScorerMap } | null> {
+  const { team, players } = await fetchSeasonAggregates(teamId);
+  if (!team) return null;
+
+  const record: TeamRecord = {
+    teamId, teamName,
+    played: team.played || 0,
+    wins: team.wins || 0, draws: team.draws || 0, losses: team.losses || 0,
+    goalsFor: team.goalsFor || 0, goalsAgainst: team.goalsAgainst || 0,
+    form: [...(team.form || [])].reverse() as ('W' | 'D' | 'L')[], // newest first
+  };
+
+  const scorers: ScorerMap = new Map();
+  for (const p of players) {
+    if ((p.goals || 0) === 0 && (p.assists || 0) === 0) continue;
+    scorers.set(p.playerId, {
+      name: p.playerName || p.playerId,
+      team: teamName,
+      goals: p.goals || 0,
+      assists: p.assists || 0,
+    });
+  }
+  return { record, scorers };
+}
 
 async function fetchTeamRecord(teamId: string, teamName: string): Promise<TeamRecord> {
   const matchSnap = await db
@@ -132,10 +168,25 @@ export default function StatsScreen() {
     if (isRefresh) setRefreshing(true);
 
     try {
-      const [recs, scorerMaps] = await Promise.all([
-        Promise.all(teamRows.map((t) => fetchTeamRecord(t.id, t.teamName || t.id))),
-        Promise.all(teamRows.map((t) => fetchTopScorers(t.id, t.teamName || t.id))),
-      ]);
+      // Per team: aggregates fast path, client computation as fallback.
+      const perTeam = await Promise.all(
+        teamRows.map(async (t) => {
+          const name = t.teamName || t.id;
+          try {
+            const agg = await fetchTeamStatsFromAggregates(t.id, name);
+            if (agg) return agg;
+          } catch (e) {
+            console.warn('[Stats] aggregates read failed, falling back', e);
+          }
+          const [record, scorers] = await Promise.all([
+            fetchTeamRecord(t.id, name),
+            fetchTopScorers(t.id, name),
+          ]);
+          return { record, scorers };
+        }),
+      );
+      const recs = perTeam.map((x) => x.record);
+      const scorerMaps = perTeam.map((x) => x.scorers);
 
       setRecords(recs);
 
