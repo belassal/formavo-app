@@ -24,6 +24,7 @@ import OpponentHistoryScreen from '../../screens/teams/OpponentHistoryScreen';
 import ClubDashboardScreen from '../../screens/club/ClubDashboardScreen';
 import ClubReportsScreen from '../../screens/club/ClubReportsScreen';
 import FixtureImportScreen from '../../screens/teams/FixtureImportScreen';
+import RosterImportScreen from '../../screens/teams/RosterImportScreen';
 import TryoutsScreen from '../../screens/club/TryoutsScreen';
 import TryoutDetailScreen from '../../screens/club/TryoutDetailScreen';
 
@@ -47,6 +48,7 @@ export type TeamsStackParamList = {
   ClubDashboard: { clubId: string; clubName: string; viewerRole?: string };
   ClubReports: { clubId: string; clubName?: string };
   FixtureImport: { teamId: string; seasonId?: string };
+  RosterImport: { teamId: string; clubId?: string; seasonId?: string };
   Tryouts: { clubId: string; clubName?: string };
   TryoutDetail: { clubId: string; tryoutId: string; tryoutName?: string };
   ClubSettings: { clubId: string; clubName?: string };
@@ -119,6 +121,11 @@ export default function TeamsStack() {
         name="FixtureImport"
         component={FixtureImportScreen}
         options={{ title: 'Import Fixtures' }}
+      />
+      <Stack.Screen
+        name="RosterImport"
+        component={RosterImportScreen}
+        options={{ title: 'Import Roster' }}
       />
       <Stack.Screen
         name="Tryouts"

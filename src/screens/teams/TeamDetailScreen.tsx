@@ -1167,6 +1167,20 @@ export default function TeamDetailScreen() {
               ))
             )
           )}
+          {rosterOpen && !isParent && (
+            <View>
+              <View style={S.divider} />
+              <TouchableOpacity
+                onPress={() => navigation.navigate('RosterImport' as any, {
+                  teamId, clubId: clubId ?? undefined, seasonId: viewingSeasonId ?? undefined,
+                })}
+                style={[S.row, { justifyContent: 'center' }]}
+                activeOpacity={0.6}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '600', color: '#3b82f6' }}>⇪ Import roster (paste a list)</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
         {/* ===== TRAININGS ACCORDION ===== */}
