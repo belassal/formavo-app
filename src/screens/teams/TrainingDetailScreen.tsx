@@ -17,7 +17,9 @@ import {
   createTraining,
   createRecurringTrainings,
   updateTraining,
+  updateTrainingSeries,
   softDeleteTraining,
+  softDeleteTrainingSeries,
   markTrainingAttended,
   setTrainingAttendance,
   type Training,
@@ -90,6 +92,7 @@ export default function TrainingDetailScreen() {
   const [fieldName, setFieldName] = useState('');
   const [notes, setNotes] = useState('');
   const [status, setStatus] = useState<TrainingStatus>('scheduled');
+  const [recurrenceId, setRecurrenceId] = useState<string | null>(null);
 
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
@@ -128,6 +131,7 @@ export default function TrainingDetailScreen() {
         setConfirmedIds(data.confirmedPlayerIds ?? []);
         setDeclinedIds(data.declinedPlayerIds ?? []);
         setAttendedIds(data.attendedPlayerIds ?? []);
+        setRecurrenceId((data as any).recurrenceId ?? null);
       }, console.warn);
     return () => unsub();
   }, [teamId, trainingId]);
@@ -222,6 +226,40 @@ export default function TrainingDetailScreen() {
     }
   };
 
+  const saveSeries = async () => {
+    try {
+      setSaving(true);
+      // Times apply onto each future session's own date; title/location/notes as-is.
+      const count = await updateTrainingSeries({
+        teamId,
+        recurrenceId: recurrenceId!,
+        fromStartISO: startISO,
+        title: title.trim(),
+        location: location.trim(),
+        fieldName: fieldName.trim(),
+        notes: notes.trim(),
+        startTime: (startISO.split(' ')[1] || '').trim() || undefined,
+        endTime: (endISO.split(' ')[1] || '').trim() || undefined,
+      });
+      Alert.alert('Saved', `${count} session${count === 1 ? '' : 's'} updated.`, [
+        { text: 'OK', onPress: () => navigation.goBack() },
+      ]);
+    } catch (e: any) {
+      Alert.alert('Save Failed', e?.message ?? 'Unknown error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const onSavePress = () => {
+    if (isNew || !recurrenceId) { handleSave(); return; }
+    Alert.alert('Repeating session', 'Apply these changes to…', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'This session only', onPress: handleSave },
+      { text: 'This + future sessions', onPress: saveSeries },
+    ]);
+  };
+
   const openRepeatPicker = () => {
     ActionSheetIOS.showActionSheetWithOptions(
       { options: ['Cancel', 'Does not repeat', 'Weekly', 'Every 2 weeks'], cancelButtonIndex: 0 },
@@ -235,23 +273,43 @@ export default function TrainingDetailScreen() {
 
   const handleDelete = () => {
     if (!trainingId) return;
+    const deleteOne = async () => {
+      try {
+        setDeleting(true);
+        await softDeleteTraining({ teamId, trainingId: trainingId! });
+        navigation.goBack();
+      } catch (e: any) {
+        Alert.alert('Delete Failed', e?.message ?? 'Unknown error');
+      } finally {
+        setDeleting(false);
+      }
+    };
+    const deleteSeries = async () => {
+      try {
+        setDeleting(true);
+        const count = await softDeleteTrainingSeries({
+          teamId, recurrenceId: recurrenceId!, fromStartISO: startISO,
+        });
+        Alert.alert('Deleted', `${count} session${count === 1 ? '' : 's'} removed.`, [
+          { text: 'OK', onPress: () => navigation.goBack() },
+        ]);
+      } catch (e: any) {
+        Alert.alert('Delete Failed', e?.message ?? 'Unknown error');
+      } finally {
+        setDeleting(false);
+      }
+    };
+    if (recurrenceId) {
+      Alert.alert('Repeating session', 'Delete…', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'This session only', style: 'destructive', onPress: deleteOne },
+        { text: 'This + all future sessions', style: 'destructive', onPress: deleteSeries },
+      ]);
+      return;
+    }
     Alert.alert('Delete session?', 'This will permanently remove this training session.', [
       { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            setDeleting(true);
-            await softDeleteTraining({ teamId, trainingId: trainingId! });
-            navigation.goBack();
-          } catch (e: any) {
-            Alert.alert('Delete Failed', e?.message ?? 'Unknown error');
-          } finally {
-            setDeleting(false);
-          }
-        },
-      },
+      { text: 'Delete', style: 'destructive', onPress: deleteOne },
     ]);
   };
 
@@ -720,7 +778,7 @@ export default function TrainingDetailScreen() {
 
         {/* Save */}
         <TouchableOpacity
-          onPress={handleSave}
+          onPress={onSavePress}
           disabled={saving}
           style={{ backgroundColor: '#111', borderRadius: 14, paddingVertical: 16, alignItems: 'center' }}
         >

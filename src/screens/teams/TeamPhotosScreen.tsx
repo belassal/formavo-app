@@ -27,7 +27,7 @@ const THUMB = (width - 4) / 3;
 
 export default function TeamPhotosScreen() {
   const route = useRoute<RouteT>();
-  const { teamId, role } = route.params;
+  const { teamId, role, matchId } = route.params;
   const isParent = role === 'parent';
 
   const [photos, setPhotos] = useState<TeamPhoto[]>([]);
@@ -46,9 +46,9 @@ export default function TeamPhotosScreen() {
     const unsub = listenTeamPhotos(teamId, (data) => {
       setPhotos(data);
       setLoading(false);
-    });
+    }, matchId ? { matchId } : undefined);
     return () => unsub();
-  }, [teamId]);
+  }, [teamId, matchId]);
 
   const handlePickPhoto = async () => {
     const uri = await pickPhoto();
@@ -76,6 +76,7 @@ export default function TeamPhotosScreen() {
         uploadedBy: uid,
         uploaderName: name,
         caption: captionText,
+        ...(matchId ? { matchId } : {}),
       });
     } catch (e: any) {
       Alert.alert('Upload failed', e?.message ?? 'Unknown error');
@@ -131,10 +132,12 @@ export default function TeamPhotosScreen() {
       ) : photos.length === 0 ? (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 }}>
           <Text style={{ fontSize: 40 }}>📷</Text>
-          <Text style={{ fontSize: 17, fontWeight: '700', color: '#374151' }}>No photos yet</Text>
+          <Text style={{ fontSize: 17, fontWeight: '700', color: '#374151' }}>
+            {matchId ? 'No photos from this match yet' : 'No photos yet'}
+          </Text>
           {!isParent && (
             <Text style={{ fontSize: 14, color: '#9ca3af', textAlign: 'center', paddingHorizontal: 40 }}>
-              Tap "Add Photo" to share your first team photo
+              {matchId ? 'Tap "Add Photo" to share photos from this match' : 'Tap "Add Photo" to share your first team photo'}
             </Text>
           )}
         </View>

@@ -128,11 +128,24 @@ functions/src/index.ts # all Cloud Functions
   Parents skip season-bootstrap writes (`isParent` guard).
 - Trainings: doc-level RSVP arrays (`confirmedPlayerIds`/`declinedPlayerIds`),
   coach check-in via `attendedPlayerIds`. Match RSVPs live on roster docs
-  (`rsvpStatus` etc.) — two different mechanisms.
+  (`rsvpStatus` etc.) — two different mechanisms. Recurring series share a
+  `recurrenceId`; save/delete on a recurring session offers "this session only"
+  vs "this + future" (series time edits apply HH:mm onto each session's date).
+- Photos: TeamPhotos takes optional `matchId` (filter + tag on upload);
+  MatchDetail has a 📷 Photos pill. RosterImport (Roster accordion) bulk-adds
+  players from pasted CSV and sends parent invites per row.
 - Stats screens read `aggregates`/`playerAggregates` first
   (`aggregatesService.fetchSeasonAggregates`, active season), falling back to
   client-side computation for teams without an aggregate doc — and always for
   competition-filtered views (player aggregates have no per-competition split).
+
+## Telemetry
+- Crashlytics + Analytics via `services/telemetryService.ts`: JS errors hooked
+  in RootNavigator (`installJsErrorReporting`), screen views logged from
+  NavigationContainer, uid tagged in RootGate. Use `logEvent('snake_case')`
+  for product events. All calls no-op (try/catch) on binaries that predate the
+  pods. dSYM upload build phase "Upload Crashlytics dSYMs" is in the Xcode
+  project.
 
 ## Design System
 - Background `#f2f2f7`; white cards `borderRadius: 14`, 1px `#e5e7eb` border
@@ -148,6 +161,4 @@ functions/src/index.ts # all Cloud Functions
 
 ## Known gaps / next work
 - Privacy policy draft in `docs/privacy-policy.md` needs legal review.
-- Recurring trainings: `recurrenceId` written but no edit/delete-series flow.
-- `photoService` supports per-match photos (`matchId` param) — no UI passes it.
 - Android untested; payments not started.

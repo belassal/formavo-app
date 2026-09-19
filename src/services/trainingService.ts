@@ -158,6 +158,76 @@ export async function updateTraining(params: {
     .update(patch);
 }
 
+/**
+ * Fetch this session and all FUTURE sessions of the same recurring series
+ * (startISO >= fromStartISO, not deleted). Single-field query on recurrenceId
+ * — no composite index needed; date filtering is client-side.
+ */
+async function fetchSeriesFrom(teamId: string, recurrenceId: string, fromStartISO: string) {
+  const snap = await db
+    .collection(COL.teams)
+    .doc(teamId)
+    .collection(COL.trainings)
+    .where('recurrenceId', '==', recurrenceId)
+    .get();
+  return snap.docs.filter((d) => {
+    const t = d.data() as any;
+    return !t.isDeleted && (t.startISO || '') >= fromStartISO;
+  });
+}
+
+/**
+ * Apply an edit to this and all future sessions of a recurring series.
+ * Title/location/fieldName/notes apply as-is; times (HH:mm from startISO/endISO)
+ * are applied onto each session's own date, so a "Tuesdays now 18:30" change
+ * moves every future Tuesday without collapsing them onto one date.
+ */
+export async function updateTrainingSeries(params: {
+  teamId: string;
+  recurrenceId: string;
+  fromStartISO: string;
+  title?: string;
+  location?: string;
+  fieldName?: string;
+  notes?: string;
+  startTime?: string; // 'HH:mm'
+  endTime?: string;   // 'HH:mm'
+}): Promise<number> {
+  const { teamId, recurrenceId, fromStartISO, title, location, fieldName, notes, startTime, endTime } = params;
+  const docs = await fetchSeriesFrom(teamId, recurrenceId, fromStartISO);
+
+  const batch = db.batch();
+  for (const d of docs) {
+    const t = d.data() as any;
+    const patch: Record<string, any> = { updatedAt: serverTimestamp() };
+    if (title !== undefined) patch.title = title;
+    if (location !== undefined) patch.location = location || '';
+    if (fieldName !== undefined) patch.fieldName = fieldName || '';
+    if (notes !== undefined) patch.notes = notes || '';
+    if (startTime) patch.startISO = `${(t.startISO || '').split(' ')[0]} ${startTime}`;
+    if (endTime) patch.endISO = `${(t.endISO || t.startISO || '').split(' ')[0]} ${endTime}`;
+    batch.update(d.ref, patch);
+  }
+  await batch.commit();
+  return docs.length;
+}
+
+/** Soft-delete this and all future sessions of a recurring series. */
+export async function softDeleteTrainingSeries(params: {
+  teamId: string;
+  recurrenceId: string;
+  fromStartISO: string;
+}): Promise<number> {
+  const { teamId, recurrenceId, fromStartISO } = params;
+  const docs = await fetchSeriesFrom(teamId, recurrenceId, fromStartISO);
+  const batch = db.batch();
+  for (const d of docs) {
+    batch.update(d.ref, { isDeleted: true, updatedAt: serverTimestamp() });
+  }
+  await batch.commit();
+  return docs.length;
+}
+
 export async function softDeleteTraining(params: {
   teamId: string;
   trainingId: string;

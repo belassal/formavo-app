@@ -59,7 +59,7 @@ export type TeamsStackParamList = {
   TrainingDetail: { teamId: string; trainingId?: string; role?: string };
   TeamChat: { teamId: string; teamName?: string; role?: string };
   TeamSchedule: { teamId: string; teamName?: string; role?: string };
-  TeamPhotos: { teamId: string; teamName?: string; role?: string };
+  TeamPhotos: { teamId: string; teamName?: string; role?: string; matchId?: string };
   PlayerAttendance: { teamId: string; playerId: string; playerName: string };
   PlayerSeasonCard: import('../../screens/teams/PlayerSeasonCardScreen').SeasonCardParams;
   PlayerReport: import('../../screens/teams/PlayerReportScreen').PlayerReportParams;
