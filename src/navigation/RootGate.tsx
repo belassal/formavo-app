@@ -5,6 +5,7 @@ import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
 import AppTabs from './tabs/AppTabs';
 import AuthStack from './stacks/AuthStack';
 import { setupNotifications } from '../services/notificationService';
+import { setTelemetryUser } from '../services/telemetryService';
 
 type AuthState = 'loading' | 'unauthenticated' | 'anonymous' | 'authenticated';
 
@@ -13,6 +14,7 @@ export function RootGate() {
 
   useEffect(() => {
     const unsub = auth().onIdTokenChanged((user: FirebaseAuthTypes.User | null) => {
+      setTelemetryUser(user && !user.isAnonymous ? user.uid : null);
       if (!user) {
         setAuthState('unauthenticated');
       } else if (user.isAnonymous) {
