@@ -1,0 +1,252 @@
+<title>Formavo Partner Walkthrough</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;800;900&display=swap">
+<style>
+  :root {
+    --ground: #f4f6f5;
+    --card: #ffffff;
+    --ink: #101828;
+    --muted: #667085;
+    --border: #e5e7eb;
+    --divider: #f2f4f7;
+    --navy: #0b1220;
+    --navy-ink: #ffffff;
+    --navy-muted: rgba(255,255,255,0.55);
+    --green: #16a34a;
+    --green-bright: #22c55e;
+    --green-tint: #ecfdf3;
+    --chip: #f2f4f7;
+    --display: 'Archivo', 'Avenir Next Condensed', system-ui, sans-serif;
+    --body: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0c111a;
+      --card: #131b28;
+      --ink: #e6eaf0;
+      --muted: #8c97a8;
+      --border: #232d3d;
+      --divider: #1a2332;
+      --green-tint: #10241a;
+      --chip: #1b2534;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0c111a;
+    --card: #131b28;
+    --ink: #e6eaf0;
+    --muted: #8c97a8;
+    --border: #232d3d;
+    --divider: #1a2332;
+    --green-tint: #10241a;
+    --chip: #1b2534;
+  }
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 16px;
+    line-height: 1.6;
+    padding: 0 16px;
+  }
+  .wrap { max-width: 680px; margin: 0 auto; padding-block: 28px 64px; }
+  h1, h2 { font-family: var(--display); text-wrap: balance; }
+  h2 { font-size: 22px; font-weight: 800; margin: 44px 0 6px; letter-spacing: -0.01em; }
+  .kicker {
+    font-family: var(--display); font-weight: 800; font-size: 12px;
+    letter-spacing: 0.14em; text-transform: uppercase; color: var(--green);
+  }
+  p { margin: 10px 0; }
+  .lede { color: var(--muted); }
+  strong { font-weight: 650; }
+
+  /* ── Hero: the app's full-time scoreline card ── */
+  .hero {
+    background: var(--navy); color: var(--navy-ink);
+    border-radius: 18px; padding: 26px 22px 22px; text-align: center;
+    margin-top: 18px; position: relative; overflow: hidden;
+  }
+  .hero::before {
+    content: ''; position: absolute; inset: 0 0 auto 0; height: 5px;
+    background: var(--green-bright);
+  }
+  .ft-badge {
+    display: inline-block; background: var(--green); color: #fff;
+    font-family: var(--display); font-weight: 900; font-size: 11px;
+    letter-spacing: 0.12em; padding: 4px 12px; border-radius: 999px;
+  }
+  .score {
+    font-family: var(--display); font-weight: 900; font-size: 52px;
+    line-height: 1.1; margin-top: 10px; font-variant-numeric: tabular-nums;
+  }
+  .fixture { font-weight: 700; font-size: 16px; margin-top: 2px; }
+  .hero .meta { color: var(--navy-muted); font-size: 13px; margin-top: 4px; }
+  .presented {
+    color: var(--navy-muted); font-family: var(--display); font-weight: 800;
+    font-size: 10.5px; letter-spacing: 0.14em; margin-top: 16px;
+  }
+  .hero-note { font-size: 13px; color: var(--muted); text-align: center; margin-top: 10px; }
+
+  /* ── Cards & rows (the app's design system) ── */
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 14px; padding: 4px 16px; margin-top: 14px;
+  }
+  .row { padding: 12px 0; border-top: 1px solid var(--divider); }
+  .row:first-child { border-top: 0; }
+  .row b { display: block; font-size: 15px; }
+  .row span { color: var(--muted); font-size: 14px; }
+
+  /* Numbered steps — real sequences only */
+  ol.steps { list-style: none; padding: 0; margin: 12px 0 0; counter-reset: step; }
+  ol.steps li {
+    counter-increment: step; position: relative; padding: 0 0 14px 44px;
+  }
+  ol.steps li::before {
+    content: counter(step); position: absolute; left: 0; top: 1px;
+    width: 28px; height: 28px; border-radius: 9px;
+    background: var(--navy); color: #fff;
+    font-family: var(--display); font-weight: 800; font-size: 14px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  ol.steps li::after {
+    content: ''; position: absolute; left: 13.5px; top: 33px; bottom: 4px;
+    width: 1px; background: var(--border);
+  }
+  ol.steps li:last-child::after { display: none; }
+  ol.steps li:last-child { padding-bottom: 0; }
+
+  .try {
+    background: var(--green-tint); border: 1px solid var(--green);
+    border-radius: 12px; padding: 12px 14px; font-size: 14.5px; margin: 14px 0;
+  }
+  .try .kicker { display: block; margin-bottom: 2px; }
+
+  .pill {
+    display: inline-block; background: var(--chip); border-radius: 999px;
+    padding: 2px 10px; font-size: 13px; font-weight: 600; white-space: nowrap;
+  }
+  code.path {
+    font-family: var(--body); font-weight: 600; font-size: 14px;
+    background: var(--chip); border-radius: 6px; padding: 1px 7px;
+  }
+
+  .table-scroll { overflow-x: auto; margin-top: 14px; }
+  table {
+    border-collapse: collapse; width: 100%; min-width: 480px;
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    overflow: hidden; font-size: 14px;
+  }
+  th, td { padding: 10px 14px; text-align: left; border-top: 1px solid var(--divider); }
+  thead th {
+    border-top: 0; font-family: var(--display); font-weight: 800; font-size: 11.5px;
+    letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted);
+  }
+  td:first-child { font-weight: 650; }
+
+  ul.plain { padding-left: 20px; margin: 10px 0; }
+  ul.plain li { margin: 6px 0; }
+  .thesis {
+    font-family: var(--display); font-weight: 800; font-size: 19px;
+    line-height: 1.4; text-wrap: balance; border-left: 4px solid var(--green);
+    padding-left: 14px; margin: 22px 0;
+  }
+  .foot { color: var(--muted); font-size: 14px; margin-top: 40px; border-top: 1px solid var(--border); padding-top: 16px; }
+</style>
+
+<div class="wrap">
+  <span class="kicker">Formavo · Partner walkthrough</span>
+  <h1 style="font-size:32px;font-weight:900;margin:6px 0 4px;">A first week with Formavo</h1>
+  <p class="lede">Youth soccer club management built around the touchline, not the office.
+  A coach runs the whole game from their phone — and everything downstream builds itself:
+  live score pushes to parents, shareable recaps, player minutes, season stats, club reports.</p>
+
+  <div class="hero">
+    <span class="ft-badge">FULL TIME · WIN</span>
+    <div class="score">2 – 1</div>
+    <div class="fixture">U13 Tigers (Demo) vs Harbour City SC</div>
+    <div class="meta">2026-09-12 · Demo Park, Bedford · League</div>
+    <div class="presented">PRESENTED BY HARBOURVIEW HARDWARE (DEMO)</div>
+  </div>
+  <p class="hero-note">This is a real screen from the demo club you'll get access to — clubs sell that “Presented by” line to a sponsor.</p>
+
+  <h2>1 · Getting in</h2>
+  <ol class="steps">
+    <li><b>Accept the TestFlight invite</b> (arrives by email) on an iPhone and install Formavo.</li>
+    <li><b>Create an account with that same email.</b> Pending team invites attach automatically the moment you sign up.</li>
+    <li><b>Open U13 Tigers (Demo)</b> in Formavo FC (Demo) — a fictional team with a full season of data. Nothing in it is real, so tap, edit, and break anything you like.</li>
+  </ol>
+
+  <h2>2 · Ten-minute tour of the demo</h2>
+  <p><strong>Home tab</strong> — this week's schedule, a “next up” hero with countdown, RSVP glance
+  and match-day weather, and the last result.</p>
+  <div class="card">
+    <div class="row"><b>Open a completed match → <span class="pill">📊 Recap</span></b>
+      <span>Scoreline, goal timeline, shot map, minutes per player, one-tap share.</span></div>
+    <div class="row"><b><span class="pill">⭐ Rate</span> on a completed match</b>
+      <span>Post-match player ratings that feed each player's development log.</span></div>
+    <div class="row"><b>Roster → tap a player</b>
+      <span>Season stats, shareable Season Card, Season Report for parents, and four-corner assessments (Technical / Tactical / Physical / Mental).</span></div>
+    <div class="row"><b>Stats tab</b>
+      <span>Team record and leaderboards — try the League / Cup / Friendly filter chips.</span></div>
+  </div>
+  <p style="margin-top:18px;"><strong>Club level</strong> — from the Teams screen, open the club dashboard:</p>
+  <div class="card">
+    <div class="row"><b>📊 Club Reports</b>
+      <span><strong>Records</strong> (per-competition W-D-L per team) · <strong>Equity</strong> (playing-time fairness with under-median flags — receipts for the “why isn't my kid playing” conversation) · <strong>Positions</strong> (who's stuck in one spot) · <strong>Adoption</strong> (which coaches actually use the tools).</span></div>
+    <div class="row"><b>📝 Tryouts</b>
+      <span>Sessions, quick-add candidates, tap-star ratings, keep / maybe / pass shortlists you can share.</span></div>
+  </div>
+
+  <h2>3 · Run a live match</h2>
+  <p>The demo team has upcoming fixtures. Open one, then <strong>Game Day</strong>:</p>
+  <ol class="steps">
+    <li><b>Kick off.</b> The clock runs; parents with the app get a live match card.</li>
+    <li><b>Log a goal.</b> Tap the scorer on the pitch → Goal → optional assist and the spot on the mini-pitch. Parents get the score pushed <em>as it happens</em>.</li>
+    <li><b>Make a sub.</b> Tap a bench player, place them in a slot — minutes tracking handles rolling subs automatically.</li>
+    <li><b>Switch formation mid-game.</b> Players re-slot to their natural positions by position priority.</li>
+    <li><b>Mistakes are safe.</b> Undo the last event, or remove any event later — “logged by mistake” or “disallowed by referee”, with a reason.</li>
+    <li><b>Full time.</b> The recap, minutes, stats and club reports all update themselves.</li>
+  </ol>
+  <p class="thesis">One coach logging a game feeds every report a parent, coach, or club administrator will ever ask for.</p>
+
+  <h2>4 · Set up a real team in 10 minutes</h2>
+  <ol class="steps">
+    <li><b>Create a team</b> in the Teams tab (age group, season).</li>
+    <li><b>Import the roster.</b> Roster → <code class="path">⇪ Import roster (paste a list)</code>. Paste straight from a spreadsheet — <code class="path">name, number, parent email</code> per line, any order. Players are created and parent invites go out by email in one pass.</li>
+    <li><b>Import the fixtures.</b> Matches → <code class="path">⇪ Import fixtures from league schedule</code>. Paste the league's calendar link (ICS) or a CSV; tag the whole batch league / cup / friendly once.</li>
+    <li><b>Done.</b> Parents accept their invite, see only their own kids, and can RSVP.</li>
+  </ol>
+
+  <h2>5 · What each role sees</h2>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th></th><th>Coach</th><th>Parent</th><th>Club staff</th></tr></thead>
+      <tbody>
+        <tr><td>Schedule + RSVP</td><td>Full control</td><td>RSVP own kids</td><td>View</td></tr>
+        <tr><td>Live console</td><td>Runs the game</td><td>Live score view</td><td>View</td></tr>
+        <tr><td>Stats &amp; reports</td><td>Team level</td><td>Own kids</td><td>Every team</td></tr>
+        <tr><td>Chat &amp; announcements</td><td>Post + moderate</td><td>Read + chat</td><td>Post</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Parents are deliberately read-and-RSVP: they can't touch lineups, events, or other
+  people's kids — enforced server-side, not just hidden in the interface.</p>
+
+  <h2>6 · Honest current limits</h2>
+  <ul class="plain">
+    <li><strong>iOS only today.</strong> Android is the next platform milestone.</li>
+    <li>Payments / registration collection isn't built yet (planned for the club tier).</li>
+    <li>English only for now.</li>
+  </ul>
+
+  <h2>7 · What this demo should answer</h2>
+  <div class="try">
+    <span class="kicker">While you explore, keep asking</span>
+    Would the live console survive <em>your</em> touchline on a rainy Tuesday?
+    Which club report would make a technical director pay?
+    What's missing before you'd put your own club on it?
+  </div>
+
+  <p class="foot">Send every reaction — especially the negative ones — to Bilal.
+  Everything in Formavo FC (Demo) is fictional and safe to change.</p>
+</div>
