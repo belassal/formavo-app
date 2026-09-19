@@ -62,8 +62,9 @@ functions/src/index.ts # all Cloud Functions
   (`senderId == uid`). Aggregates subcollections are read-only for clients
   (functions write them). `mail` is create-only.
 - `storage.rules`: images only, <10MB; team photos coach-only, club logo
-  manager-only, own avatar only. Known soft spot: `players/{id}/avatar.jpg` has
-  no team in path → any signed-in user may write.
+  manager-only, own avatar only. Player avatars are team/club-scoped
+  (`teams/{t}/players/{p}/avatar.jpg`, `clubs/{c}/players/{p}/avatar.jpg`,
+  staff-only); legacy `players/{id}/avatar.jpg` is frozen read-only.
 - Rules depend on invite doc IDs and `linkedPlayerIds` — don't change invite
   writing without updating rules.
 
@@ -96,6 +97,12 @@ functions/src/index.ts # all Cloud Functions
 - Scheduled: `weeklyDigest` (Sun 18:00 America/Halifax), `rsvpReminders`
   (daily 17:00, matches inside 48h, once per match via `rsvpReminderSent`),
   `sweepStaleLiveMatches` (hourly).
+- `onUserDeleted` (auth trigger): full account cleanup — member docs (via the
+  user's teamRefs/clubRef), pending invites by email, then recursive-deletes
+  users/{uid}. The client deletes ONLY the auth user; never delete teamRefs
+  client-side first or the function can't find memberships.
+- Deploys run `npm run build` via the predeploy hook in firebase.json — the
+  packaged code is `lib/`, so never deploy without it.
 - Member docs are keyed by uid — recipient lookup is `d.id`, never `d.data().uid`.
 - Gotcha: `functions/package.json` must keep `@firebase/app` as a direct dep
   (firebase-admin 14 peer-dep quirk; cloud builds fail without it).
@@ -138,9 +145,7 @@ functions/src/index.ts # all Cloud Functions
 - Design consistency across all screens is a priority
 
 ## Known gaps / next work
-- Privacy policy draft in `docs/privacy-policy.md` needs legal review; basic
-  delete-account exists in Settings (auth + user doc only — memberships remain).
+- Privacy policy draft in `docs/privacy-policy.md` needs legal review.
 - Recurring trainings: `recurrenceId` written but no edit/delete-series flow.
 - `photoService` supports per-match photos (`matchId` param) — no UI passes it.
-- Player avatars storage path lacks team scoping (see storage.rules note).
 - Android untested; payments not started.

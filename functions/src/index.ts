@@ -788,3 +788,49 @@ export const sweepStaleLiveMatches = functions.pubsub
       console.log(`Auto-finalized stale live match ${doc.ref.path}`);
     }
   });
+
+// ─── 12. Account deletion cleanup ─────────────────────────────────────────────
+// Fires when a Firebase Auth account is deleted (Settings → Delete account).
+// The client only deletes the auth user; everything else happens here with
+// admin privileges so parents (who can't write member docs) get cleaned up too:
+//   • teams/{t}/members/{uid} + clubs/{c}/members/{uid} (discovered via the
+//     user's teamRefs/clubRef subcollections)
+//   • any still-pending invite docs for their email
+//   • users/{uid} and all its subcollections (teamRefs, clubRef, …)
+// Team records (matches, rosters, chat) stay with the team by design.
+export const onUserDeleted = functions.auth.user().onDelete(async (user) => {
+  const uid = user.uid;
+  const emailLower = (user.email || '').toLowerCase();
+  const userRef = db.collection('users').doc(uid);
+
+  // 1) Member docs, via the user's own refs
+  const [teamRefsSnap, clubRefSnap] = await Promise.all([
+    userRef.collection('teamRefs').get(),
+    userRef.collection('clubRef').get(),
+  ]);
+  const memberRefs = [
+    ...teamRefsSnap.docs.map((d) => db.collection('teams').doc(d.id).collection('members').doc(uid)),
+    ...clubRefSnap.docs
+      .map((d) => (d.data() as any)?.clubId)
+      .filter(Boolean)
+      .map((clubId: string) => db.collection('clubs').doc(clubId).collection('members').doc(uid)),
+  ];
+
+  // 2) Pending invites for this email (same query/index as acceptTeamInvitesForUser)
+  if (emailLower) {
+    const invitesSnap = await db
+      .collectionGroup('members')
+      .where('invitedEmailLower', '==', emailLower)
+      .where('status', '==', 'invited')
+      .get();
+    memberRefs.push(...invitesSnap.docs.map((d) => d.ref));
+  }
+
+  const batch = db.batch();
+  for (const ref of memberRefs) batch.delete(ref);
+  await batch.commit();
+
+  // 3) User doc + all subcollections
+  await db.recursiveDelete(userRef);
+  console.log(`Cleaned up account ${uid}: ${memberRefs.length} membership/invite docs removed`);
+});

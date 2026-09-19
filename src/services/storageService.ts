@@ -41,13 +41,31 @@ export function pickPlayerPhoto(): Promise<string | null> {
 
 /**
  * Upload a local image URI to Firebase Storage and return the download URL.
- * Path: players/{playerId}/avatar.jpg
+ * Path: teams/{teamId}/players/{playerId}/avatar.jpg — team-scoped so storage
+ * rules can verify the uploader is team staff. (The legacy players/{id} path
+ * is read-only; existing avatar URLs keep working.)
  */
 export async function uploadPlayerAvatar(
+  teamId: string,
   playerId: string,
   localUri: string
 ): Promise<string> {
-  const ref = storage().ref(`players/${playerId}/avatar.jpg`);
+  const ref = storage().ref(`teams/${teamId}/players/${playerId}/avatar.jpg`);
+  await ref.putFile(localUri);
+  const url: string = await ref.getDownloadURL();
+  return url;
+}
+
+/**
+ * Club-registry variant of uploadPlayerAvatar (PlayerEditScreen has a clubId,
+ * not a teamId). Path: clubs/{clubId}/players/{playerId}/avatar.jpg.
+ */
+export async function uploadClubPlayerAvatar(
+  clubId: string,
+  playerId: string,
+  localUri: string
+): Promise<string> {
+  const ref = storage().ref(`clubs/${clubId}/players/${playerId}/avatar.jpg`);
   await ref.putFile(localUri);
   const url: string = await ref.getDownloadURL();
   return url;

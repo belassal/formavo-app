@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sweepStaleLiveMatches = exports.rsvpReminders = exports.weeklyDigest = exports.onEventWriteRecompute = exports.onMatchCompletedAggregates = exports.onMatchEventCreated = exports.onTrainingAttendanceUpdated = exports.onMessageSent = exports.onTrainingCreated = exports.onRsvpUpdated = exports.onMatchCreated = exports.onAnnouncementCreated = void 0;
+exports.onUserDeleted = exports.sweepStaleLiveMatches = exports.rsvpReminders = exports.weeklyDigest = exports.onEventWriteRecompute = exports.onMatchCompletedAggregates = exports.onMatchEventCreated = exports.onTrainingAttendanceUpdated = exports.onMessageSent = exports.onTrainingCreated = exports.onRsvpUpdated = exports.onMatchCreated = exports.onAnnouncementCreated = void 0;
 const app_1 = require("firebase-admin/app");
 const firestore_1 = require("firebase-admin/firestore");
 const messaging_1 = require("firebase-admin/messaging");
@@ -373,6 +373,8 @@ async function buildMatchSummary(teamId, matchId, match) {
         opponent: match.opponent || 'Opponent',
         dateISO: match.dateISO || '',
         seasonId: (_e = match.seasonId) !== null && _e !== void 0 ? _e : null,
+        competitionType: match.competitionType || 'league',
+        competitionName: match.competitionName || '',
         scorers,
         playerLines: Object.values(lines),
         cleanSheet: awayScore === 0,
@@ -382,6 +384,7 @@ async function buildMatchSummary(teamId, matchId, match) {
     return summary;
 }
 async function recomputeSeasonAggregates(teamId, seasonId) {
+    var _a, _b;
     const seasonKey = seasonId || 'none';
     const matchesSnap = await db
         .collection('teams').doc(teamId).collection('matches')
@@ -396,6 +399,23 @@ async function recomputeSeasonAggregates(teamId, seasonId) {
         form: [],
     };
     const players = {};
+    // Records split by competition type (league/cup/friendly/tournament) and,
+    // for named cups/tournaments, per named competition (array — names are
+    // free text and unsafe as Firestore map keys).
+    const byCompetition = {};
+    const namedComps = {};
+    const tally = (bucket, s) => {
+        bucket.played++;
+        if (s.result === 'W')
+            bucket.wins++;
+        else if (s.result === 'D')
+            bucket.draws++;
+        else
+            bucket.losses++;
+        bucket.goalsFor += s.homeScore;
+        bucket.goalsAgainst += s.awayScore;
+    };
+    const freshTally = () => ({ played: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0 });
     const ordered = [...matches].sort((a, b) => String(a.summary.dateISO).localeCompare(String(b.summary.dateISO)));
     for (const m of ordered) {
         const s = m.summary;
@@ -411,6 +431,16 @@ async function recomputeSeasonAggregates(teamId, seasonId) {
         if (s.cleanSheet)
             team.cleanSheets++;
         team.form.push(s.result);
+        // Read the tag from the match doc (not the summary) so re-tagging an old
+        // completed match takes effect without a summary rebuild.
+        const compType = m.competitionType || s.competitionType || 'league';
+        const compName = String((_b = (_a = m.competitionName) !== null && _a !== void 0 ? _a : s.competitionName) !== null && _b !== void 0 ? _b : '').trim();
+        tally(byCompetition[compType] || (byCompetition[compType] = freshTally()), s);
+        if (compName && (compType === 'cup' || compType === 'tournament')) {
+            const key = `${compType}|${compName.toLowerCase()}`;
+            namedComps[key] = namedComps[key] || Object.assign({ name: compName, type: compType }, freshTally());
+            tally(namedComps[key], s);
+        }
         for (const l of s.playerLines || []) {
             const p = players[l.playerId] || (players[l.playerId] = {
                 playerId: l.playerId, playerName: l.playerName, seasonId: seasonKey,
@@ -434,7 +464,7 @@ async function recomputeSeasonAggregates(teamId, seasonId) {
         }
     }
     const batch = db.batch();
-    batch.set(db.collection('teams').doc(teamId).collection('aggregates').doc(seasonKey), Object.assign(Object.assign({}, team), { form: team.form.slice(-5), seasonId: seasonKey, updatedAt: firestore_1.FieldValue.serverTimestamp() }));
+    batch.set(db.collection('teams').doc(teamId).collection('aggregates').doc(seasonKey), Object.assign(Object.assign({}, team), { form: team.form.slice(-5), seasonId: seasonKey, byCompetition, competitions: Object.values(namedComps), updatedAt: firestore_1.FieldValue.serverTimestamp() }));
     for (const p of Object.values(players)) {
         batch.set(db.collection('teams').doc(teamId).collection('playerAggregates').doc(`${p.playerId}_${seasonKey}`), Object.assign(Object.assign({}, p), { updatedAt: firestore_1.FieldValue.serverTimestamp() }));
     }
@@ -452,7 +482,9 @@ exports.onMatchCompletedAggregates = functions.firestore
     const editedWhileCompleted = after.status === 'completed' &&
         ((before === null || before === void 0 ? void 0 : before.homeScore) !== after.homeScore ||
             (before === null || before === void 0 ? void 0 : before.awayScore) !== after.awayScore ||
-            (before === null || before === void 0 ? void 0 : before.isDeleted) !== after.isDeleted);
+            (before === null || before === void 0 ? void 0 : before.isDeleted) !== after.isDeleted ||
+            (before === null || before === void 0 ? void 0 : before.competitionType) !== after.competitionType ||
+            (before === null || before === void 0 ? void 0 : before.competitionName) !== after.competitionName);
     if (!becameCompleted && !editedWhileCompleted)
         return;
     const { teamId, matchId } = context.params;
@@ -605,5 +637,47 @@ exports.sweepStaleLiveMatches = functions.pubsub
         }, { merge: true });
         console.log(`Auto-finalized stale live match ${doc.ref.path}`);
     }
+});
+// ─── 12. Account deletion cleanup ─────────────────────────────────────────────
+// Fires when a Firebase Auth account is deleted (Settings → Delete account).
+// The client only deletes the auth user; everything else happens here with
+// admin privileges so parents (who can't write member docs) get cleaned up too:
+//   • teams/{t}/members/{uid} + clubs/{c}/members/{uid} (discovered via the
+//     user's teamRefs/clubRef subcollections)
+//   • any still-pending invite docs for their email
+//   • users/{uid} and all its subcollections (teamRefs, clubRef, …)
+// Team records (matches, rosters, chat) stay with the team by design.
+exports.onUserDeleted = functions.auth.user().onDelete(async (user) => {
+    const uid = user.uid;
+    const emailLower = (user.email || '').toLowerCase();
+    const userRef = db.collection('users').doc(uid);
+    // 1) Member docs, via the user's own refs
+    const [teamRefsSnap, clubRefSnap] = await Promise.all([
+        userRef.collection('teamRefs').get(),
+        userRef.collection('clubRef').get(),
+    ]);
+    const memberRefs = [
+        ...teamRefsSnap.docs.map((d) => db.collection('teams').doc(d.id).collection('members').doc(uid)),
+        ...clubRefSnap.docs
+            .map((d) => { var _a; return (_a = d.data()) === null || _a === void 0 ? void 0 : _a.clubId; })
+            .filter(Boolean)
+            .map((clubId) => db.collection('clubs').doc(clubId).collection('members').doc(uid)),
+    ];
+    // 2) Pending invites for this email (same query/index as acceptTeamInvitesForUser)
+    if (emailLower) {
+        const invitesSnap = await db
+            .collectionGroup('members')
+            .where('invitedEmailLower', '==', emailLower)
+            .where('status', '==', 'invited')
+            .get();
+        memberRefs.push(...invitesSnap.docs.map((d) => d.ref));
+    }
+    const batch = db.batch();
+    for (const ref of memberRefs)
+        batch.delete(ref);
+    await batch.commit();
+    // 3) User doc + all subcollections
+    await db.recursiveDelete(userRef);
+    console.log(`Cleaned up account ${uid}: ${memberRefs.length} membership/invite docs removed`);
 });
 //# sourceMappingURL=index.js.map

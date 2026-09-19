@@ -619,7 +619,7 @@ export default function TeamDetailScreen() {
       const uri = await pickPlayerPhoto();
       if (!uri || !editingMember) return;
       const playerId = editingMember.id;
-      const url = await uploadPlayerAvatar(playerId, uri);
+      const url = await uploadPlayerAvatar(teamId, playerId, uri);
       setEditAvatarUrl(url);
     } catch (e: any) {
       Alert.alert('Upload failed', e?.message ?? 'Unknown error');

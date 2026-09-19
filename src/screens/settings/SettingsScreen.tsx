@@ -85,7 +85,7 @@ export default function SettingsScreen() {
   const handleDeleteAccount = () => {
     Alert.alert(
       'Delete account',
-      'This permanently deletes your login and personal profile. Team records you created (matches, rosters) stay with the team. This cannot be undone.',
+      'This permanently deletes your login, profile, and team memberships. Team records (matches, results, rosters) stay with the team. This cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -97,17 +97,10 @@ export default function SettingsScreen() {
             try {
               const token = await messaging().getToken().catch(() => null);
               if (token) await removeFCMToken(user.uid, token).catch(() => {});
-              // Remove personal data the user owns
-              const userRef = db.collection('users').doc(user.uid);
-              const [teamRefs, clubRef] = await Promise.all([
-                userRef.collection('teamRefs').get(),
-                userRef.collection('clubRef').get(),
-              ]);
-              const batch = db.batch();
-              teamRefs.docs.forEach((d) => batch.delete(d.ref));
-              clubRef.docs.forEach((d) => batch.delete(d.ref));
-              batch.delete(userRef);
-              await batch.commit();
+              // Only delete the auth account here. The onUserDeleted Cloud
+              // Function does the Firestore cleanup (member docs, invites,
+              // users/{uid} + subcollections) — it discovers memberships via
+              // teamRefs, so nothing may be deleted client-side first.
               await user.delete();
             } catch (e: any) {
               if (e?.code === 'auth/requires-recent-login') {

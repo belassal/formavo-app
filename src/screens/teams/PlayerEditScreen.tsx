@@ -19,7 +19,7 @@ import {
   syncClubPlayerToMemberships,
   type ClubPlayer,
 } from '../../services/clubPlayerService';
-import { pickPlayerPhoto, uploadPlayerAvatar } from '../../services/storageService';
+import { pickPlayerPhoto, uploadClubPlayerAvatar } from '../../services/storageService';
 import Avatar from '../../components/Avatar';
 import DateTimePickerModal from '../../components/DateTimePickerModal';
 
@@ -140,7 +140,7 @@ export default function PlayerEditScreen() {
       const uri = await pickPlayerPhoto();
       if (!uri) return;
       setUploadingPhoto(true);
-      const url = await uploadPlayerAvatar(playerId, uri);
+      const url = await uploadClubPlayerAvatar(clubId, playerId, uri);
       setAvatarUrl(url);
       // Save avatar immediately
       await updateClubPlayer({ clubId, playerId, avatarUrl: url });
