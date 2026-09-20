@@ -345,6 +345,42 @@ export default function ClubSettingsScreen({ route }: Props) {
           </View>
         </View>
 
+        {/* Equity Threshold Card */}
+        <View style={cardStyle}>
+          <View style={cardHeaderStyle}>
+            <Text style={cardTitleStyle}>Playing-Time Flag</Text>
+            <Text style={{ fontSize: 13, color: '#9ca3af', marginTop: 3 }}>
+              Club Reports flags players whose season minutes fall under this share of their team's median.
+            </Text>
+          </View>
+          <View style={{ height: 1, backgroundColor: '#f3f4f6' }} />
+          <View style={{ flexDirection: 'row', gap: 8, padding: 14, flexWrap: 'wrap' }}>
+            {[50, 60, 65, 70, 75].map((pct) => {
+              const active = ((club as any)?.equityThresholdPct ?? 50) === pct;
+              return (
+                <TouchableOpacity
+                  key={pct}
+                  onPress={() =>
+                    updateClub({ clubId, equityThresholdPct: pct }).catch((e: any) =>
+                      Alert.alert('Error', e?.message ?? 'Could not save.'),
+                    )
+                  }
+                  style={{
+                    paddingVertical: 8,
+                    paddingHorizontal: 16,
+                    borderRadius: 20,
+                    backgroundColor: active ? '#111' : '#f3f4f6',
+                  }}
+                >
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: active ? '#fff' : '#374151' }}>
+                    {pct}%
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
         {/* Staff Positions Card */}
         <View style={cardStyle}>
           <View style={cardHeaderStyle}>

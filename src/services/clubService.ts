@@ -432,13 +432,15 @@ export async function updateClub(params: {
   logoUrl?: string;
   sponsorName?: string;
   sponsorLogoUrl?: string;
+  equityThresholdPct?: number; // Equity report flags players under this % of team median minutes (default 50)
 }): Promise<void> {
-  const { clubId, name, logoUrl, sponsorName, sponsorLogoUrl } = params;
+  const { clubId, name, logoUrl, sponsorName, sponsorLogoUrl, equityThresholdPct } = params;
   const update: Record<string, any> = { updatedAt: serverTimestamp() };
   if (name !== undefined) update.name = name;
   if (logoUrl !== undefined) update.logoUrl = logoUrl;
   if (sponsorName !== undefined) update.sponsorName = sponsorName;
   if (sponsorLogoUrl !== undefined) update.sponsorLogoUrl = sponsorLogoUrl;
+  if (equityThresholdPct !== undefined) update.equityThresholdPct = equityThresholdPct;
   await db.collection(COL.clubs).doc(clubId).update(update);
 }
 
