@@ -187,6 +187,12 @@ service cloud.firestore {
           allow read: if canReadTeam(teamId);
           allow write: if canWriteTeam(teamId);
         }
+
+        // Voice notes are candid staff observations — staff-only in BOTH
+        // directions; parents must never be able to read them.
+        match /coachNotes/{noteId} {
+          allow read, write: if canWriteTeam(teamId);
+        }
       }
 
       match /trainings/{trainingId} {

@@ -115,6 +115,12 @@ functions/src/index.ts # all Cloud Functions
   EventWizard (away goals need no roster scorer; optional free-text opponent
   scorer), slot-based lineup with drag layout, saved lineups, minutes tracker.
   `onPitch`/`bench` are slotKey-based, not role-based.
+- **Voice notes** (staff-only): 🎙 button on GameDayPitch header (non-draft)
+  records ≤2 min AAC via `react-native-audio-recorder-player` v4 (nitro pod);
+  minute-stamped docs in `teams/{t}/matches/{m}/coachNotes`, audio at the same
+  Storage path. Rules make BOTH read and write staff-only (candid coach
+  observations — parents must never see them; keep them out of MatchRecap).
+  Playback/delete in MatchDetail's Voice Notes section (`voiceNoteService`).
 - **MatchRecapScreen**: scoreline hero, goal timeline, multi-goal shot map
   (`MiniPitchDisplay markers` prop), cards, minutes (summary-first, client
   fallback), native share. Entry: Recap pill on completed MatchDetail.
@@ -158,6 +164,17 @@ functions/src/index.ts # all Cloud Functions
 - Flat-list-with-dividers layout preferred over grouped cards
 - Review and approve changes incrementally before moving to the next task
 - Design consistency across all screens is a priority
+
+## TestFlight release
+- `npm run testflight` — one command: bumps CURRENT_PROJECT_VERSION, archives
+  Release, uploads headlessly via ASC API key (one-time setup:
+  scripts/testflight.env.example). Interactive fallback: archive in Xcode →
+  Organizer → Distribute App.
+- Gotchas learned the hard way: never pipe xcodebuild through `tail`/`grep`
+  (masks the exit code); archives need ~10GB free disk; deleting ios/build
+  also deletes RN codegen output — re-run pod install after; "dSYM missing
+  for React/hermes framework" upload warnings are expected (prebuilt RN
+  frameworks) and harmless.
 
 ## Known gaps / next work
 - Privacy policy draft in `docs/privacy-policy.md` needs legal review.

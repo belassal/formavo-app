@@ -41,6 +41,14 @@ import {
   buildSubEvent,
 } from '../../services/matchService';
 import { saveLineup, listenLineups, deleteLineup, applyLineupToMatch } from '../../services/lineupService';
+import {
+  startVoiceRecording,
+  stopVoiceRecording,
+  cancelVoiceRecording,
+  saveVoiceNote,
+  MAX_VOICE_NOTE_SEC,
+} from '../../services/voiceNoteService';
+import { logEvent } from '../../services/telemetryService';
 import type { SavedLineup } from '../../models/lineup';
 import type { MatchEvent } from '../../models/matchEvent';
 import { calculateMatchMinutes } from '../../services/minutesService';
@@ -104,6 +112,65 @@ export default function GameDayPitchScreen() {
       Alert.alert('Undo failed', e?.message ?? 'Unknown error');
     }
   };
+
+  // ── Voice notes (staff-only, recorded from the header mic button) ────────
+  const [recSec, setRecSec] = useState<number | null>(null); // null = idle
+  const [savingNote, setSavingNote] = useState(false);
+  const recStartMinuteRef = React.useRef(0);
+  const finishingNoteRef = React.useRef(false);
+
+  const finishVoiceNote = async () => {
+    if (finishingNoteRef.current) return;
+    finishingNoteRef.current = true;
+    try {
+      const { localPath, durationSec } = await stopVoiceRecording();
+      setRecSec(null);
+      setSavingNote(true);
+      await saveVoiceNote({
+        teamId,
+        matchId,
+        minute: recStartMinuteRef.current,
+        localPath,
+        durationSec,
+      });
+      logEvent('voice_note_recorded', { duration_sec: durationSec });
+    } catch (e: any) {
+      setRecSec(null);
+      Alert.alert('Voice note failed', e?.message ?? 'Could not save the recording.');
+    } finally {
+      setSavingNote(false);
+      finishingNoteRef.current = false;
+    }
+  };
+
+  const onMicPress = async () => {
+    if (savingNote) return;
+    if (recSec != null) {
+      await finishVoiceNote();
+      return;
+    }
+    try {
+      recStartMinuteRef.current = currentMinute();
+      await startVoiceRecording((sec) => {
+        setRecSec(sec);
+        if (sec >= MAX_VOICE_NOTE_SEC) void finishVoiceNote();
+      });
+      setRecSec(0);
+    } catch (e: any) {
+      setRecSec(null);
+      Alert.alert(
+        'Recording unavailable',
+        'Could not start recording. Check that Formavo has microphone access in Settings.'
+      );
+    }
+  };
+
+  // Discard an in-flight recording if the coach leaves the screen.
+  useEffect(() => {
+    return () => {
+      void cancelVoiceRecording();
+    };
+  }, []);
 
   // ── Ordered position preferences per player (from team memberships) ──────
   const [positionsById, setPositionsById] = useState<Record<string, string[]>>({});
@@ -917,6 +984,23 @@ const onEnd = async () => {
               </TouchableOpacity>
             )}
 
+            {/* Voice note (record/stop) */}
+            {derivedState.status !== 'draft' && (
+              <TouchableOpacity
+                onPress={onMicPress}
+                disabled={savingNote}
+                style={[styles.modeBtn, recSec != null ? styles.recBtnOn : null]}
+              >
+                <Text style={[styles.modeBtnText, recSec != null ? { color: 'white' } : null]}>
+                  {savingNote
+                    ? '…'
+                    : recSec != null
+                    ? `● ${Math.floor(recSec / 60)}:${String(recSec % 60).padStart(2, '0')}`
+                    : '🎙'}
+                </Text>
+              </TouchableOpacity>
+            )}
+
             {/* Edit layout toggle */}
             <TouchableOpacity
               onPress={() => setLayoutMode((v) => !v)}
@@ -1561,6 +1645,10 @@ const styles = StyleSheet.create({
   modeBtnOn: {
     backgroundColor: 'rgba(255,255,255,0.18)',
     borderColor: 'rgba(255,255,255,0.6)',
+  },
+  recBtnOn: {
+    backgroundColor: '#ef4444',
+    borderColor: '#ef4444',
   },
   modeBtnText: {
     color: '#cbd5e1',

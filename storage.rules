@@ -7,6 +7,7 @@ rules_version = '2';
 //   clubs/{clubId}/players/{playerId}/avatar.jpg   — player photo (club staff)
 //   players/{playerId}/avatar.jpg                  — LEGACY player photos, read-only
 //   teams/{teamId}/photos/{file}                   — team photo gallery (coach upload/delete)
+//   teams/{teamId}/matches/{matchId}/coachNotes/{file} — voice note audio (staff-only, incl. read)
 //   clubs/{clubId}/logo.jpg, sponsor.jpg           — club logo/sponsor (managers)
 
 service firebase.storage {
@@ -35,6 +36,16 @@ service firebase.storage {
     function isClubStaff(clubId) {
       return isSignedIn()
         && firestore.exists(/databases/(default)/documents/clubs/$(clubId)/members/$(request.auth.uid));
+    }
+
+    function isClubStaffOfTeam(teamId) {
+      return isClubStaff(firestore.get(/databases/(default)/documents/teams/$(teamId)).data.clubId);
+    }
+
+    function isAudio() {
+      return request.resource != null
+        && request.resource.size < 20 * 1024 * 1024
+        && request.resource.contentType.matches('audio/.*');
     }
 
     match /users/{uid}/{file} {
@@ -70,6 +81,15 @@ service firebase.storage {
       allow read: if isSignedIn();
       allow create, update: if isTeamStaff(teamId) && isImage();
       allow delete: if isTeamStaff(teamId);
+    }
+
+    // Voice note audio — staff-only INCLUDING read (candid coach observations;
+    // parents must not be able to fetch these even with the URL path).
+    // Mirrors Firestore's canWriteTeam: team staff OR any staff of the team's club.
+    match /teams/{teamId}/matches/{matchId}/coachNotes/{file} {
+      allow read: if isTeamStaff(teamId) || isClubStaffOfTeam(teamId);
+      allow create, update: if (isTeamStaff(teamId) || isClubStaffOfTeam(teamId)) && isAudio();
+      allow delete: if isTeamStaff(teamId) || isClubStaffOfTeam(teamId);
     }
 
     match /clubs/{clubId}/{file} {

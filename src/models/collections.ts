@@ -18,5 +18,6 @@ export const COL = {
   messages: 'messages',   // teams/{teamId}/messages/{messageId}
   photos: 'photos',       // teams/{teamId}/photos/{photoId}
   ratings: 'ratings',     // teams/{teamId}/matches/{matchId}/ratings/{playerId}
+  coachNotes: 'coachNotes', // teams/{teamId}/matches/{matchId}/coachNotes/{noteId} — staff-only voice notes
 } as const;
 

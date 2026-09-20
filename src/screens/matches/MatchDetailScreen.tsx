@@ -56,6 +56,13 @@ import { openMaps } from '../../utils/openMaps';
 import LocationMapPreview from '../../components/LocationMapPreview';
 import { calculateMatchMinutes } from '../../services/minutesService';
 import { listenLocations, type SavedLocation } from '../../services/locationService';
+import {
+  listenVoiceNotes,
+  deleteVoiceNote,
+  playVoiceNote,
+  stopVoiceNotePlayback,
+} from '../../services/voiceNoteService';
+import type { VoiceNote } from '../../models/voiceNote';
 
 
 
@@ -244,6 +251,62 @@ export default function MatchDetailScreen() {
       unsubTeam();
     };
   }, [teamId, matchId]);
+
+  // ── Voice notes (staff-only; parents have no rules access to coachNotes) ──
+  const [voiceNotes, setVoiceNotes] = useState<VoiceNote[]>([]);
+  const [playingNote, setPlayingNote] = useState<{ id: string; pos: number; dur: number } | null>(null);
+
+  useEffect(() => {
+    if (isParent) return;
+    const unsub = listenVoiceNotes(teamId, matchId, setVoiceNotes);
+    return () => {
+      unsub();
+      void stopVoiceNotePlayback();
+    };
+  }, [teamId, matchId, isParent]);
+
+  const togglePlayNote = async (n: VoiceNote) => {
+    if (playingNote?.id === n.id) {
+      await stopVoiceNotePlayback();
+      setPlayingNote(null);
+      return;
+    }
+    try {
+      setPlayingNote({ id: n.id, pos: 0, dur: n.durationSec || 0 });
+      await playVoiceNote(
+        n.audioUrl,
+        (pos, dur) =>
+          setPlayingNote((cur) =>
+            cur && cur.id === n.id ? { id: n.id, pos, dur: dur || n.durationSec || 0 } : cur
+          ),
+        () => setPlayingNote((cur) => (cur && cur.id === n.id ? null : cur))
+      );
+    } catch (e: any) {
+      setPlayingNote(null);
+      Alert.alert('Playback failed', e?.message ?? 'Could not play this note.');
+    }
+  };
+
+  const confirmDeleteNote = (n: VoiceNote) => {
+    Alert.alert('Delete voice note?', 'The recording will be removed for all staff.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          if (playingNote?.id === n.id) {
+            await stopVoiceNotePlayback();
+            setPlayingNote(null);
+          }
+          try {
+            await deleteVoiceNote({ teamId, matchId, note: n });
+          } catch (e: any) {
+            Alert.alert('Delete failed', e?.message ?? 'Unknown error');
+          }
+        },
+      },
+    ]);
+  };
 
   // --- goal side cleanup ---
   useEffect(() => {
@@ -1058,6 +1121,64 @@ const addSelectedToRoster = async () => {
                 })
               ))}
             </View>
+
+            {/* ===== Voice notes (staff only) ===== */}
+            {!isParent && voiceNotes.length > 0 && (
+              <View style={SC.container}>
+                <View style={SC.header}>
+                  <View style={SC.titleRow}>
+                    <Text style={SC.title}>Voice Notes</Text>
+                    <Text style={SC.count}>{voiceNotes.length} · staff only</Text>
+                  </View>
+                </View>
+                {voiceNotes.map((n) => {
+                  const isPlaying = playingNote?.id === n.id;
+                  const fmt = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+                  return (
+                    <View key={n.id}>
+                      <View style={{ height: 1, backgroundColor: '#f3f4f6' }} />
+                      <View style={[SC.row, { gap: 12 }]}>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#9ca3af', width: 28 }}>
+                          {n.minute}'
+                        </Text>
+                        <TouchableOpacity
+                          onPress={() => togglePlayNote(n)}
+                          style={{
+                            width: 34,
+                            height: 34,
+                            borderRadius: 17,
+                            backgroundColor: isPlaying ? '#111' : '#f3f4f6',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <Text style={{ fontSize: 13, color: isPlaying ? '#fff' : '#111' }}>
+                            {isPlaying ? '■' : '▶'}
+                          </Text>
+                        </TouchableOpacity>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 14, fontWeight: '600', color: '#111' }}>
+                            🎙 {isPlaying
+                              ? `${fmt(playingNote.pos)} / ${fmt(playingNote.dur || n.durationSec || 0)}`
+                              : fmt(n.durationSec || 0)}
+                          </Text>
+                          {n.createdByName ? (
+                            <Text style={{ fontSize: 12, color: '#9ca3af', marginTop: 1 }}>{n.createdByName}</Text>
+                          ) : null}
+                        </View>
+                        <TouchableOpacity
+                          onPress={() => confirmDeleteNote(n)}
+                          style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}
+                          hitSlop={ICON_HITSLOP}
+                        >
+                          <Text style={{ fontSize: 18, fontWeight: '700', color: '#ef4444', lineHeight: 22 }}>×</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
 
             {/* ===== Parent RSVP ===== */}
             {isParent && linkedPlayers.length > 0 && status !== 'completed' && (
