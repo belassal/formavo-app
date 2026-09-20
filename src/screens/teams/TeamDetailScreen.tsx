@@ -55,7 +55,7 @@ import { db } from '../../services/firebase';
 import { migrateTeamPlayersToClub } from '../../services/clubPlayerService';
 import { listenTrainings, setTrainingAttendance, type Training } from '../../services/trainingService';
 import SeasonPickerModal from './components/SeasonPickerModal';
-import { STAFF_POSITIONS } from '../../models/staffPosition';
+import { listenClubPositions, addClubPosition, DEFAULT_POSITIONS } from '../../services/staffPositionService';
 import NewSeasonModal from './components/NewSeasonModal';
 
 type TeamDetailRoute = RouteProp<TeamsStackParamList, 'TeamDetail'>;
@@ -332,6 +332,11 @@ export default function TeamDetailScreen() {
   const [showInvite, setShowInvite] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [invitePosition, setInvitePosition] = useState<string>('Assistant Coach');
+  const [clubPositions, setClubPositions] = useState<string[]>(DEFAULT_POSITIONS);
+  useEffect(() => {
+    if (!clubId) return;
+    return listenClubPositions(clubId, setClubPositions);
+  }, [clubId]);
   const [savingInvite, setSavingInvite] = useState(false);
 
   // Roster
@@ -1527,7 +1532,7 @@ export default function TeamDetailScreen() {
             />
 
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              {STAFF_POSITIONS.map((p) => {
+              {clubPositions.map((p) => {
                 const active = invitePosition === p;
                 return (
                   <TouchableOpacity
@@ -1548,10 +1553,12 @@ export default function TeamDetailScreen() {
                     'e.g. Fitness Coach, Analyst…',
                     (text) => {
                       const t = (text || '').trim();
-                      if (t) setInvitePosition(t);
+                      if (!t) return;
+                      setInvitePosition(t);
+                      if (clubId) addClubPosition(clubId, t).catch(console.warn);
                     },
                     'plain-text',
-                    STAFF_POSITIONS.includes(invitePosition as any) ? '' : invitePosition,
+                    clubPositions.includes(invitePosition) ? '' : invitePosition,
                   )
                 }
                 style={{
@@ -1559,11 +1566,11 @@ export default function TeamDetailScreen() {
                   paddingHorizontal: 14,
                   borderRadius: 10,
                   alignItems: 'center',
-                  backgroundColor: STAFF_POSITIONS.includes(invitePosition as any) ? '#f3f4f6' : '#111',
+                  backgroundColor: clubPositions.includes(invitePosition) ? '#f3f4f6' : '#111',
                 }}
               >
-                <Text style={{ fontWeight: '600', fontSize: 14, color: STAFF_POSITIONS.includes(invitePosition as any) ? '#374151' : '#fff' }}>
-                  {STAFF_POSITIONS.includes(invitePosition as any) ? 'Other…' : `${invitePosition} ✎`}
+                <Text style={{ fontWeight: '600', fontSize: 14, color: clubPositions.includes(invitePosition) ? '#374151' : '#fff' }}>
+                  {clubPositions.includes(invitePosition) ? 'Other…' : `${invitePosition} ✎`}
                 </Text>
               </TouchableOpacity>
             </View>

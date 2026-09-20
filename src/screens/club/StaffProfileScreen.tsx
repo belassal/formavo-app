@@ -18,7 +18,8 @@ import {
   updateMemberTeamAssignments,
 } from '../../services/clubService';
 import type { ClubMember, ClubRole } from '../../services/clubService';
-import { STAFF_POSITIONS, defaultPositionForClubRole } from '../../models/staffPosition';
+import { defaultPositionForClubRole } from '../../models/staffPosition';
+import { listenClubPositions, addClubPosition, DEFAULT_POSITIONS } from '../../services/staffPositionService';
 import Avatar from '../../components/Avatar';
 import { listenMyTeams } from '../../services/teamService';
 import { getUserProfile, type UserProfile } from '../../services/userService';
@@ -87,6 +88,10 @@ export default function StaffProfileScreen({ route }: Props) {
 
   // All teams the viewer manages (for team assignment)
   const [allTeams, setAllTeams] = useState<Array<{ id: string; name: string }>>([]);
+
+  // Club position catalog (managed in Club Settings)
+  const [clubPositions, setClubPositions] = useState<string[]>(DEFAULT_POSITIONS);
+  useEffect(() => listenClubPositions(clubId, setClubPositions), [clubId]);
 
   useEffect(() => {
     const unsub = listenClubMembers(clubId, (members) => {
@@ -168,7 +173,10 @@ export default function StaffProfileScreen({ route }: Props) {
       'e.g. Fitness Coach, Analyst…',
       (text) => {
         const title = (text || '').trim();
-        if (title) handleSetPosition(teamId, title);
+        if (!title) return;
+        handleSetPosition(teamId, title);
+        // Save to the club catalog so it's pickable everywhere from now on.
+        addClubPosition(clubId, title).catch(console.warn);
       },
       'plain-text',
       currentAssignments()[teamId],
@@ -318,7 +326,7 @@ export default function StaffProfileScreen({ route }: Props) {
             allTeams.map((team) => {
               const assigned = team.id in assignments;
               const position = assignments[team.id];
-              const isPreset = STAFF_POSITIONS.includes(position as any);
+              const isPreset = clubPositions.includes(position);
               return (
                 <View key={team.id}>
                   <View style={{ height: 1, backgroundColor: '#e5e7eb' }} />
@@ -364,7 +372,7 @@ export default function StaffProfileScreen({ route }: Props) {
                   {/* Position picker for assigned teams (owner only) */}
                   {assigned && isOwner && (
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingLeft: 50, paddingRight: 16, paddingBottom: 12 }}>
-                      {STAFF_POSITIONS.map((p) => {
+                      {clubPositions.map((p) => {
                         const active = position === p;
                         return (
                           <TouchableOpacity

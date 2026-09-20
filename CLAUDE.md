@@ -53,6 +53,13 @@ functions/src/index.ts # all Cloud Functions
   (Trigger Email extension).
 - Every coach implicitly owns a club (`getOrCreateClubForUser`); the club UI on
   TeamsScreen appears only with >1 team or >1 staff.
+- **Position catalog**: `clubs/{c}/config/staffPositions {positions: []}` —
+  the controlled vocabulary all position pickers read
+  (`staffPositionService`; missing doc = defaults). Managed in ClubSettings
+  (add/rename/remove; rename rewrites every member's teamPositions and the
+  sync function propagates; remove blocked while in use). Custom titles
+  entered via "Other…" auto-join the catalog. ClubReports has a Staff tab
+  counting members per position.
 - **Per-team staff positions**: club member docs carry
   `teamPositions: {teamId: title}` (presets in `models/staffPosition.ts` +
   free text; `teamIds` kept in sync as the key list). The

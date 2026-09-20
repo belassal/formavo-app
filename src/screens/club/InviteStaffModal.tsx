@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -12,7 +12,8 @@ import {
 } from 'react-native';
 import { inviteStaffMember } from '../../services/clubService';
 import type { ClubRole } from '../../services/clubService';
-import { STAFF_POSITIONS, defaultPositionForClubRole } from '../../models/staffPosition';
+import { defaultPositionForClubRole } from '../../models/staffPosition';
+import { listenClubPositions, DEFAULT_POSITIONS } from '../../services/staffPositionService';
 
 type Props = {
   visible: boolean;
@@ -42,6 +43,9 @@ export default function InviteStaffModal({ visible, onClose, clubId, teams, invi
   // Per-team position title, keyed by teamId (defaults from the club role).
   const [teamPositions, setTeamPositions] = useState<Record<string, string>>({});
   const [sending, setSending] = useState(false);
+
+  const [clubPositions, setClubPositions] = useState<string[]>(DEFAULT_POSITIONS);
+  useEffect(() => listenClubPositions(clubId, setClubPositions), [clubId]);
 
   const toggleTeam = (teamId: string) => {
     setSelectedTeamIds((prev) => {
@@ -238,7 +242,7 @@ export default function InviteStaffModal({ visible, onClose, clubId, teams, invi
                         {/* Position on this team */}
                         {checked && (
                           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingLeft: 48, paddingRight: 14, paddingBottom: 10 }}>
-                            {STAFF_POSITIONS.map((p) => {
+                            {clubPositions.map((p) => {
                               const active = teamPositions[team.id] === p;
                               return (
                                 <TouchableOpacity

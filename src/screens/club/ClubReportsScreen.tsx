@@ -16,6 +16,8 @@ import {
 import { useRoute, type RouteProp } from '@react-navigation/native';
 import { db } from '../../services/firebase';
 import { COL } from '../../models/collections';
+import { listenClubMembers, type ClubMember } from '../../services/clubService';
+import { positionUsageCounts } from '../../services/staffPositionService';
 
 type Params = { ClubReports: { clubId: string; clubName?: string } };
 
@@ -107,7 +109,7 @@ async function fetchReports(clubId: string): Promise<TeamReport[]> {
   );
 }
 
-const TABS = ['Records', 'Equity', 'Positions', 'Adoption'] as const;
+const TABS = ['Records', 'Equity', 'Positions', 'Adoption', 'Staff'] as const;
 
 const COMP_ORDER = ['league', 'cup', 'tournament', 'friendly'];
 const COMP_LABELS: Record<string, string> = {
@@ -139,6 +141,8 @@ export default function ClubReportsScreen() {
 
   const [tab, setTab] = useState<(typeof TABS)[number]>('Records');
   const [reports, setReports] = useState<TeamReport[] | null>(null);
+  const [staffMembers, setStaffMembers] = useState<ClubMember[]>([]);
+  useEffect(() => listenClubMembers(clubId, setStaffMembers), [clubId]);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
@@ -155,6 +159,40 @@ export default function ClubReportsScreen() {
   useEffect(() => { load(); }, [load]);
 
   const body = useMemo(() => {
+    if (tab === 'Staff') {
+      const active = staffMembers.filter((m) => m.status === 'active');
+      const pending = staffMembers.length - active.length;
+      const counts = positionUsageCounts(staffMembers);
+      const rows = Object.entries(counts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+      return (
+        <View style={s.card}>
+          <Text style={s.cardTitle}>Staff</Text>
+          <View style={{ flexDirection: 'row', gap: 18, marginTop: 10, marginBottom: rows.length ? 8 : 0 }}>
+            <View>
+              <Text style={s.bigStat}>{active.length}</Text>
+              <Text style={s.statLabel}>active staff</Text>
+            </View>
+            <View>
+              <Text style={s.bigStat}>{pending}</Text>
+              <Text style={s.statLabel}>pending invites</Text>
+            </View>
+          </View>
+          {rows.length === 0 ? (
+            <Text style={{ color: '#9ca3af', fontSize: 13, marginTop: 8 }}>
+              No team assignments yet — positions appear here once staff are assigned to teams.
+            </Text>
+          ) : (
+            rows.map(([title, n]) => (
+              <View key={title} style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 }}>
+                <Text style={{ fontSize: 13, fontWeight: '500', color: '#6b7280' }}>{title}</Text>
+                <Text style={{ fontSize: 13, fontWeight: '800', color: '#111', fontVariant: ['tabular-nums'] }}>{n}</Text>
+              </View>
+            ))
+          )}
+        </View>
+      );
+    }
+
     if (!reports) return null;
     if (reports.length === 0) {
       return <Text style={{ color: '#9ca3af', fontSize: 14, marginTop: 24, textAlign: 'center' }}>No team data yet.</Text>;
@@ -312,7 +350,7 @@ export default function ClubReportsScreen() {
         </View>
       );
     });
-  }, [reports, tab]);
+  }, [reports, tab, staffMembers]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#f2f2f7' }}>
