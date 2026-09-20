@@ -36,10 +36,12 @@ if [ "$AVAIL_GB" -lt 10 ]; then
   exit 1
 fi
 
-# Re-run pod install when the Podfile changed (also regenerates RN codegen
-# under ios/build/generated, which archives depend on).
-if ! diff -q ios/Podfile.lock ios/Pods/Manifest.lock >/dev/null 2>&1; then
-  echo "› Podfile changed — running pod install…"
+# Re-run pod install when the Podfile changed, or when RN codegen output is
+# missing (pod install writes it to ios/build/generated — deleting ios/build
+# to free disk space silently removes it and archives then fail).
+if ! diff -q ios/Podfile.lock ios/Pods/Manifest.lock >/dev/null 2>&1 \
+   || [ ! -d ios/build/generated ]; then
+  echo "› Podfile changed or codegen missing — running pod install…"
   (cd ios && LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 pod install)
 fi
 
