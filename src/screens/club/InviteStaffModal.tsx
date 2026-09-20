@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { inviteStaffMember } from '../../services/clubService';
 import type { ClubRole } from '../../services/clubService';
+import { STAFF_POSITIONS, defaultPositionForClubRole } from '../../models/staffPosition';
 
 type Props = {
   visible: boolean;
@@ -38,12 +39,21 @@ export default function InviteStaffModal({ visible, onClose, clubId, teams, invi
   const [email, setEmail] = useState('');
   const [selectedRole, setSelectedRole] = useState<ClubRole>('asst_coach');
   const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
+  // Per-team position title, keyed by teamId (defaults from the club role).
+  const [teamPositions, setTeamPositions] = useState<Record<string, string>>({});
   const [sending, setSending] = useState(false);
 
   const toggleTeam = (teamId: string) => {
-    setSelectedTeamIds((prev) =>
-      prev.includes(teamId) ? prev.filter((id) => id !== teamId) : [...prev, teamId],
-    );
+    setSelectedTeamIds((prev) => {
+      const selected = prev.includes(teamId);
+      setTeamPositions((pos) => {
+        const next = { ...pos };
+        if (selected) delete next[teamId];
+        else next[teamId] = defaultPositionForClubRole(selectedRole);
+        return next;
+      });
+      return selected ? prev.filter((id) => id !== teamId) : [...prev, teamId];
+    });
   };
 
   const handleSend = async () => {
@@ -59,12 +69,14 @@ export default function InviteStaffModal({ visible, onClose, clubId, teams, invi
         email: trimmedEmail,
         role: selectedRole,
         teamIds: selectedTeamIds,
+        teamPositions,
         invitedByName,
       });
       // Reset and close
       setEmail('');
       setSelectedRole('asst_coach');
       setSelectedTeamIds([]);
+      setTeamPositions({});
       onClose();
     } catch (e: any) {
       Alert.alert('Error', e?.message ?? 'Could not send invite.');
@@ -77,6 +89,7 @@ export default function InviteStaffModal({ visible, onClose, clubId, teams, invi
     setEmail('');
     setSelectedRole('asst_coach');
     setSelectedTeamIds([]);
+    setTeamPositions({});
     onClose();
   };
 
@@ -221,6 +234,31 @@ export default function InviteStaffModal({ visible, onClose, clubId, teams, invi
                             {team.name}
                           </Text>
                         </TouchableOpacity>
+
+                        {/* Position on this team */}
+                        {checked && (
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingLeft: 48, paddingRight: 14, paddingBottom: 10 }}>
+                            {STAFF_POSITIONS.map((p) => {
+                              const active = teamPositions[team.id] === p;
+                              return (
+                                <TouchableOpacity
+                                  key={p}
+                                  onPress={() => setTeamPositions((pos) => ({ ...pos, [team.id]: p }))}
+                                  style={{
+                                    paddingHorizontal: 10,
+                                    paddingVertical: 5,
+                                    borderRadius: 20,
+                                    backgroundColor: active ? '#111' : '#f3f4f6',
+                                  }}
+                                >
+                                  <Text style={{ fontSize: 12, fontWeight: '600', color: active ? '#fff' : '#374151' }}>
+                                    {p}
+                                  </Text>
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </View>
+                        )}
                       </View>
                     );
                   })}

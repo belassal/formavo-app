@@ -1409,7 +1409,7 @@ export default function TeamDetailScreen() {
                           {isInvite ? m.invitedEmail || 'Invited' : memberLabel(m)}
                         </Text>
                         <Text style={{ marginTop: 2, fontSize: 13, color: '#9ca3af' }}>
-                          {m.role || 'assistant'}{isInvite ? ' · Pending' : ' · Active'}
+                          {(m as any).title || m.role || 'assistant'}{isInvite ? ' · Pending' : ' · Active'}
                         </Text>
                       </View>
                       {isInvite && (

@@ -15,9 +15,10 @@ import {
   listenClubMembers,
   removeMember,
   updateMemberRole,
-  updateMemberTeams,
+  updateMemberTeamAssignments,
 } from '../../services/clubService';
 import type { ClubMember, ClubRole } from '../../services/clubService';
+import { STAFF_POSITIONS, defaultPositionForClubRole } from '../../models/staffPosition';
 import Avatar from '../../components/Avatar';
 import { listenMyTeams } from '../../services/teamService';
 import { getUserProfile, type UserProfile } from '../../services/userService';
@@ -125,20 +126,53 @@ export default function StaffProfileScreen({ route }: Props) {
     }
   };
 
-  const handleToggleTeam = async (teamId: string) => {
-    if (!member) return;
-    const current = member.teamIds ?? [];
-    const next = current.includes(teamId)
-      ? current.filter((id) => id !== teamId)
-      : [...current, teamId];
+  // Current {teamId: position title} map, backfilling a default title for
+  // legacy members that predate per-team positions (teamIds only).
+  const currentAssignments = (): Record<string, string> => {
+    if (!member) return {};
+    const out: Record<string, string> = { ...(member.teamPositions ?? {}) };
+    for (const id of member.teamIds ?? []) {
+      if (!out[id]) out[id] = defaultPositionForClubRole(member.role);
+    }
+    return out;
+  };
+
+  const applyAssignments = async (next: Record<string, string>) => {
     try {
       setSaving(true);
-      await updateMemberTeams({ clubId, userId: memberId, teamIds: next });
+      await updateMemberTeamAssignments({ clubId, userId: memberId, teamPositions: next });
     } catch (e: any) {
       Alert.alert('Error', e?.message ?? 'Could not update team assignment.');
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleToggleTeam = (teamId: string) => {
+    if (!member) return;
+    const next = currentAssignments();
+    if (teamId in next) delete next[teamId];
+    else next[teamId] = defaultPositionForClubRole(member.role);
+    void applyAssignments(next);
+  };
+
+  const handleSetPosition = (teamId: string, title: string) => {
+    const next = currentAssignments();
+    next[teamId] = title;
+    void applyAssignments(next);
+  };
+
+  const handleCustomPosition = (teamId: string) => {
+    Alert.prompt(
+      'Custom position',
+      'e.g. Fitness Coach, Analyst…',
+      (text) => {
+        const title = (text || '').trim();
+        if (title) handleSetPosition(teamId, title);
+      },
+      'plain-text',
+      currentAssignments()[teamId],
+    );
   };
 
   const handleRemove = () => {
@@ -179,7 +213,7 @@ export default function StaffProfileScreen({ route }: Props) {
     );
   }
 
-  const assignedTeamIds = member.teamIds ?? [];
+  const assignments = currentAssignments();
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#f2f2f7' }}>
@@ -282,7 +316,9 @@ export default function StaffProfileScreen({ route }: Props) {
             </>
           ) : (
             allTeams.map((team) => {
-              const assigned = assignedTeamIds.includes(team.id);
+              const assigned = team.id in assignments;
+              const position = assignments[team.id];
+              const isPreset = STAFF_POSITIONS.includes(position as any);
               return (
                 <View key={team.id}>
                   <View style={{ height: 1, backgroundColor: '#e5e7eb' }} />
@@ -315,10 +351,55 @@ export default function StaffProfileScreen({ route }: Props) {
                         <Text style={{ color: '#fff', fontSize: 13, fontWeight: '800', lineHeight: 16 }}>✓</Text>
                       )}
                     </View>
-                    <Text style={{ flex: 1, fontSize: 15, fontWeight: '500', color: '#111' }}>
-                      {team.name}
-                    </Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 15, fontWeight: '500', color: '#111' }}>
+                        {team.name}
+                      </Text>
+                      {assigned && !isOwner && (
+                        <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 1 }}>{position}</Text>
+                      )}
+                    </View>
                   </TouchableOpacity>
+
+                  {/* Position picker for assigned teams (owner only) */}
+                  {assigned && isOwner && (
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingLeft: 50, paddingRight: 16, paddingBottom: 12 }}>
+                      {STAFF_POSITIONS.map((p) => {
+                        const active = position === p;
+                        return (
+                          <TouchableOpacity
+                            key={p}
+                            onPress={() => handleSetPosition(team.id, p)}
+                            disabled={saving}
+                            style={{
+                              paddingHorizontal: 10,
+                              paddingVertical: 5,
+                              borderRadius: 20,
+                              backgroundColor: active ? '#111' : '#f3f4f6',
+                            }}
+                          >
+                            <Text style={{ fontSize: 12, fontWeight: '600', color: active ? '#fff' : '#374151' }}>
+                              {p}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                      <TouchableOpacity
+                        onPress={() => handleCustomPosition(team.id)}
+                        disabled={saving}
+                        style={{
+                          paddingHorizontal: 10,
+                          paddingVertical: 5,
+                          borderRadius: 20,
+                          backgroundColor: !isPreset ? '#111' : '#f3f4f6',
+                        }}
+                      >
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: !isPreset ? '#fff' : '#374151' }}>
+                          {!isPreset ? `${position} ✎` : 'Other…'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
                 </View>
               );
             })

@@ -53,6 +53,15 @@ functions/src/index.ts # all Cloud Functions
   (Trigger Email extension).
 - Every coach implicitly owns a club (`getOrCreateClubForUser`); the club UI on
   TeamsScreen appears only with >1 team or >1 staff.
+- **Per-team staff positions**: club member docs carry
+  `teamPositions: {teamId: title}` (presets in `models/staffPosition.ts` +
+  free text; `teamIds` kept in sync as the key list). The
+  `syncClubMemberTeams` function mirrors assignments onto
+  `teams/{t}/members/{uid}` (`title` + role: Head Coach→coach, else
+  assistant) and `users/{uid}/teamRefs` — clients must NOT write another
+  user's team member docs/teamRefs (rules forbid it); they edit the club
+  member doc and let the function reconcile. It also revokes team access on
+  club removal. Parents' member docs are never touched by the sync.
 
 ## Security (deployed)
 - `firestore.rules`: team data readable by team members + members of the team's
