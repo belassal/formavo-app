@@ -16,14 +16,13 @@ import {
   removeMember,
   updateMemberRole,
   updateMemberTeamAssignments,
+  listenClubTeams,
 } from '../../services/clubService';
 import type { ClubMember, ClubRole } from '../../services/clubService';
 import { defaultPositionForClubRole } from '../../models/staffPosition';
 import { listenClubPositions, addClubPosition, DEFAULT_POSITIONS } from '../../services/staffPositionService';
 import Avatar from '../../components/Avatar';
-import { listenMyTeams } from '../../services/teamService';
 import { getUserProfile, type UserProfile } from '../../services/userService';
-import auth from '@react-native-firebase/auth';
 
 type Props = NativeStackScreenProps<TeamsStackParamList, 'StaffProfile'>;
 
@@ -78,7 +77,6 @@ export default function StaffProfileScreen({ route }: Props) {
   const { clubId, memberId, memberName, viewerRole } = route.params;
   const navigation = useNavigation();
 
-  const uid = auth().currentUser?.uid ?? null;
   const isOwner = viewerRole === 'owner';
 
   const [member, setMember] = useState<ClubMember | null>(null);
@@ -86,8 +84,10 @@ export default function StaffProfileScreen({ route }: Props) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  // All teams the viewer manages (for team assignment)
+  // The club's teams (assignments are club-scoped, independent of what the
+  // viewer personally coaches)
   const [allTeams, setAllTeams] = useState<Array<{ id: string; name: string }>>([]);
+  useEffect(() => listenClubTeams(clubId, setAllTeams), [clubId]);
 
   // Club position catalog (managed in Club Settings)
   const [clubPositions, setClubPositions] = useState<string[]>(DEFAULT_POSITIONS);
@@ -106,18 +106,6 @@ export default function StaffProfileScreen({ route }: Props) {
   useEffect(() => {
     getUserProfile(memberId).then(setExtProfile).catch(console.warn);
   }, [memberId]);
-
-  useEffect(() => {
-    if (!uid) return;
-    const unsub = listenMyTeams(uid, (rows: any[]) => {
-      setAllTeams(
-        rows
-          .filter((r) => !r.isDeleted && r.role !== 'parent')
-          .map((r) => ({ id: r.id, name: r.teamName || r.id })),
-      );
-    });
-    return () => unsub();
-  }, [uid]);
 
   const handleRoleChange = async (newRole: ClubRole) => {
     if (!member) return;
@@ -143,9 +131,15 @@ export default function StaffProfileScreen({ route }: Props) {
   };
 
   const applyAssignments = async (next: Record<string, string>) => {
+    // Drop assignments pointing at teams outside this club (stale entries from
+    // the pre-fix picker that offered the viewer's own teams).
+    const clubTeamIds = new Set(allTeams.map((t) => t.id));
+    const cleaned = allTeams.length
+      ? Object.fromEntries(Object.entries(next).filter(([id]) => clubTeamIds.has(id)))
+      : next;
     try {
       setSaving(true);
-      await updateMemberTeamAssignments({ clubId, userId: memberId, teamPositions: next });
+      await updateMemberTeamAssignments({ clubId, userId: memberId, teamPositions: cleaned });
     } catch (e: any) {
       Alert.alert('Error', e?.message ?? 'Could not update team assignment.');
     } finally {

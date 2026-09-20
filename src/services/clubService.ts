@@ -408,6 +408,34 @@ export async function updateMemberTeamAssignments(params: {
 }
 
 /**
+ * Live list of the CLUB's teams ({id, name}, sorted). This — not the viewer's
+ * own teams — is what staff assignment/invite pickers must offer: a staff
+ * profile in club X assigns club X's teams, including ones the viewer has no
+ * personal membership on.
+ */
+export function listenClubTeams(
+  clubId: string,
+  onData: (teams: Array<{ id: string; name: string }>) => void
+) {
+  return db
+    .collection(COL.teams)
+    .where('clubId', '==', clubId)
+    .onSnapshot(
+      (snap) => {
+        const rows = snap.docs
+          .filter((d) => !(d.data() as any).isDeleted)
+          .map((d) => ({ id: d.id, name: (d.data() as any).name || 'Team' }))
+          .sort((a, b) => a.name.localeCompare(b.name));
+        onData(rows);
+      },
+      (err) => {
+        console.log('[clubService] listenClubTeams error:', err);
+        onData([]);
+      }
+    );
+}
+
+/**
  * Removes a member from the club.
  */
 export async function removeMember(params: {
