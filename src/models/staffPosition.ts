@@ -12,6 +12,7 @@ export const STAFF_POSITIONS = [
   'Assistant Coach',
   'Team Manager',
   'GK Coach',
+  'Stats Specialist',
   'Physio',
 ] as const;
 
