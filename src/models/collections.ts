@@ -11,6 +11,7 @@ export const COL = {
   lineups: 'lineups', // teams/{teamId}/lineups/{lineupId}
   announcements: 'announcements', // teams/{teamId}/announcements/{announcementId}
   clubs: 'clubs', // clubs/{clubId}
+  clubRequests: 'clubRequests', // clubRequests/{requestId} — approved by the app owner, provisioned by a function
   clubMembers: 'members', // clubs/{clubId}/members/{memberId}
   clubPlayers: 'players', // clubs/{clubId}/players/{playerId}
   seasons: 'seasons', // teams/{teamId}/seasons/{seasonId}

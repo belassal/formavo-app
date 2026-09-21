@@ -2,10 +2,14 @@ import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getMessaging } from 'firebase-admin/messaging';
 import * as functions from 'firebase-functions/v1';
+import { defineString } from 'firebase-functions/params';
 
 initializeApp();
 
 const db = getFirestore();
+
+// Where new club requests are sent for approval (set in functions/.env or at deploy).
+const adminNotifyEmail = defineString('ADMIN_NOTIFY_EMAIL');
 
 // Notification preference keys. users/{uid}.notificationPrefs = { [key]: boolean }.
 // Missing key or missing map means ON (opt-out model).
@@ -834,6 +838,165 @@ export const onUserDeleted = functions.auth.user().onDelete(async (user) => {
   await db.recursiveDelete(userRef);
   console.log(`Cleaned up account ${uid}: ${memberRefs.length} membership/invite docs removed`);
 });
+
+// ─── 13. Club requests → owner approval → club provisioning ──────────────────
+// The club is the paying tenant, so clients never create clubs. A coach files
+// clubRequests/{id} (status 'pending'); the app owner reviews it and sets
+// status to 'approved' or 'rejected' in the console. Approval provisions the
+// club here with a trial plan — the same `plan` fields a billing webhook will
+// write later.
+
+function escapeHtml(s: string): string {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function emailShell(title: string, bodyHtml: string): string {
+  return `
+    <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px;">
+      <h2 style="font-size: 22px; font-weight: 800; color: #111; margin-bottom: 8px;">${title}</h2>
+      ${bodyHtml}
+    </div>`;
+}
+
+export const onClubRequestCreated = functions.firestore
+  .document('clubRequests/{requestId}')
+  .onCreate(async (snap, context) => {
+    const data = snap.data();
+    if (!data) return;
+    const to = adminNotifyEmail.value();
+    if (!to) {
+      console.warn('ADMIN_NOTIFY_EMAIL is not set; skipping club request email');
+      return;
+    }
+
+    const rows: Array<[string, string]> = [
+      ['Club', data.clubName],
+      ['Contact', `${data.contactName || '—'} (${data.contactEmailLower})`],
+      ['Teams', String(data.teamCount ?? '—')],
+      ['Players', String(data.playerCount ?? '—')],
+      ['Notes', data.notes || '—'],
+      ['Request ID', context.params.requestId],
+    ];
+    const table = rows
+      .map(([k, v]) =>
+        `<tr><td style="padding:6px 12px 6px 0;color:#6b7280;font-size:14px;">${k}</td>` +
+        `<td style="padding:6px 0;color:#111;font-size:14px;">${escapeHtml(v)}</td></tr>`)
+      .join('');
+
+    await db.collection('mail').add({
+      to: [to],
+      message: {
+        subject: `Formavo club request: ${data.clubName}`,
+        html: emailShell(
+          'New club request',
+          `<table style="border-collapse:collapse;">${table}</table>
+           <p style="color:#374151;font-size:14px;line-height:1.6;margin-top:16px;">
+             Approve by setting <code>status</code> to <code>approved</code> on
+             <code>clubRequests/${context.params.requestId}</code> in the Firebase console
+             (or <code>rejected</code> to decline).
+           </p>`,
+        ),
+        text: rows.map(([k, v]) => `${k}: ${v}`).join('\n') +
+          `\n\nApprove by setting status=approved on clubRequests/${context.params.requestId}.`,
+      },
+    });
+  });
+
+export const onClubRequestUpdated = functions.firestore
+  .document('clubRequests/{requestId}')
+  .onUpdate(async (change, context) => {
+    const before = change.before.data();
+    const after = change.after.data();
+    if (!before || !after) return;
+    if (before.status === after.status) return;
+    if (before.status !== 'pending') return;
+
+    const requestId = context.params.requestId;
+    const contactEmail: string = after.contactEmailLower;
+    const clubName: string = after.clubName;
+
+    if (after.status === 'rejected') {
+      await change.after.ref.set({ reviewedAt: FieldValue.serverTimestamp() }, { merge: true });
+      await db.collection('mail').add({
+        to: [contactEmail],
+        message: {
+          subject: `Your Formavo club request for ${clubName}`,
+          html: emailShell(
+            'About your club request',
+            `<p style="color:#374151;font-size:16px;line-height:1.6;">
+               Thanks for your interest in Formavo. We're not able to set up
+               <strong>${escapeHtml(clubName)}</strong> right now. Reply to this email if
+               you'd like to talk it through.
+             </p>`,
+          ),
+          text: `Thanks for your interest in Formavo. We're not able to set up ${clubName} right now. Reply to this email if you'd like to talk it through.`,
+        },
+      });
+      return;
+    }
+
+    if (after.status !== 'approved') return;
+    if (after.clubId) return;
+
+    const uid: string = after.uid;
+    const userSnap = await db.collection('users').doc(uid).get();
+    const displayName: string =
+      after.contactName || userSnap.data()?.displayName || contactEmail;
+
+    const clubRef = db.collection('clubs').doc();
+    const now = FieldValue.serverTimestamp();
+    const batch = db.batch();
+    batch.set(clubRef, {
+      name: clubName,
+      createdBy: uid,
+      requestId,
+      plan: {
+        tier: 'trial',
+        status: 'active',
+        maxTeams: Number(after.teamCount) > 0 ? Number(after.teamCount) : 3,
+        startedAt: now,
+      },
+      createdAt: now,
+      updatedAt: now,
+    });
+    batch.set(clubRef.collection('members').doc(uid), {
+      role: 'owner',
+      status: 'active',
+      displayName,
+      email: contactEmail,
+      photoUrl: userSnap.data()?.photoUrl ?? null,
+      teamIds: [],
+      teamPositions: {},
+      joinedAt: now,
+    });
+    batch.set(
+      db.collection('users').doc(uid).collection('clubRef').doc('data'),
+      { clubId: clubRef.id },
+      { merge: true },
+    );
+    batch.set(change.after.ref, { clubId: clubRef.id, reviewedAt: now }, { merge: true });
+    await batch.commit();
+
+    await db.collection('mail').add({
+      to: [contactEmail],
+      message: {
+        subject: `${clubName} is ready on Formavo ⚽`,
+        html: emailShell(
+          "You're in",
+          `<p style="color:#374151;font-size:16px;line-height:1.6;">
+             <strong>${escapeHtml(clubName)}</strong> has been set up on Formavo and you're its owner.
+             Open the app to create your first team, import your roster and invite your coaches.
+           </p>`,
+        ),
+        text: `${clubName} has been set up on Formavo and you're its owner. Open the app to create your first team, import your roster and invite your coaches.`,
+      },
+    });
+    console.log(`Provisioned club ${clubRef.id} for request ${requestId}`);
+  });
 
 
 // ─── Sync club member team assignments → team memberships ───────────────────

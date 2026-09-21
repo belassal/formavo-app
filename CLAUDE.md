@@ -51,7 +51,14 @@ functions/src/index.ts # all Cloud Functions
   member doc, records `linkedPlayerIds` for parents, and **deletes** the invite doc.
   Coach, parent, and club-staff invites all send email via the `mail` collection
   (Trigger Email extension).
-- Every coach implicitly owns a club (`getOrCreateClubForUser`); the club UI on
+- **The club is the tenant.** Clients never create clubs: a coach files
+  `clubRequests/{id}` (TeamsScreen empty state → "Request a Club"), the app
+  owner sets `status: approved` in the console, and `onClubRequestUpdated`
+  provisions `clubs/{id}` with `plan: { tier: 'trial', status: 'active',
+  maxTeams }`, the owner member doc, and `users/{uid}/clubRef`. Teams can only
+  be created by the club owner/head_coach while `plan.status == 'active'`
+  (enforced in rules; `canAddTeam` mirrors it client-side). `plan` is written
+  only by functions — a billing webhook will own it later. The club UI on
   TeamsScreen appears only with >1 team or >1 staff.
 - **Position catalog**: `clubs/{c}/config/staffPositions {positions: []}` —
   the controlled vocabulary all position pickers read
@@ -113,6 +120,10 @@ functions/src/index.ts # all Cloud Functions
 - Scheduled: `weeklyDigest` (Sun 18:00 America/Halifax), `rsvpReminders`
   (daily 17:00, matches inside 48h, once per match via `rsvpReminderSent`),
   `sweepStaleLiveMatches` (hourly).
+- `onClubRequestCreated` emails `ADMIN_NOTIFY_EMAIL` (functions param, in
+  `functions/.env`); `onClubRequestUpdated` provisions the club on approval
+  and emails the requester on approval/rejection. Pre-existing clubs were
+  given a trial plan via `functions/scripts/backfillClubPlans.js`.
 - `onUserDeleted` (auth trigger): full account cleanup — member docs (via the
   user's teamRefs/clubRef), pending invites by email, then recursive-deletes
   users/{uid}. The client deletes ONLY the auth user; never delete teamRefs
