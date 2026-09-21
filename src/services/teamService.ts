@@ -1,6 +1,6 @@
 import { db, serverTimestamp, arrayUnion } from './firebase';
 import { COL } from '../models/collections';
-import { getOrCreateClubForUser, acceptClubStaffInvite } from './clubService';
+import { acceptClubStaffInvite } from './clubService';
 import { getOrCreateDefaultSeason, setActiveSeasonId } from './seasonService';
 
 export type TeamRole = 'coach' | 'assistant' | 'parent';
@@ -29,17 +29,23 @@ function normLower(s: string) {
   return norm(s).toLowerCase();
 }
 
+/**
+ * Creates a team inside a club. Security rules require the caller to be the
+ * club's owner/head coach and the club's plan to be active.
+ */
 export async function createTeam(params: {
   name: string;
   ageGroup?: string;
   season?: string;
+  clubId: string;
   createdBy: string; // uid
   createdByEmail?: string;
   createdByName?: string;
 }) {
-  const { name, ageGroup = '', season = '', createdBy, createdByEmail = '', createdByName = '' } = params;
+  const { name, ageGroup = '', season = '', clubId, createdBy, createdByEmail = '', createdByName = '' } = params;
 
   if (!name.trim()) throw new Error('Team name is required');
+  if (!clubId) throw new Error('Teams must belong to a club');
 
   const teamRef = db.collection(COL.teams).doc();
 
@@ -49,6 +55,7 @@ export async function createTeam(params: {
       nameLower: name.trim().toLowerCase(),
       ageGroup,
       season,
+      clubId,
       createdBy,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -96,34 +103,14 @@ export async function createTeam(params: {
     // Non-fatal: season creation failed, team was still created
   }
 
-  // Link team to club (best effort — does not block team creation)
-  try {
-    const clubId = await getOrCreateClubForUser({
-      uid: createdBy,
-      email: createdByEmail,
-      displayName: createdByName || 'Coach',
-    });
-
-    // Store clubId on the team doc
-    await teamRef.update({ clubId });
-
-    // Add teamId to the owner's member doc in the club
-    const memberDocRef = db
-      .collection('clubs')
-      .doc(clubId)
-      .collection('members')
-      .doc(createdBy);
-
-    const memberSnap = await memberDocRef.get();
-    if (memberSnap.exists) {
-      const existing = (memberSnap.data() as any)?.teamIds ?? [];
-      if (!existing.includes(teamId)) {
-        await memberDocRef.update({ teamIds: [...existing, teamId] });
-      }
-    }
-  } catch (_e) {
-    // Non-fatal: club linkage failed, team was still created
-  }
+  // Record the team on the creator's club member doc (best effort)
+  await db
+    .collection(COL.clubs)
+    .doc(clubId)
+    .collection(COL.clubMembers)
+    .doc(createdBy)
+    .update({ teamIds: arrayUnion(teamId) })
+    .catch((e) => console.warn('[createTeam] club member teamIds update failed:', e));
 
   return teamId;
 }

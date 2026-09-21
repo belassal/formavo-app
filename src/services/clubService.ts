@@ -1,4 +1,3 @@
-import firestore from '@react-native-firebase/firestore';
 import { db, serverTimestamp } from './firebase';
 import { COL } from '../models/collections';
 
@@ -17,85 +16,104 @@ export type ClubMember = {
   invitedEmail?: string;
 };
 
+export type ClubPlanTier = 'trial' | 'starter' | 'pro';
+export type ClubPlanStatus = 'active' | 'expired' | 'cancelled';
+
+/** Billing entitlement, written only by Cloud Functions (approval today, billing webhook later). */
+export type ClubPlan = {
+  tier: ClubPlanTier;
+  status: ClubPlanStatus;
+  maxTeams?: number;
+  startedAt?: any;
+  expiresAt?: any;
+};
+
 export type Club = {
   id: string;
   name: string;
   logoUrl?: string;
   createdBy: string;
   createdAt: any;
+  plan?: ClubPlan;
+};
+
+export function isClubPlanActive(club: Club | null | undefined): boolean {
+  return club?.plan?.status === 'active';
+}
+
+export function canAddTeam(club: Club | null | undefined, currentTeamCount: number): boolean {
+  if (!isClubPlanActive(club)) return false;
+  const max = club?.plan?.maxTeams;
+  return typeof max !== 'number' || currentTeamCount < max;
+}
+
+export type ClubRequestStatus = 'pending' | 'approved' | 'rejected';
+
+export type ClubRequest = {
+  id: string;
+  uid: string;
+  clubName: string;
+  contactName: string;
+  contactEmailLower: string;
+  teamCount?: number;
+  playerCount?: number;
+  notes?: string;
+  status: ClubRequestStatus;
+  clubId?: string;
+  createdAt: any;
 };
 
 /**
- * Creates a new club doc and adds the creator as owner member.
- * Returns the new clubId.
+ * Files a request for a new club. The app owner approves it (status →
+ * 'approved') and a Cloud Function provisions the club and emails the coach.
  */
-export async function createClub(params: {
-  name: string;
-  createdBy: string;
-  createdByEmail: string;
-  createdByName: string;
-}): Promise<string> {
-  const { name, createdBy, createdByEmail, createdByName } = params;
-
-  const clubRef = db.collection(COL.clubs).doc();
-
-  const batch = db.batch();
-
-  batch.set(clubRef, {
-    name,
-    createdBy,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
-
-  const memberRef = clubRef.collection(COL.clubMembers).doc(createdBy);
-  batch.set(memberRef, {
-    role: 'owner' as ClubRole,
-    status: 'active' as ClubMemberStatus,
-    displayName: createdByName,
-    email: createdByEmail,
-    teamIds: [],
-    joinedAt: serverTimestamp(),
-  });
-
-  await batch.commit();
-
-  return clubRef.id;
-}
-
-/**
- * Returns the clubId for a user. If no club exists yet, creates one
- * named "{displayName}'s Club" and stores the ref in users/{uid}/clubRef.
- */
-export async function getOrCreateClubForUser(params: {
+export async function submitClubRequest(params: {
   uid: string;
   email: string;
-  displayName: string;
+  clubName: string;
+  contactName: string;
+  teamCount?: number;
+  playerCount?: number;
+  notes?: string;
 }): Promise<string> {
-  const { uid, email, displayName } = params;
+  const { uid, email, clubName, contactName, teamCount, playerCount, notes } = params;
+  const name = clubName.trim();
+  if (!name) throw new Error('Club name is required');
 
-  const clubRefDoc = db.collection(COL.users).doc(uid).collection('clubRef').doc('data');
-  const snap = await clubRefDoc.get();
-
-  if (snap.data() != null) {
-    const data = snap.data() as any;
-    if (data?.clubId) {
-      return data.clubId as string;
-    }
-  }
-
-  // Create a new club
-  const clubId = await createClub({
-    name: `${displayName}'s Club`,
-    createdBy: uid,
-    createdByEmail: email,
-    createdByName: displayName,
+  const ref = db.collection(COL.clubRequests).doc();
+  await ref.set({
+    uid,
+    clubName: name,
+    contactName: contactName.trim(),
+    contactEmailLower: email.trim().toLowerCase(),
+    ...(teamCount ? { teamCount } : {}),
+    ...(playerCount ? { playerCount } : {}),
+    ...(notes?.trim() ? { notes: notes.trim() } : {}),
+    status: 'pending' as ClubRequestStatus,
+    createdAt: serverTimestamp(),
   });
+  return ref.id;
+}
 
-  // Store clubId for fast lookup
-  await clubRefDoc.set({ clubId }, { merge: true });
-
-  return clubId;
+/** Listens to the user's most recent club request (null when none). */
+export function listenMyClubRequest(
+  uid: string,
+  onData: (request: ClubRequest | null) => void,
+): () => void {
+  return db
+    .collection(COL.clubRequests)
+    .where('uid', '==', uid)
+    .onSnapshot(
+      (snap) => {
+        const rows = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }) as ClubRequest);
+        rows.sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0));
+        onData(rows[0] ?? null);
+      },
+      (e) => {
+        console.warn('[listenMyClubRequest] error:', e);
+        onData(null);
+      },
+    );
 }
 
 /**

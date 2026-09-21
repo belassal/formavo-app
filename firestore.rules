@@ -8,6 +8,12 @@ rules_version = '2';
 //   Pending invites live in the same collections keyed 'invite_{emailLower}'
 //   (deterministic IDs let these rules validate self-join on acceptance).
 //
+// Tenancy:
+//   The club is the paying tenant. Clubs are never created by clients: a coach
+//   files clubRequests/{id}, the app owner approves it, and a Cloud Function
+//   provisions clubs/{clubId} with a `plan`. Teams can only be created inside
+//   a club whose plan is active.
+//
 // Broad strokes:
 //   - Team data is readable by team members and by members of the team's club.
 //   - Team data is writable by team coaches/assistants and club staff.
@@ -72,6 +78,11 @@ service cloud.firestore {
     function teamClubId(teamId) {
       return get(/databases/$(database)/documents/teams/$(teamId)).data.clubId;
     }
+    // Clubs are provisioned by Cloud Functions on request approval and carry a
+    // plan; only a club on an active plan may add teams.
+    function clubPlanActive(clubId) {
+      return get(/databases/$(database)/documents/clubs/$(clubId)).data.plan.status == 'active';
+    }
     // Any active member of the club a team belongs to (owner/coaching staff).
     function isClubStaffOfTeam(teamId) {
       return isClubMember(teamClubId(teamId));
@@ -126,7 +137,12 @@ service cloud.firestore {
         || hasTeamInvite(teamId)
         || (('clubId' in resource.data)
             && exists(/databases/$(database)/documents/clubs/$(resource.data.clubId)/members/$(myInviteId())));
-      allow create: if isSignedIn() && request.resource.data.createdBy == uid();
+      // Teams belong to a club: only its owner/head coach creates them, and only
+      // while the club's plan is active.
+      allow create: if isSignedIn() && request.resource.data.createdBy == uid()
+        && request.resource.data.clubId is string
+        && isClubManager(request.resource.data.clubId)
+        && clubPlanActive(request.resource.data.clubId);
       allow update: if isTeamStaff(teamId)
         || (('clubId' in resource.data) && isClubMember(resource.data.clubId));
       allow delete: if false;
@@ -253,12 +269,30 @@ service cloud.firestore {
       }
     }
 
+    // ── Club requests ───────────────────────────────────────────────────────
+    // A coach asks for a club; the app owner approves by setting status to
+    // 'approved' (Cloud Function then provisions the club). Clients can only
+    // file a pending request for themselves and read their own.
+    match /clubRequests/{requestId} {
+      allow read: if isSignedIn() && resource.data.uid == uid();
+      allow create: if isSignedIn()
+        && request.resource.data.uid == uid()
+        && request.resource.data.contactEmailLower == userEmail()
+        && request.resource.data.status == 'pending'
+        && request.resource.data.clubName is string
+        && request.resource.data.clubName.size() > 0;
+      allow update, delete: if false;
+    }
+
     // ── Clubs ───────────────────────────────────────────────────────────────
+    // Club docs (and their owner member doc) are written only by Cloud
+    // Functions when a request is approved; `plan` is the billing entitlement.
     match /clubs/{clubId} {
       allow read: if isClubMember(clubId)
         || exists(/databases/$(database)/documents/clubs/$(clubId)/members/$(myInviteId()));
-      allow create: if isSignedIn() && request.resource.data.createdBy == uid();
-      allow update: if isClubManager(clubId);
+      allow create: if false;
+      allow update: if isClubManager(clubId)
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['plan', 'createdBy']);
       allow delete: if false;
 
       match /members/{memberId} {
@@ -267,10 +301,6 @@ service cloud.firestore {
         allow create: if isClubManager(clubId)
           && memberId == 'invite_' + request.resource.data.invitedEmailLower
           && request.resource.data.status == 'invited';
-        // Owner bootstrap while creating the club (club doc created in the same batch).
-        allow create: if isSignedIn() && memberId == uid()
-          && !exists(/databases/$(database)/documents/clubs/$(clubId))
-          && request.resource.data.role == 'owner';
         // Accept your own staff invite, with the invited role.
         allow create, update: if isSignedIn() && memberId == uid()
           && exists(/databases/$(database)/documents/clubs/$(clubId)/members/$(myInviteId()))
@@ -278,6 +308,9 @@ service cloud.firestore {
                == get(/databases/$(database)/documents/clubs/$(clubId)/members/$(myInviteId())).data.role;
         // Owner manages roles/teams/removal; owner's own teamIds updates included.
         allow update, delete: if isClubOwner(clubId);
+        // A manager creating a team records it on their own member doc.
+        allow update: if isClubManager(clubId) && memberId == uid()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['teamIds']);
         // Remove your own invite doc on acceptance.
         allow delete: if isSignedIn() && memberId == myInviteId();
       }

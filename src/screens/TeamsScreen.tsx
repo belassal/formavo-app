@@ -21,8 +21,11 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { createTeam, listenMyTeams } from '../services/teamService';
-import { listenMyClubId, listenClub, listenClubMembers, getOrCreateClubForUser, tagUserTeamsWithClubId } from '../services/clubService';
-import type { Club, ClubMember } from '../services/clubService';
+import {
+  listenMyClubId, listenClub, listenClubMembers, tagUserTeamsWithClubId,
+  listenMyClubRequest, submitClubRequest, canAddTeam,
+} from '../services/clubService';
+import type { Club, ClubMember, ClubRequest } from '../services/clubService';
 import type { TeamsStackParamList } from '../navigation/stacks/TeamsStack';
 
 type TeamRow = {
@@ -104,14 +107,10 @@ export default function TeamsScreen() {
 
   // Club state
   const [clubId, setClubId] = useState<string | null>(null);
+  const [clubLoaded, setClubLoaded] = useState(false);
   const [club, setClub] = useState<Club | null>(null);
   const [clubMembers, setClubMembers] = useState<ClubMember[]>([]);
-
-  // Hide "Create Team" if the user is only ever a parent (no coach/admin role on any team)
-  const canCreateTeam = useMemo(
-    () => teams.length === 0 || teams.some((t) => t.role !== 'parent'),
-    [teams]
-  );
+  const [clubRequest, setClubRequest] = useState<ClubRequest | null>(null);
 
   // Determine if the user is a parent-only user (never show club section to parents)
   const isParentOnly = useMemo(
@@ -124,6 +123,13 @@ export default function TeamsScreen() {
   const [name, setName] = useState('');
   const [ageGroup, setAgeGroup] = useState('');
   const [season, setSeason] = useState('');
+
+  const [showRequest, setShowRequest] = useState(false);
+  const [requesting, setRequesting] = useState(false);
+  const [reqClubName, setReqClubName] = useState('');
+  const [reqContactName, setReqContactName] = useState('');
+  const [reqTeamCount, setReqTeamCount] = useState('');
+  const [reqNotes, setReqNotes] = useState('');
 
   useEffect(() => {
     if (!uid) {
@@ -158,20 +164,16 @@ export default function TeamsScreen() {
     if (!uid) return;
     const unsub = listenMyClubId(uid, (id) => {
       setClubId(id);
+      setClubLoaded(true);
     });
     return () => unsub();
   }, [uid]);
 
-  // Auto-create club for existing coach users who don't have one yet
+  // Listen to the user's pending/approved club request
   useEffect(() => {
     if (!uid || isParentOnly) return;
-    const user = auth().currentUser;
-    if (!user) return;
-    getOrCreateClubForUser({
-      uid,
-      email: user.email ?? '',
-      displayName: user.displayName ?? user.email ?? 'Coach',
-    }).catch((e) => console.warn('[TeamsScreen] getOrCreateClub error:', e));
+    const unsub = listenMyClubRequest(uid, setClubRequest);
+    return () => unsub();
   }, [uid, isParentOnly]);
 
   // Tag existing teams (created before club feature) with their clubId
@@ -200,7 +202,7 @@ export default function TeamsScreen() {
   };
 
   const onCreate = async () => {
-    if (!uid) return;
+    if (!uid || !clubId) return;
     const trimmed = name.trim();
     if (!trimmed) { Alert.alert('Missing Team Name', 'Please enter a team name.'); return; }
     try {
@@ -209,6 +211,7 @@ export default function TeamsScreen() {
         name: trimmed,
         ageGroup: ageGroup.trim(),
         season: season.trim(),
+        clubId,
         createdBy: uid,
         createdByEmail: currentUser?.email ?? '',
         createdByName: currentUser?.displayName ?? currentUser?.email ?? '',
@@ -221,6 +224,36 @@ export default function TeamsScreen() {
     }
   };
 
+  const openRequest = () => {
+    setReqClubName('');
+    setReqContactName(currentUser?.displayName ?? '');
+    setReqTeamCount('');
+    setReqNotes('');
+    setShowRequest(true);
+  };
+
+  const onRequest = async () => {
+    if (!uid || !currentUser?.email) return;
+    if (!reqClubName.trim()) { Alert.alert('Missing Club Name', 'Please enter your club name.'); return; }
+    try {
+      setRequesting(true);
+      const teamCount = parseInt(reqTeamCount, 10);
+      await submitClubRequest({
+        uid,
+        email: currentUser.email,
+        clubName: reqClubName,
+        contactName: reqContactName,
+        teamCount: Number.isFinite(teamCount) && teamCount > 0 ? teamCount : undefined,
+        notes: reqNotes,
+      });
+      setShowRequest(false);
+    } catch (e: any) {
+      Alert.alert('Request Failed', e?.message ?? 'Unknown error');
+    } finally {
+      setRequesting(false);
+    }
+  };
+
   // Find the viewer's role in the club
   const viewerClubRole = useMemo(() => {
     if (!uid || !clubMembers.length) return undefined;
@@ -230,6 +263,14 @@ export default function TeamsScreen() {
 
   const staffCount = clubMembers.length;
   const teamCount = teams.filter((t) => !isParentOnly || t.role !== 'parent').length;
+
+  // Only the club's owner/head coach adds teams, and only on an active plan
+  // (mirrors the create rule in firestore.rules).
+  const canCreateTeam =
+    !!clubId
+    && (viewerClubRole === 'owner' || viewerClubRole === 'head_coach')
+    && canAddTeam(club, teamCount);
+  const requestPending = clubRequest?.status === 'pending';
 
   const createTeamModal = (
     <Modal visible={showCreate} animationType="slide" transparent onRequestClose={() => { Keyboard.dismiss(); setShowCreate(false); }}>
@@ -263,18 +304,54 @@ export default function TeamsScreen() {
     </Modal>
   );
 
-  if (loading) {
-    return (
-      <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f2f2f7' }}>
-        <ActivityIndicator />
-      </SafeAreaView>
-    );
-  }
+  const requestClubModal = (
+    <Modal visible={showRequest} animationType="slide" transparent onRequestClose={() => { Keyboard.dismiss(); setShowRequest(false); }}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' }}>
+            <View style={{ backgroundColor: 'white', padding: 20, borderTopLeftRadius: 20, borderTopRightRadius: 20, gap: 12 }}>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: '#111' }}>Request a Club</Text>
+              <Text style={{ fontSize: 13, color: B.inkMid, lineHeight: 19 }}>
+                Tell us about your club and we'll set it up for you. You'll get an email as soon as it's ready.
+              </Text>
+              <TextInput placeholder="Club name (required)" value={reqClubName} onChangeText={setReqClubName} style={S.input} returnKeyType="next" />
+              <TextInput placeholder="Your name" value={reqContactName} onChangeText={setReqContactName} style={S.input} returnKeyType="next" />
+              <TextInput placeholder="Number of teams (optional)" value={reqTeamCount} onChangeText={setReqTeamCount} style={S.input} keyboardType="number-pad" returnKeyType="next" />
+              <TextInput placeholder="Anything else? (optional)" value={reqNotes} onChangeText={setReqNotes} style={[S.input, { minHeight: 72 }]} multiline returnKeyType="done" />
+              <View style={{ flexDirection: 'row', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
+                <TouchableOpacity onPress={() => { Keyboard.dismiss(); setShowRequest(false); }} disabled={requesting}>
+                  <Text style={{ padding: 10, color: '#6b7280', fontWeight: '500' }}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={onRequest}
+                  disabled={requesting}
+                  style={{ paddingVertical: 10, paddingHorizontal: 20, backgroundColor: '#111', borderRadius: 12 }}
+                >
+                  <Text style={{ fontWeight: '700', color: '#fff' }}>{requesting ? 'Sending…' : 'Send Request'}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
 
   if (error) {
     return (
       <SafeAreaView style={{ flex: 1, padding: 16, backgroundColor: '#f2f2f7' }}>
         <Text style={{ marginTop: 10, color: 'red' }}>{error}</Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (loading || !clubLoaded) {
+    return (
+      <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f2f2f7' }}>
+        <ActivityIndicator />
       </SafeAreaView>
     );
   }
@@ -291,16 +368,37 @@ export default function TeamsScreen() {
             </Text>
           </View>
 
-          <TouchableOpacity
-            onPress={openCreate}
-            activeOpacity={0.85}
-            style={{ backgroundColor: B.green, borderRadius: 14, padding: 20, gap: 4 }}
-          >
-            <Text style={{ fontSize: 17, fontWeight: '800', color: '#fff' }}>⚽  Create a Team</Text>
-            <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.75)', marginTop: 2 }}>
-              For coaches — set up your roster, matches and lineups
-            </Text>
-          </TouchableOpacity>
+          {canCreateTeam ? (
+            <TouchableOpacity
+              onPress={openCreate}
+              activeOpacity={0.85}
+              style={{ backgroundColor: B.green, borderRadius: 14, padding: 20, gap: 4 }}
+            >
+              <Text style={{ fontSize: 17, fontWeight: '800', color: '#fff' }}>⚽  Create your first team</Text>
+              <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.75)', marginTop: 2 }}>
+                {club?.name ? `${club.name} is ready — ` : ''}set up your roster, matches and lineups
+              </Text>
+            </TouchableOpacity>
+          ) : requestPending ? (
+            <View style={{ backgroundColor: B.navy, borderRadius: 14, padding: 20, gap: 4 }}>
+              <Text style={{ fontSize: 17, fontWeight: '800', color: '#fff' }}>⏳  Request received</Text>
+              <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.75)', marginTop: 2, lineHeight: 19 }}>
+                We're setting up <Text style={{ fontWeight: '700', color: '#fff' }}>{clubRequest?.clubName}</Text>.
+                You'll get an email at {clubRequest?.contactEmailLower} as soon as it's ready.
+              </Text>
+            </View>
+          ) : !clubId ? (
+            <TouchableOpacity
+              onPress={openRequest}
+              activeOpacity={0.85}
+              style={{ backgroundColor: B.green, borderRadius: 14, padding: 20, gap: 4 }}
+            >
+              <Text style={{ fontSize: 17, fontWeight: '800', color: '#fff' }}>⚽  Request a Club</Text>
+              <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.75)', marginTop: 2 }}>
+                For coaches and club admins — we'll set up your club and you take it from there
+              </Text>
+            </TouchableOpacity>
+          ) : null}
 
           <View style={{ backgroundColor: B.card, borderRadius: 14, borderWidth: 1, borderColor: B.border, padding: 20 }}>
             <Text style={{ fontSize: 17, fontWeight: '700', color: B.ink }}>Waiting for an invite?</Text>
@@ -314,6 +412,7 @@ export default function TeamsScreen() {
         </View>
 
         {createTeamModal}
+        {requestClubModal}
       </SafeAreaView>
     );
   }
@@ -433,6 +532,7 @@ export default function TeamsScreen() {
       </ScrollView>
 
       {createTeamModal}
+      {requestClubModal}
     </SafeAreaView>
   );
 }
