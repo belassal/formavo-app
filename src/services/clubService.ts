@@ -1,5 +1,6 @@
 import { db, serverTimestamp } from './firebase';
 import { COL } from '../models/collections';
+import { defaultPositionForClubRole, positionToTeamRole } from '../models/staffPosition';
 
 export type ClubRole = 'owner' | 'head_coach' | 'asst_coach' | 'staff';
 export type ClubMemberStatus = 'active' | 'invited';
@@ -12,6 +13,10 @@ export type ClubMember = {
   email: string;
   photoUrl?: string;
   teamIds: string[]; // which teams assigned to
+  // Per-team position title (e.g. 'Head Coach', 'Team Manager', custom text),
+  // keyed by teamId. teamIds stays in sync (= keys) for display/queries.
+  // syncClubMemberTeams (Cloud Function) mirrors these onto team member docs.
+  teamPositions?: Record<string, string>;
   joinedAt: any;
   invitedEmail?: string;
 };
@@ -222,9 +227,10 @@ export async function inviteStaffMember(params: {
   email: string;
   role: ClubRole;
   teamIds: string[];
+  teamPositions?: Record<string, string>;
   invitedByName: string;
 }): Promise<void> {
-  const { clubId, email, role, teamIds, invitedByName } = params;
+  const { clubId, email, role, teamIds, teamPositions, invitedByName } = params;
 
   const emailLower = email.trim().toLowerCase();
   if (!emailLower || !emailLower.includes('@')) {
@@ -246,6 +252,7 @@ export async function inviteStaffMember(params: {
         invitedEmail: emailLower,
         invitedEmailLower: emailLower,
         teamIds: teamIds ?? [],
+        teamPositions: teamPositions ?? {},
         joinedAt: serverTimestamp(),
         invitedByName,
       },
@@ -282,12 +289,8 @@ export async function inviteStaffMember(params: {
   }).catch((e) => console.warn('[inviteStaff] mail error:', e));
 }
 
-/**
- * Maps a club role to the team-level role granted on assigned teams.
- */
-export function clubRoleToTeamRole(role: ClubRole): 'coach' | 'assistant' {
-  return role === 'owner' || role === 'head_coach' ? 'coach' : 'assistant';
-}
+// (Blanket club-role → team-role mapping removed: team role now derives from
+// the per-team position via positionToTeamRole in models/staffPosition.)
 
 /**
  * Accepts a pending staff invite (clubs/{clubId}/members/{inviteId}).
@@ -309,7 +312,10 @@ export async function acceptClubStaffInvite(params: {
 
   const role: ClubRole = inviteData?.role || 'staff';
   const teamIds: string[] = Array.isArray(inviteData?.teamIds) ? inviteData.teamIds : [];
-  const teamRole = clubRoleToTeamRole(role);
+  const teamPositions: Record<string, string> =
+    inviteData?.teamPositions && typeof inviteData.teamPositions === 'object'
+      ? inviteData.teamPositions
+      : {};
 
   const clubRefDoc = db.collection(COL.users).doc(uid).collection('clubRef').doc('data');
   const [clubRefSnap, ...teamSnaps] = await Promise.all([
@@ -327,6 +333,7 @@ export async function acceptClubStaffInvite(params: {
       displayName: displayName || inviteData?.displayName || email,
       email,
       teamIds,
+      teamPositions,
       joinedAt: serverTimestamp(),
       invitedEmailLower: email,
     },
@@ -345,11 +352,14 @@ export async function acceptClubStaffInvite(params: {
     if (teamData.isDeleted) continue;
     const teamId = teamSnap.id;
     const teamName = teamData.name || 'Team';
+    const title = teamPositions[teamId] || defaultPositionForClubRole(role);
+    const teamRole = positionToTeamRole(title);
 
     batch.set(
       db.collection(COL.teams).doc(teamId).collection(COL.members).doc(uid),
       {
         role: teamRole,
+        title,
         status: 'active',
         joinedAt: serverTimestamp(),
         invitedEmail: email,
@@ -364,6 +374,7 @@ export async function acceptClubStaffInvite(params: {
       {
         teamId,
         role: teamRole,
+        title,
         status: 'active',
         joinedAt: serverTimestamp(),
         teamName,
@@ -395,20 +406,51 @@ export async function updateMemberRole(params: {
 }
 
 /**
- * Updates which teams a club member is assigned to.
+ * Sets a club member's full team-assignment map ({teamId: position title}).
+ * teamIds is kept in sync as the key list. The syncClubMemberTeams Cloud
+ * Function reconciles the actual team member docs + teamRefs from this write
+ * (client rules can't touch another user's teamRefs).
  */
-export async function updateMemberTeams(params: {
+export async function updateMemberTeamAssignments(params: {
   clubId: string;
   userId: string;
-  teamIds: string[];
+  teamPositions: Record<string, string>;
 }): Promise<void> {
-  const { clubId, userId, teamIds } = params;
+  const { clubId, userId, teamPositions } = params;
   await db
     .collection(COL.clubs)
     .doc(clubId)
     .collection(COL.clubMembers)
     .doc(userId)
-    .update({ teamIds });
+    .update({ teamPositions, teamIds: Object.keys(teamPositions) });
+}
+
+/**
+ * Live list of the CLUB's teams ({id, name}, sorted). This — not the viewer's
+ * own teams — is what staff assignment/invite pickers must offer: a staff
+ * profile in club X assigns club X's teams, including ones the viewer has no
+ * personal membership on.
+ */
+export function listenClubTeams(
+  clubId: string,
+  onData: (teams: Array<{ id: string; name: string }>) => void
+) {
+  return db
+    .collection(COL.teams)
+    .where('clubId', '==', clubId)
+    .onSnapshot(
+      (snap) => {
+        const rows = snap.docs
+          .filter((d) => !(d.data() as any).isDeleted)
+          .map((d) => ({ id: d.id, name: (d.data() as any).name || 'Team' }))
+          .sort((a, b) => a.name.localeCompare(b.name));
+        onData(rows);
+      },
+      (err) => {
+        console.log('[clubService] listenClubTeams error:', err);
+        onData([]);
+      }
+    );
 }
 
 /**
@@ -436,13 +478,15 @@ export async function updateClub(params: {
   logoUrl?: string;
   sponsorName?: string;
   sponsorLogoUrl?: string;
+  equityThresholdPct?: number; // Equity report flags players under this % of team median minutes (default 50)
 }): Promise<void> {
-  const { clubId, name, logoUrl, sponsorName, sponsorLogoUrl } = params;
+  const { clubId, name, logoUrl, sponsorName, sponsorLogoUrl, equityThresholdPct } = params;
   const update: Record<string, any> = { updatedAt: serverTimestamp() };
   if (name !== undefined) update.name = name;
   if (logoUrl !== undefined) update.logoUrl = logoUrl;
   if (sponsorName !== undefined) update.sponsorName = sponsorName;
   if (sponsorLogoUrl !== undefined) update.sponsorLogoUrl = sponsorLogoUrl;
+  if (equityThresholdPct !== undefined) update.equityThresholdPct = equityThresholdPct;
   await db.collection(COL.clubs).doc(clubId).update(update);
 }
 

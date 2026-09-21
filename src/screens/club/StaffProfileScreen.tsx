@@ -15,13 +15,14 @@ import {
   listenClubMembers,
   removeMember,
   updateMemberRole,
-  updateMemberTeams,
+  updateMemberTeamAssignments,
+  listenClubTeams,
 } from '../../services/clubService';
 import type { ClubMember, ClubRole } from '../../services/clubService';
+import { defaultPositionForClubRole } from '../../models/staffPosition';
+import { listenClubPositions, addClubPosition, DEFAULT_POSITIONS } from '../../services/staffPositionService';
 import Avatar from '../../components/Avatar';
-import { listenMyTeams } from '../../services/teamService';
 import { getUserProfile, type UserProfile } from '../../services/userService';
-import auth from '@react-native-firebase/auth';
 
 type Props = NativeStackScreenProps<TeamsStackParamList, 'StaffProfile'>;
 
@@ -76,7 +77,6 @@ export default function StaffProfileScreen({ route }: Props) {
   const { clubId, memberId, memberName, viewerRole } = route.params;
   const navigation = useNavigation();
 
-  const uid = auth().currentUser?.uid ?? null;
   const isOwner = viewerRole === 'owner';
 
   const [member, setMember] = useState<ClubMember | null>(null);
@@ -84,8 +84,14 @@ export default function StaffProfileScreen({ route }: Props) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  // All teams the viewer manages (for team assignment)
+  // The club's teams (assignments are club-scoped, independent of what the
+  // viewer personally coaches)
   const [allTeams, setAllTeams] = useState<Array<{ id: string; name: string }>>([]);
+  useEffect(() => listenClubTeams(clubId, setAllTeams), [clubId]);
+
+  // Club position catalog (managed in Club Settings)
+  const [clubPositions, setClubPositions] = useState<string[]>(DEFAULT_POSITIONS);
+  useEffect(() => listenClubPositions(clubId, setClubPositions), [clubId]);
 
   useEffect(() => {
     const unsub = listenClubMembers(clubId, (members) => {
@@ -101,18 +107,6 @@ export default function StaffProfileScreen({ route }: Props) {
     getUserProfile(memberId).then(setExtProfile).catch(console.warn);
   }, [memberId]);
 
-  useEffect(() => {
-    if (!uid) return;
-    const unsub = listenMyTeams(uid, (rows: any[]) => {
-      setAllTeams(
-        rows
-          .filter((r) => !r.isDeleted && r.role !== 'parent')
-          .map((r) => ({ id: r.id, name: r.teamName || r.id })),
-      );
-    });
-    return () => unsub();
-  }, [uid]);
-
   const handleRoleChange = async (newRole: ClubRole) => {
     if (!member) return;
     try {
@@ -125,20 +119,62 @@ export default function StaffProfileScreen({ route }: Props) {
     }
   };
 
-  const handleToggleTeam = async (teamId: string) => {
-    if (!member) return;
-    const current = member.teamIds ?? [];
-    const next = current.includes(teamId)
-      ? current.filter((id) => id !== teamId)
-      : [...current, teamId];
+  // Current {teamId: position title} map, backfilling a default title for
+  // legacy members that predate per-team positions (teamIds only).
+  const currentAssignments = (): Record<string, string> => {
+    if (!member) return {};
+    const out: Record<string, string> = { ...(member.teamPositions ?? {}) };
+    for (const id of member.teamIds ?? []) {
+      if (!out[id]) out[id] = defaultPositionForClubRole(member.role);
+    }
+    return out;
+  };
+
+  const applyAssignments = async (next: Record<string, string>) => {
+    // Drop assignments pointing at teams outside this club (stale entries from
+    // the pre-fix picker that offered the viewer's own teams).
+    const clubTeamIds = new Set(allTeams.map((t) => t.id));
+    const cleaned = allTeams.length
+      ? Object.fromEntries(Object.entries(next).filter(([id]) => clubTeamIds.has(id)))
+      : next;
     try {
       setSaving(true);
-      await updateMemberTeams({ clubId, userId: memberId, teamIds: next });
+      await updateMemberTeamAssignments({ clubId, userId: memberId, teamPositions: cleaned });
     } catch (e: any) {
       Alert.alert('Error', e?.message ?? 'Could not update team assignment.');
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleToggleTeam = (teamId: string) => {
+    if (!member) return;
+    const next = currentAssignments();
+    if (teamId in next) delete next[teamId];
+    else next[teamId] = defaultPositionForClubRole(member.role);
+    void applyAssignments(next);
+  };
+
+  const handleSetPosition = (teamId: string, title: string) => {
+    const next = currentAssignments();
+    next[teamId] = title;
+    void applyAssignments(next);
+  };
+
+  const handleCustomPosition = (teamId: string) => {
+    Alert.prompt(
+      'Custom position',
+      'e.g. Fitness Coach, Analyst…',
+      (text) => {
+        const title = (text || '').trim();
+        if (!title) return;
+        handleSetPosition(teamId, title);
+        // Save to the club catalog so it's pickable everywhere from now on.
+        addClubPosition(clubId, title).catch(console.warn);
+      },
+      'plain-text',
+      currentAssignments()[teamId],
+    );
   };
 
   const handleRemove = () => {
@@ -179,7 +215,7 @@ export default function StaffProfileScreen({ route }: Props) {
     );
   }
 
-  const assignedTeamIds = member.teamIds ?? [];
+  const assignments = currentAssignments();
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#f2f2f7' }}>
@@ -282,7 +318,9 @@ export default function StaffProfileScreen({ route }: Props) {
             </>
           ) : (
             allTeams.map((team) => {
-              const assigned = assignedTeamIds.includes(team.id);
+              const assigned = team.id in assignments;
+              const position = assignments[team.id];
+              const isPreset = clubPositions.includes(position);
               return (
                 <View key={team.id}>
                   <View style={{ height: 1, backgroundColor: '#e5e7eb' }} />
@@ -315,10 +353,55 @@ export default function StaffProfileScreen({ route }: Props) {
                         <Text style={{ color: '#fff', fontSize: 13, fontWeight: '800', lineHeight: 16 }}>✓</Text>
                       )}
                     </View>
-                    <Text style={{ flex: 1, fontSize: 15, fontWeight: '500', color: '#111' }}>
-                      {team.name}
-                    </Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 15, fontWeight: '500', color: '#111' }}>
+                        {team.name}
+                      </Text>
+                      {assigned && !isOwner && (
+                        <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 1 }}>{position}</Text>
+                      )}
+                    </View>
                   </TouchableOpacity>
+
+                  {/* Position picker for assigned teams (owner only) */}
+                  {assigned && isOwner && (
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingLeft: 50, paddingRight: 16, paddingBottom: 12 }}>
+                      {clubPositions.map((p) => {
+                        const active = position === p;
+                        return (
+                          <TouchableOpacity
+                            key={p}
+                            onPress={() => handleSetPosition(team.id, p)}
+                            disabled={saving}
+                            style={{
+                              paddingHorizontal: 10,
+                              paddingVertical: 5,
+                              borderRadius: 20,
+                              backgroundColor: active ? '#111' : '#f3f4f6',
+                            }}
+                          >
+                            <Text style={{ fontSize: 12, fontWeight: '600', color: active ? '#fff' : '#374151' }}>
+                              {p}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                      <TouchableOpacity
+                        onPress={() => handleCustomPosition(team.id)}
+                        disabled={saving}
+                        style={{
+                          paddingHorizontal: 10,
+                          paddingVertical: 5,
+                          borderRadius: 20,
+                          backgroundColor: !isPreset ? '#111' : '#f3f4f6',
+                        }}
+                      >
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: !isPreset ? '#fff' : '#374151' }}>
+                          {!isPreset ? `${position} ✎` : 'Other…'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
                 </View>
               );
             })

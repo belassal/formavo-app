@@ -16,6 +16,8 @@ import {
 import { useRoute, type RouteProp } from '@react-navigation/native';
 import { db } from '../../services/firebase';
 import { COL } from '../../models/collections';
+import { listenClub, listenClubMembers, type ClubMember } from '../../services/clubService';
+import { positionUsageCounts } from '../../services/staffPositionService';
 
 type Params = { ClubReports: { clubId: string; clubName?: string } };
 
@@ -107,7 +109,7 @@ async function fetchReports(clubId: string): Promise<TeamReport[]> {
   );
 }
 
-const TABS = ['Records', 'Equity', 'Positions', 'Adoption'] as const;
+const TABS = ['Records', 'Equity', 'Positions', 'Adoption', 'Staff'] as const;
 
 const COMP_ORDER = ['league', 'cup', 'tournament', 'friendly'];
 const COMP_LABELS: Record<string, string> = {
@@ -139,6 +141,10 @@ export default function ClubReportsScreen() {
 
   const [tab, setTab] = useState<(typeof TABS)[number]>('Records');
   const [reports, setReports] = useState<TeamReport[] | null>(null);
+  const [staffMembers, setStaffMembers] = useState<ClubMember[]>([]);
+  useEffect(() => listenClubMembers(clubId, setStaffMembers), [clubId]);
+  const [equityPct, setEquityPct] = useState(50);
+  useEffect(() => listenClub(clubId, (c: any) => setEquityPct(c?.equityThresholdPct ?? 50)), [clubId]);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
@@ -155,6 +161,40 @@ export default function ClubReportsScreen() {
   useEffect(() => { load(); }, [load]);
 
   const body = useMemo(() => {
+    if (tab === 'Staff') {
+      const active = staffMembers.filter((m) => m.status === 'active');
+      const pending = staffMembers.length - active.length;
+      const counts = positionUsageCounts(staffMembers);
+      const rows = Object.entries(counts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+      return (
+        <View style={s.card}>
+          <Text style={s.cardTitle}>Staff</Text>
+          <View style={{ flexDirection: 'row', gap: 18, marginTop: 10, marginBottom: rows.length ? 8 : 0 }}>
+            <View>
+              <Text style={s.bigStat}>{active.length}</Text>
+              <Text style={s.statLabel}>active staff</Text>
+            </View>
+            <View>
+              <Text style={s.bigStat}>{pending}</Text>
+              <Text style={s.statLabel}>pending invites</Text>
+            </View>
+          </View>
+          {rows.length === 0 ? (
+            <Text style={{ color: '#9ca3af', fontSize: 13, marginTop: 8 }}>
+              No team assignments yet — positions appear here once staff are assigned to teams.
+            </Text>
+          ) : (
+            rows.map(([title, n]) => (
+              <View key={title} style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 }}>
+                <Text style={{ fontSize: 13, fontWeight: '500', color: '#6b7280' }}>{title}</Text>
+                <Text style={{ fontSize: 13, fontWeight: '800', color: '#111', fontVariant: ['tabular-nums'] }}>{n}</Text>
+              </View>
+            ))
+          )}
+        </View>
+      );
+    }
+
     if (!reports) return null;
     if (reports.length === 0) {
       return <Text style={{ color: '#9ca3af', fontSize: 14, marginTop: 24, textAlign: 'center' }}>No team data yet.</Text>;
@@ -220,12 +260,12 @@ export default function ClubReportsScreen() {
               Median {median}' · spread {sortedMin[0]}'–{sortedMin[sortedMin.length - 1]}'
             </Text>
             {played.map((p) => {
-              const flagged = median > 0 && p.minutes < median * 0.5;
+              const flagged = median > 0 && p.minutes < median * (equityPct / 100);
               return (
                 <View key={p.playerId} style={{ marginTop: 10 }}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                     <Text style={{ fontSize: 13, fontWeight: '600', color: flagged ? '#dc2626' : '#111' }}>
-                      {p.playerName}{flagged ? '  ⚠️ under 50% of median' : ''}
+                      {p.playerName}{flagged ? `  ⚠️ under ${equityPct}% of median` : ''}
                     </Text>
                     <Text style={{ fontSize: 13, fontWeight: '800', color: '#111', fontVariant: ['tabular-nums'] }}>
                       {p.minutes}'
@@ -296,15 +336,15 @@ export default function ClubReportsScreen() {
         <View key={r.teamId} style={s.card}>
           <Text style={s.cardTitle}>{r.teamName}{stale ? '  💤' : ''}</Text>
           <View style={{ flexDirection: 'row', gap: 18, marginTop: 10 }}>
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={s.bigStat}>{matchPct == null ? '—' : `${matchPct}%`}</Text>
               <Text style={s.statLabel}>matches with events{'\n'}({r.matchesWithEvents}/{r.completedMatches})</Text>
             </View>
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={s.bigStat}>{trainPct == null ? '—' : `${trainPct}%`}</Text>
               <Text style={s.statLabel}>trainings checked in{'\n'}({r.trainingsWithCheckin}/{r.pastTrainings})</Text>
             </View>
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={s.bigStat}>{r.lastMatchISO ? r.lastMatchISO.substring(5, 10) : '—'}</Text>
               <Text style={s.statLabel}>last completed{'\n'}match</Text>
             </View>
@@ -312,11 +352,11 @@ export default function ClubReportsScreen() {
         </View>
       );
     });
-  }, [reports, tab]);
+  }, [reports, tab, staffMembers, equityPct]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#f2f2f7' }}>
-      <View style={{ flexDirection: 'row', gap: 8, padding: 16, paddingBottom: 10 }}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ flexDirection: 'row', gap: 8, padding: 16, paddingBottom: 10 }}>
         {TABS.map((t) => (
           <TouchableOpacity
             key={t}
@@ -330,7 +370,7 @@ export default function ClubReportsScreen() {
             <Text style={{ fontSize: 13, fontWeight: '700', color: tab === t ? '#fff' : '#374151' }}>{t}</Text>
           </TouchableOpacity>
         ))}
-      </View>
+      </ScrollView>
 
       {!reports ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
@@ -349,8 +389,8 @@ export default function ClubReportsScreen() {
           )}
           {tab === 'Equity' && (
             <Text style={s.blurb}>
-              Minutes this season. ⚠️ flags players under half the team median — your receipts
-              for equal-playing-time conversations.
+              Minutes this season. ⚠️ flags players under {equityPct}% of the team median (set in
+              Club Settings) — your receipts for equal-playing-time conversations.
             </Text>
           )}
           {tab === 'Positions' && (

@@ -42,9 +42,16 @@ glance, weather for the upcoming match, and the last result.
 **Club level** — from the Teams screen open the club dashboard:
 
 - **📊 Club Reports**: *Records* (per-competition W-D-L per team), *Equity*
-  (playing-time fairness with under-median flags — receipts for the "why isn't
-  my kid playing" conversation), *Positions* (who's stuck in one spot), and
-  *Adoption* (which coaches actually use the tools).
+  (playing-time fairness with under-threshold flags — receipts for the "why
+  isn't my kid playing" conversation; the club picks its own bar, 50–75% of
+  team median, in Club Settings), *Positions* (who's stuck in one spot),
+  *Adoption* (which coaches actually use the tools), and *Staff* (headcount
+  per position across the club).
+- **Staff with real positions**: invite staff as Head Coach, Team Manager,
+  GK Coach, Stats Specialist, Physio — or any custom title — **per team**, so
+  one person can be Head Coach of the U13s and GK Coach for the U15s. The
+  position list is club-managed (Club Settings), and titles show wherever
+  staff appear.
 - **📝 Tryouts**: sessions, quick-add candidates, tap-star ratings,
   keep/maybe/pass shortlists you can share.
 
@@ -59,9 +66,14 @@ The demo team has upcoming fixtures. Open one, then **Game Day**:
    handles rolling subs automatically.
 4. **Switch formation mid-game** — players re-slot to their natural positions
    by their position priority.
-5. Mistakes are safe: **undo** the last event, or remove any event later
+5. **Record a voice note** — tap **🎙** in the header and say what you just
+   saw ("Maya keeps ghosting at the far post on corners"). It lands
+   minute-stamped in the match detail, **visible to staff only** — parents can
+   never access it, so it's safe for candid player observations. Replay them
+   post-match while rating players.
+6. Mistakes are safe: **undo** the last event, or remove any event later
    ("logged by mistake" / "disallowed by referee, with reason").
-6. **Full time** → the recap, minutes, stats, and club reports all update
+7. **Full time** → the recap, minutes, stats, and club reports all update
    themselves.
 
 That's the pitch in one sentence: *one coach logging a game feeds every report

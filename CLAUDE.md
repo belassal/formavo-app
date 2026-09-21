@@ -60,6 +60,22 @@ functions/src/index.ts # all Cloud Functions
   (enforced in rules; `canAddTeam` mirrors it client-side). `plan` is written
   only by functions — a billing webhook will own it later. The club UI on
   TeamsScreen appears only with >1 team or >1 staff.
+- **Position catalog**: `clubs/{c}/config/staffPositions {positions: []}` —
+  the controlled vocabulary all position pickers read
+  (`staffPositionService`; missing doc = defaults). Managed in ClubSettings
+  (add/rename/remove; rename rewrites every member's teamPositions and the
+  sync function propagates; remove blocked while in use). Custom titles
+  entered via "Other…" auto-join the catalog. ClubReports has a Staff tab
+  counting members per position.
+- **Per-team staff positions**: club member docs carry
+  `teamPositions: {teamId: title}` (presets in `models/staffPosition.ts` +
+  free text; `teamIds` kept in sync as the key list). The
+  `syncClubMemberTeams` function mirrors assignments onto
+  `teams/{t}/members/{uid}` (`title` + role: Head Coach→coach, else
+  assistant) and `users/{uid}/teamRefs` — clients must NOT write another
+  user's team member docs/teamRefs (rules forbid it); they edit the club
+  member doc and let the function reconcile. It also revokes team access on
+  club removal. Parents' member docs are never touched by the sync.
 
 ## Security (deployed)
 - `firestore.rules`: team data readable by team members + members of the team's

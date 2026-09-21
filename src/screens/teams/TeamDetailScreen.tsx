@@ -55,6 +55,7 @@ import { db } from '../../services/firebase';
 import { migrateTeamPlayersToClub } from '../../services/clubPlayerService';
 import { listenTrainings, setTrainingAttendance, type Training } from '../../services/trainingService';
 import SeasonPickerModal from './components/SeasonPickerModal';
+import { listenClubPositions, addClubPosition, DEFAULT_POSITIONS } from '../../services/staffPositionService';
 import NewSeasonModal from './components/NewSeasonModal';
 
 type TeamDetailRoute = RouteProp<TeamsStackParamList, 'TeamDetail'>;
@@ -330,7 +331,12 @@ export default function TeamDetailScreen() {
   // Invite modal
   const [showInvite, setShowInvite] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<'assistant' | 'coach'>('assistant');
+  const [invitePosition, setInvitePosition] = useState<string>('Assistant Coach');
+  const [clubPositions, setClubPositions] = useState<string[]>(DEFAULT_POSITIONS);
+  useEffect(() => {
+    if (!clubId) return;
+    return listenClubPositions(clubId, setClubPositions);
+  }, [clubId]);
   const [savingInvite, setSavingInvite] = useState(false);
 
   // Roster
@@ -643,7 +649,7 @@ export default function TeamDetailScreen() {
   // --- Invite actions ---
   const openInvite = () => {
     setInviteEmail('');
-    setInviteRole('assistant');
+    setInvitePosition('Assistant Coach');
     setShowInvite(true);
   };
 
@@ -655,7 +661,7 @@ export default function TeamDetailScreen() {
     }
     setSavingInvite(true);
     try {
-      await inviteCoach({ teamId, inviteEmail: email, invitedBy: uid!, role: inviteRole });
+      await inviteCoach({ teamId, inviteEmail: email, invitedBy: uid!, title: invitePosition });
       setShowInvite(false);
       Alert.alert('Invite sent', `An invite has been sent to ${email}.`);
     } catch (e: any) {
@@ -1409,7 +1415,7 @@ export default function TeamDetailScreen() {
                           {isInvite ? m.invitedEmail || 'Invited' : memberLabel(m)}
                         </Text>
                         <Text style={{ marginTop: 2, fontSize: 13, color: '#9ca3af' }}>
-                          {m.role || 'assistant'}{isInvite ? ' · Pending' : ' · Active'}
+                          {(m as any).title || m.role || 'assistant'}{isInvite ? ' · Pending' : ' · Active'}
                         </Text>
                       </View>
                       {isInvite && (
@@ -1513,7 +1519,7 @@ export default function TeamDetailScreen() {
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' }}>
           <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, gap: 14 }}>
-            <Text style={{ fontSize: 17, fontWeight: '700', color: '#111' }}>Invite Coach</Text>
+            <Text style={{ fontSize: 17, fontWeight: '700', color: '#111' }}>Invite Staff</Text>
 
             <TextInput
               placeholder="Email address"
@@ -1525,18 +1531,48 @@ export default function TeamDetailScreen() {
               style={{ backgroundColor: '#f3f4f6', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 13, fontSize: 16, color: '#111' }}
             />
 
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              {(['assistant', 'coach'] as const).map((r) => (
-                <TouchableOpacity
-                  key={r}
-                  onPress={() => setInviteRole(r)}
-                  style={{ flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center', backgroundColor: inviteRole === r ? '#111' : '#f3f4f6' }}
-                >
-                  <Text style={{ fontWeight: '600', fontSize: 14, color: inviteRole === r ? '#fff' : '#374151' }}>
-                    {r === 'coach' ? 'Head Coach' : 'Assistant'}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {clubPositions.map((p) => {
+                const active = invitePosition === p;
+                return (
+                  <TouchableOpacity
+                    key={p}
+                    onPress={() => setInvitePosition(p)}
+                    style={{ paddingVertical: 9, paddingHorizontal: 14, borderRadius: 10, alignItems: 'center', backgroundColor: active ? '#111' : '#f3f4f6' }}
+                  >
+                    <Text style={{ fontWeight: '600', fontSize: 14, color: active ? '#fff' : '#374151' }}>
+                      {p}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+              <TouchableOpacity
+                onPress={() =>
+                  Alert.prompt(
+                    'Custom position',
+                    'e.g. Fitness Coach, Analyst…',
+                    (text) => {
+                      const t = (text || '').trim();
+                      if (!t) return;
+                      setInvitePosition(t);
+                      if (clubId) addClubPosition(clubId, t).catch(console.warn);
+                    },
+                    'plain-text',
+                    clubPositions.includes(invitePosition) ? '' : invitePosition,
+                  )
+                }
+                style={{
+                  paddingVertical: 9,
+                  paddingHorizontal: 14,
+                  borderRadius: 10,
+                  alignItems: 'center',
+                  backgroundColor: clubPositions.includes(invitePosition) ? '#f3f4f6' : '#111',
+                }}
+              >
+                <Text style={{ fontWeight: '600', fontSize: 14, color: clubPositions.includes(invitePosition) ? '#374151' : '#fff' }}>
+                  {clubPositions.includes(invitePosition) ? 'Other…' : `${invitePosition} ✎`}
+                </Text>
+              </TouchableOpacity>
             </View>
 
             <View style={{ flexDirection: 'row', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>

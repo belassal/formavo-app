@@ -32,6 +32,11 @@ target 'Formavo' do
     installer.pods_project.targets.each do |t|
       t.build_configurations.each do |c|
         c.build_settings['GCC_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
+        # Old pods declare iOS 9/11 deployment targets; newer Xcode (incl.
+        # Xcode Cloud) rejects anything below 15. Clamp to the app's minimum.
+        if c.build_settings['IPHONEOS_DEPLOYMENT_TARGET'].to_f < 15.1
+          c.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.1'
+        end
         c.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
         c.build_settings['CLANG_WARN_NON_MODULAR_INCLUDE_IN_FRAMEWORK_MODULES'] = 'NO'
 

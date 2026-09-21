@@ -1,5 +1,6 @@
 import { db, serverTimestamp, arrayUnion } from './firebase';
 import { COL } from '../models/collections';
+import { defaultPositionForClubRole, positionToTeamRole } from '../models/staffPosition';
 import { acceptClubStaffInvite } from './clubService';
 import { getOrCreateDefaultSeason, setActiveSeasonId } from './seasonService';
 
@@ -103,13 +104,17 @@ export async function createTeam(params: {
     // Non-fatal: season creation failed, team was still created
   }
 
-  // Record the team on the creator's club member doc (best effort)
+  // Record the team on the creator's club member doc (best effort). Only the
+  // club owner/head coach can get here, so the position defaults to Head Coach.
   await db
     .collection(COL.clubs)
     .doc(clubId)
     .collection(COL.clubMembers)
     .doc(createdBy)
-    .update({ teamIds: arrayUnion(teamId) })
+    .update({
+      teamIds: arrayUnion(teamId),
+      [`teamPositions.${teamId}`]: defaultPositionForClubRole('head_coach'),
+    })
     .catch((e) => console.warn('[createTeam] club member teamIds update failed:', e));
 
   return teamId;
@@ -259,9 +264,11 @@ export async function inviteCoach(params: {
   teamId: string;
   inviteEmail: string;
   invitedBy: string; // uid
-  role?: TeamRole; // default 'assistant'
+  role?: TeamRole; // default derived from title, else 'assistant'
+  title?: string; // staff position (models/staffPosition presets or custom)
 }) {
-  const { teamId, inviteEmail, invitedBy, role = 'assistant' } = params;
+  const { teamId, inviteEmail, invitedBy, title } = params;
+  const role: TeamRole = params.role ?? (title ? positionToTeamRole(title) : 'assistant');
 
   const emailLower = normLower(inviteEmail);
   if (!emailLower || !emailLower.includes('@')) throw new Error('Valid email is required');
@@ -271,6 +278,7 @@ export async function inviteCoach(params: {
   await teamRef.collection(COL.members).doc(inviteDocId(emailLower)).set(
     {
       role,
+      ...(title ? { title } : {}),
       status: 'invited' as MemberStatus,
       invitedEmail: emailLower,
       invitedEmailLower: emailLower,
@@ -283,7 +291,8 @@ export async function inviteCoach(params: {
   // Send the invite email (picked up by the Trigger Email extension)
   const teamSnap = await teamRef.get();
   const teamName = (teamSnap.data() as any)?.name || 'a team';
-  const roleLabel = role === 'coach' ? 'coach' : 'assistant coach';
+  const roleLabel = title || (role === 'coach' ? 'coach' : 'assistant coach');
+  const article = /^[aeiou]/i.test(roleLabel) ? 'an' : 'a';
   await db.collection('mail').add({
     to: [emailLower],
     message: {
@@ -294,7 +303,7 @@ export async function inviteCoach(params: {
             You're invited to Formavo ⚽
           </h2>
           <p style="color: #374151; font-size: 16px; line-height: 1.6;">
-            You've been invited to join <strong>${teamName}</strong> as ${roleLabel === 'coach' ? 'a' : 'an'} <strong>${roleLabel}</strong>.
+            You've been invited to join <strong>${teamName}</strong> as ${article} <strong>${roleLabel}</strong>.
           </p>
           <p style="color: #374151; font-size: 16px; line-height: 1.6;">
             Download the Formavo app and sign up with this email address
@@ -302,7 +311,7 @@ export async function inviteCoach(params: {
           </p>
         </div>
       `,
-      text: `You've been invited to join ${teamName} on Formavo as ${roleLabel === 'coach' ? 'a' : 'an'} ${roleLabel}.\n\nDownload the Formavo app and sign up with this email address (${emailLower}) to manage the roster, schedule and match days.`,
+      text: `You've been invited to join ${teamName} on Formavo as ${article} ${roleLabel}.\n\nDownload the Formavo app and sign up with this email address (${emailLower}) to manage the roster, schedule and match days.`,
     },
   }).catch((e) => console.warn('[inviteCoach] mail error:', e));
 }
@@ -480,6 +489,7 @@ export async function acceptTeamInvitesForUser(params: {
     if (parentCollection !== COL.teams) continue;
 
     const role: TeamRole = inviteData.role || 'assistant';
+    const title: string | undefined = role !== 'parent' && inviteData.title ? inviteData.title : undefined;
 
     // Propagate parent-player link fields if present.
     // Use arrayUnion so a second child invite for the same team appends to linkedPlayers.
@@ -507,6 +517,7 @@ export async function acceptTeamInvitesForUser(params: {
       memberRef,
       {
         role,
+        ...(title ? { title } : {}),
         status: 'active' as MemberStatus,
         joinedAt: serverTimestamp(),
         invitedEmail: emailLower,
@@ -529,6 +540,7 @@ export async function acceptTeamInvitesForUser(params: {
       {
         teamId,
         role,
+        ...(title ? { title } : {}),
         status: 'active' as MemberStatus,
         joinedAt: serverTimestamp(),
         teamName,

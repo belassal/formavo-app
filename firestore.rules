@@ -310,7 +310,7 @@ service cloud.firestore {
         allow update, delete: if isClubOwner(clubId);
         // A manager creating a team records it on their own member doc.
         allow update: if isClubManager(clubId) && memberId == uid()
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['teamIds']);
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['teamIds', 'teamPositions']);
         // Remove your own invite doc on acceptance.
         allow delete: if isSignedIn() && memberId == myInviteId();
       }

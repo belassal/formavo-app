@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onClubRequestUpdated = exports.onClubRequestCreated = exports.onUserDeleted = exports.sweepStaleLiveMatches = exports.rsvpReminders = exports.weeklyDigest = exports.onEventWriteRecompute = exports.onMatchCompletedAggregates = exports.onMatchEventCreated = exports.onTrainingAttendanceUpdated = exports.onMessageSent = exports.onTrainingCreated = exports.onRsvpUpdated = exports.onMatchCreated = exports.onAnnouncementCreated = void 0;
+exports.syncClubMemberTeams = exports.onClubRequestUpdated = exports.onClubRequestCreated = exports.onUserDeleted = exports.sweepStaleLiveMatches = exports.rsvpReminders = exports.weeklyDigest = exports.onEventWriteRecompute = exports.onMatchCompletedAggregates = exports.onMatchEventCreated = exports.onTrainingAttendanceUpdated = exports.onMessageSent = exports.onTrainingCreated = exports.onRsvpUpdated = exports.onMatchCreated = exports.onAnnouncementCreated = void 0;
 const app_1 = require("firebase-admin/app");
 const firestore_1 = require("firebase-admin/firestore");
 const messaging_1 = require("firebase-admin/messaging");
@@ -803,6 +803,7 @@ exports.onClubRequestUpdated = functions.firestore
         email: contactEmail,
         photoUrl: (_c = (_b = userSnap.data()) === null || _b === void 0 ? void 0 : _b.photoUrl) !== null && _c !== void 0 ? _c : null,
         teamIds: [],
+        teamPositions: {},
         joinedAt: now,
     });
     batch.set(db.collection('users').doc(uid).collection('clubRef').doc('data'), { clubId: clubRef.id }, { merge: true });
@@ -820,5 +821,92 @@ exports.onClubRequestUpdated = functions.firestore
         },
     });
     console.log(`Provisioned club ${clubRef.id} for request ${requestId}`);
+});
+// ─── Sync club member team assignments → team memberships ───────────────────
+// The client (StaffProfile / invite acceptance) only edits the club member doc
+// (teamPositions: {teamId: title}); security rules don't let one user write
+// another user's teamRefs, so this function reconciles the real memberships:
+//   • assign/retitle → teams/{t}/members/{uid} {role, title} + users/{uid}/teamRefs/{t}
+//   • unassign or club removal → both docs deleted
+// Guards: invite_ docs are skipped (handled at acceptance), teams outside this
+// club are never touched, and a member doc holding role 'parent' is left alone.
+function assignmentsOf(data) {
+    var _a, _b;
+    if (!data)
+        return {};
+    const positions = ((_a = data.teamPositions) !== null && _a !== void 0 ? _a : {});
+    const out = Object.assign({}, positions);
+    // Legacy members: teamIds without teamPositions — derive a default title.
+    const fallback = data.role === 'owner' || data.role === 'head_coach'
+        ? 'Head Coach'
+        : data.role === 'asst_coach'
+            ? 'Assistant Coach'
+            : 'Team Manager';
+    for (const teamId of ((_b = data.teamIds) !== null && _b !== void 0 ? _b : [])) {
+        if (!out[teamId])
+            out[teamId] = fallback;
+    }
+    return out;
+}
+exports.syncClubMemberTeams = functions.firestore
+    .document('clubs/{clubId}/members/{memberId}')
+    .onWrite(async (change, context) => {
+    var _a, _b, _c;
+    const { clubId, memberId } = context.params;
+    if (memberId.startsWith('invite_'))
+        return;
+    const before = assignmentsOf(change.before.exists ? change.before.data() : undefined);
+    const after = assignmentsOf(change.after.exists ? change.after.data() : undefined);
+    const afterData = change.after.exists ? change.after.data() : {};
+    const uid = memberId;
+    const toRemove = Object.keys(before).filter((t) => !(t in after));
+    const toSet = Object.keys(after).filter((t) => before[t] !== after[t]);
+    if (!toRemove.length && !toSet.length)
+        return;
+    const teamIds = [...new Set([...toRemove, ...toSet])];
+    const teamSnaps = await db.getAll(...teamIds.map((t) => db.collection('teams').doc(t)));
+    const teamById = new Map(teamSnaps.map((s) => [s.id, s]));
+    const memberSnaps = await db.getAll(...teamIds.map((t) => db.collection('teams').doc(t).collection('members').doc(uid)));
+    const memberByTeam = new Map(teamIds.map((t, i) => [t, memberSnaps[i]]));
+    const batch = db.batch();
+    let writes = 0;
+    for (const teamId of toRemove) {
+        const teamSnap = teamById.get(teamId);
+        if (!(teamSnap === null || teamSnap === void 0 ? void 0 : teamSnap.exists) || ((_a = teamSnap.data()) === null || _a === void 0 ? void 0 : _a.clubId) !== clubId)
+            continue;
+        const existing = memberByTeam.get(teamId);
+        if ((existing === null || existing === void 0 ? void 0 : existing.exists) && ((_b = existing.data()) === null || _b === void 0 ? void 0 : _b.role) === 'parent')
+            continue;
+        batch.delete(db.collection('teams').doc(teamId).collection('members').doc(uid));
+        batch.delete(db.collection('users').doc(uid).collection('teamRefs').doc(teamId));
+        writes++;
+    }
+    for (const teamId of toSet) {
+        const teamSnap = teamById.get(teamId);
+        const teamData = (teamSnap === null || teamSnap === void 0 ? void 0 : teamSnap.exists) ? teamSnap.data() : null;
+        if (!teamData || teamData.isDeleted || teamData.clubId !== clubId)
+            continue;
+        const existing = memberByTeam.get(teamId);
+        if ((existing === null || existing === void 0 ? void 0 : existing.exists) && ((_c = existing.data()) === null || _c === void 0 ? void 0 : _c.role) === 'parent')
+            continue;
+        const title = after[teamId];
+        const role = title === 'Head Coach' ? 'coach' : 'assistant';
+        const teamName = teamData.name || 'Team';
+        batch.set(db.collection('teams').doc(teamId).collection('members').doc(uid), Object.assign(Object.assign({ role,
+            title, status: 'active' }, (afterData.displayName ? { displayName: afterData.displayName } : {})), ((existing === null || existing === void 0 ? void 0 : existing.exists) ? {} : { joinedAt: firestore_1.FieldValue.serverTimestamp() })), { merge: true });
+        batch.set(db.collection('users').doc(uid).collection('teamRefs').doc(teamId), {
+            teamId,
+            role,
+            title,
+            status: 'active',
+            teamName,
+            teamNameLower: String(teamName).toLowerCase(),
+            isDeleted: false,
+        }, { merge: true });
+        writes++;
+    }
+    if (writes)
+        await batch.commit();
+    console.log(`syncClubMemberTeams ${clubId}/${uid}: ${toSet.length} set, ${toRemove.length} removed, ${writes} applied`);
 });
 //# sourceMappingURL=index.js.map

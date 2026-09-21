@@ -15,6 +15,14 @@ import type { TeamsStackParamList } from '../../navigation/stacks/TeamsStack';
 import { listenClub, listenClubMembers, updateClub } from '../../services/clubService';
 import type { Club, ClubMember } from '../../services/clubService';
 import { pickPhoto, uploadClubLogo, uploadSponsorLogo } from '../../services/storageService';
+import {
+  listenClubPositions,
+  addClubPosition,
+  removeClubPosition,
+  renameClubPosition,
+  positionUsageCounts,
+  DEFAULT_POSITIONS,
+} from '../../services/staffPositionService';
 import { B } from '../../constants/brand';
 
 type Props = NativeStackScreenProps<TeamsStackParamList, 'ClubSettings'>;
@@ -28,6 +36,60 @@ export default function ClubSettingsScreen({ route }: Props) {
 
   const [nameInput, setNameInput] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // Staff position catalog
+  const [positions, setPositions] = useState<string[]>(DEFAULT_POSITIONS);
+  const [newPosition, setNewPosition] = useState('');
+  useEffect(() => listenClubPositions(clubId, setPositions), [clubId]);
+  const usage = positionUsageCounts(members);
+
+  const handleAddPosition = async () => {
+    const t = newPosition.trim();
+    if (!t) return;
+    setNewPosition('');
+    try {
+      await addClubPosition(clubId, t);
+    } catch (e: any) {
+      Alert.alert('Error', e?.message ?? 'Could not add position.');
+    }
+  };
+
+  const handleRenamePosition = (title: string) => {
+    Alert.prompt(
+      'Rename position',
+      `Everyone currently assigned as "${title}" will be updated too.`,
+      async (text) => {
+        const t = (text || '').trim();
+        if (!t || t === title) return;
+        try {
+          await renameClubPosition({ clubId, oldTitle: title, newTitle: t });
+        } catch (e: any) {
+          Alert.alert('Error', e?.message ?? 'Could not rename position.');
+        }
+      },
+      'plain-text',
+      title,
+    );
+  };
+
+  const handleRemovePosition = (title: string) => {
+    const inUse = usage[title] ?? 0;
+    if (inUse > 0) {
+      Alert.alert(
+        'Position in use',
+        `${inUse} staff ${inUse === 1 ? 'member is' : 'members are'} assigned as "${title}". Reassign or rename them first.`,
+      );
+      return;
+    }
+    Alert.alert('Remove position?', `"${title}" will no longer be offered when assigning staff.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: () => removeClubPosition(clubId, title).catch((e) => Alert.alert('Error', e?.message ?? 'Could not remove.')),
+      },
+    ]);
+  };
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [sponsorInput, setSponsorInput] = useState('');
   const [sponsorTouched, setSponsorTouched] = useState(false);
@@ -280,6 +342,88 @@ export default function ClubSettingsScreen({ route }: Props) {
                 </Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+
+        {/* Equity Threshold Card */}
+        <View style={cardStyle}>
+          <View style={cardHeaderStyle}>
+            <Text style={cardTitleStyle}>Playing-Time Flag</Text>
+            <Text style={{ fontSize: 13, color: '#9ca3af', marginTop: 3 }}>
+              Club Reports flags players whose season minutes fall under this share of their team's median.
+            </Text>
+          </View>
+          <View style={{ height: 1, backgroundColor: '#f3f4f6' }} />
+          <View style={{ flexDirection: 'row', gap: 8, padding: 14, flexWrap: 'wrap' }}>
+            {[50, 60, 65, 70, 75].map((pct) => {
+              const active = ((club as any)?.equityThresholdPct ?? 50) === pct;
+              return (
+                <TouchableOpacity
+                  key={pct}
+                  onPress={() =>
+                    updateClub({ clubId, equityThresholdPct: pct }).catch((e: any) =>
+                      Alert.alert('Error', e?.message ?? 'Could not save.'),
+                    )
+                  }
+                  style={{
+                    paddingVertical: 8,
+                    paddingHorizontal: 16,
+                    borderRadius: 20,
+                    backgroundColor: active ? '#111' : '#f3f4f6',
+                  }}
+                >
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: active ? '#fff' : '#374151' }}>
+                    {pct}%
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* Staff Positions Card */}
+        <View style={cardStyle}>
+          <View style={cardHeaderStyle}>
+            <Text style={cardTitleStyle}>Staff Positions</Text>
+            <Text style={{ fontSize: 13, color: '#9ca3af', marginTop: 3 }}>
+              The positions offered when inviting or assigning staff. Renaming updates everyone holding it.
+            </Text>
+          </View>
+          {positions.map((p) => (
+            <View key={p}>
+              <View style={{ height: 1, backgroundColor: '#f3f4f6' }} />
+              <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, gap: 8 }}>
+                <Text style={{ flex: 1, fontSize: 15, color: '#111', fontWeight: '500' }}>{p}</Text>
+                {(usage[p] ?? 0) > 0 && (
+                  <Text style={{ fontSize: 12, color: '#9ca3af' }}>{usage[p]} assigned</Text>
+                )}
+                <TouchableOpacity onPress={() => handleRenamePosition(p)} style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 15, color: '#9ca3af' }}>✎</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => handleRemovePosition(p)} style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 18, fontWeight: '700', color: '#ef4444', lineHeight: 22 }}>×</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
+          <View style={{ height: 1, backgroundColor: '#f3f4f6' }} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, gap: 10 }}>
+            <TextInput
+              value={newPosition}
+              onChangeText={setNewPosition}
+              placeholder="New position (e.g. Analyst)"
+              placeholderTextColor="#9ca3af"
+              onSubmitEditing={handleAddPosition}
+              returnKeyType="done"
+              style={{ flex: 1, backgroundColor: '#f3f4f6', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, fontSize: 14, color: '#111' }}
+            />
+            <TouchableOpacity
+              onPress={handleAddPosition}
+              disabled={!newPosition.trim()}
+              style={{ backgroundColor: newPosition.trim() ? '#111' : '#f3f4f6', borderRadius: 10, paddingVertical: 9, paddingHorizontal: 16 }}
+            >
+              <Text style={{ color: newPosition.trim() ? '#fff' : '#9ca3af', fontWeight: '700', fontSize: 14 }}>Add</Text>
+            </TouchableOpacity>
           </View>
         </View>
 

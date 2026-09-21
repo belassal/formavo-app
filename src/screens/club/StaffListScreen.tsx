@@ -10,11 +10,10 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { TeamsStackParamList } from '../../navigation/stacks/TeamsStack';
-import { listenClub, listenClubMembers } from '../../services/clubService';
+import { listenClub, listenClubMembers, listenClubTeams } from '../../services/clubService';
 import type { Club, ClubMember, ClubRole } from '../../services/clubService';
 import Avatar from '../../components/Avatar';
 import InviteStaffModal from './InviteStaffModal';
-import { listenMyTeams } from '../../services/teamService';
 import auth from '@react-native-firebase/auth';
 
 type Props = NativeStackScreenProps<TeamsStackParamList, 'StaffList'>;
@@ -69,8 +68,6 @@ export default function StaffListScreen({ route }: Props) {
   const { clubId, clubName, viewerRole } = route.params;
   const navigation = useNavigation<NativeStackNavigationProp<TeamsStackParamList>>();
 
-  const uid = auth().currentUser?.uid ?? null;
-
   const [club, setClub] = useState<Club | null>(null);
   const [members, setMembers] = useState<ClubMember[]>([]);
   const [loading, setLoading] = useState(true);
@@ -93,17 +90,7 @@ export default function StaffListScreen({ route }: Props) {
     };
   }, [clubId]);
 
-  useEffect(() => {
-    if (!uid) return;
-    const unsub = listenMyTeams(uid, (rows: any[]) => {
-      setMyTeams(
-        rows
-          .filter((r) => !r.isDeleted && r.role !== 'parent')
-          .map((r) => ({ id: r.id, name: r.teamName || r.id })),
-      );
-    });
-    return () => unsub();
-  }, [uid]);
+  useEffect(() => listenClubTeams(clubId, setMyTeams), [clubId]);
 
   const inviterName = auth().currentUser?.displayName ?? auth().currentUser?.email ?? 'Coach';
 
