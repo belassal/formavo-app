@@ -384,7 +384,8 @@ export default function TeamsScreen() {
               <Text style={{ fontSize: 17, fontWeight: '800', color: '#fff' }}>⏳  Request received</Text>
               <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.75)', marginTop: 2, lineHeight: 19 }}>
                 We're setting up <Text style={{ fontWeight: '700', color: '#fff' }}>{clubRequest?.clubName}</Text>.
-                You'll get an email at {clubRequest?.contactEmailLower} as soon as it's ready.
+                Requests are usually approved within a few hours — you'll get an email
+                at {clubRequest?.contactEmailLower} as soon as it's ready.
               </Text>
             </View>
           ) : !clubId ? (

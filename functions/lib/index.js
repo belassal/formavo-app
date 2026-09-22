@@ -1,8 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.expireTrials = exports.TRIAL_DAYS = exports.syncClubMemberTeams = exports.onClubRequestUpdated = exports.onClubRequestCreated = exports.onUserDeleted = exports.sweepStaleLiveMatches = exports.rsvpReminders = exports.weeklyDigest = exports.onEventWriteRecompute = exports.onMatchCompletedAggregates = exports.onMatchEventCreated = exports.onTrainingAttendanceUpdated = exports.onMessageSent = exports.onTrainingCreated = exports.onRsvpUpdated = exports.onMatchCreated = exports.onAnnouncementCreated = void 0;
+exports.clubRequestAction = exports.expireTrials = exports.TRIAL_DAYS = exports.syncClubMemberTeams = exports.onClubRequestUpdated = exports.onClubRequestCreated = exports.onUserDeleted = exports.sweepStaleLiveMatches = exports.rsvpReminders = exports.weeklyDigest = exports.onEventWriteRecompute = exports.onMatchCompletedAggregates = exports.onMatchEventCreated = exports.onTrainingAttendanceUpdated = exports.onMessageSent = exports.onTrainingCreated = exports.onRsvpUpdated = exports.onMatchCreated = exports.onAnnouncementCreated = void 0;
 const app_1 = require("firebase-admin/app");
 const firestore_1 = require("firebase-admin/firestore");
+const crypto_1 = require("crypto");
 const messaging_1 = require("firebase-admin/messaging");
 const functions = require("firebase-functions/v1");
 const params_1 = require("firebase-functions/params");
@@ -715,6 +716,14 @@ exports.onClubRequestCreated = functions.firestore
         console.warn('ADMIN_NOTIFY_EMAIL is not set; skipping club request email');
         return;
     }
+    // One-click approval: a random token stored on the request doc authorizes
+    // the clubRequestAction HTTPS endpoint (links only ever go to the admin).
+    // Kept OUT of the request doc itself: the requester can read their own
+    // request, and must never see the token that approves it.
+    const adminToken = (0, crypto_1.randomBytes)(16).toString('hex');
+    await snap.ref.collection('private').doc('admin').set({ adminToken });
+    const actionUrl = (action) => `https://us-central1-formavo-prod.cloudfunctions.net/clubRequestAction` +
+        `?id=${context.params.requestId}&action=${action}&token=${adminToken}`;
     const rows = [
         ['Club', data.clubName],
         ['Contact', `${data.contactName || '—'} (${data.contactEmailLower})`],
@@ -732,13 +741,18 @@ exports.onClubRequestCreated = functions.firestore
         message: {
             subject: `Formavo club request: ${data.clubName}`,
             html: emailShell('New club request', `<table style="border-collapse:collapse;">${table}</table>
-           <p style="color:#374151;font-size:14px;line-height:1.6;margin-top:16px;">
-             Approve by setting <code>status</code> to <code>approved</code> on
-             <code>clubRequests/${context.params.requestId}</code> in the Firebase console
-             (or <code>rejected</code> to decline).
+           <p style="margin-top:20px;">
+             <a href="${actionUrl('approve')}" style="display:inline-block;background:#16a34a;color:#fff;font-weight:700;font-size:15px;padding:12px 28px;border-radius:12px;text-decoration:none;">Approve</a>
+             &nbsp;&nbsp;
+             <a href="${actionUrl('reject')}" style="display:inline-block;background:#f3f4f6;color:#374151;font-weight:700;font-size:15px;padding:12px 28px;border-radius:12px;text-decoration:none;">Reject</a>
+           </p>
+           <p style="color:#9ca3af;font-size:12px;line-height:1.6;margin-top:12px;">
+             One tap provisions the club and emails the coach. Fallback: set
+             <code>status</code> on <code>clubRequests/${context.params.requestId}</code>
+             in the Firebase console.
            </p>`),
             text: rows.map(([k, v]) => `${k}: ${v}`).join('\n') +
-                `\n\nApprove by setting status=approved on clubRequests/${context.params.requestId}.`,
+                `\n\nApprove: ${actionUrl('approve')}\nReject: ${actionUrl('reject')}`,
         },
     });
 });
@@ -919,7 +933,7 @@ exports.expireTrials = functions.pubsub
     .schedule('every day 06:00')
     .timeZone('America/Halifax')
     .onRun(async () => {
-    var _a, _b, _c;
+    var _a, _b, _c, _d, _e;
     const snap = await db.collection('clubs').where('plan.status', '==', 'active').get();
     const nowMs = Date.now();
     let expired = 0;
@@ -927,7 +941,36 @@ exports.expireTrials = functions.pubsub
         const plan = doc.data().plan || {};
         if (plan.tier !== 'trial')
             continue;
-        if (!((_a = plan.expiresAt) === null || _a === void 0 ? void 0 : _a.toMillis) || plan.expiresAt.toMillis() > nowMs)
+        if (!((_a = plan.expiresAt) === null || _a === void 0 ? void 0 : _a.toMillis))
+            continue;
+        const msLeft = plan.expiresAt.toMillis() - nowMs;
+        // Heads-up email once, in the final week of the trial.
+        if (msLeft > 0 && msLeft <= 7 * 24 * 60 * 60 * 1000 && !plan.warningSentAt) {
+            const ownerSnap = await doc.ref
+                .collection('members').where('role', '==', 'owner').limit(1).get();
+            const ownerEmail = (_c = (_b = ownerSnap.docs[0]) === null || _b === void 0 ? void 0 : _b.data()) === null || _c === void 0 ? void 0 : _c.email;
+            if (ownerEmail) {
+                const clubName = doc.data().name || 'your club';
+                const daysLeft = Math.max(1, Math.ceil(msLeft / (24 * 60 * 60 * 1000)));
+                await db.collection('mail').add({
+                    to: [ownerEmail],
+                    message: {
+                        subject: `Your Formavo trial for ${clubName} ends in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`,
+                        html: emailShell('Your trial is ending soon', `<p style="color:#374151;font-size:16px;line-height:1.6;">
+                   The trial for <strong>${escapeHtml(clubName)}</strong> ends in
+                   <strong>${daysLeft} day${daysLeft === 1 ? '' : 's'}</strong>. Everything you've
+                   built — teams, schedules, stats — stays safe either way.
+                 </p>
+                 <p style="color:#374151;font-size:16px;line-height:1.6;">
+                   Reply to this email to keep going without interruption.
+                 </p>`),
+                        text: `The trial for ${clubName} ends in ${daysLeft} day(s). Everything you've built stays safe either way. Reply to this email to keep going without interruption.`,
+                    },
+                });
+            }
+            await doc.ref.update({ 'plan.warningSentAt': firestore_1.FieldValue.serverTimestamp() });
+        }
+        if (msLeft > 0)
             continue;
         await doc.ref.update({
             'plan.status': 'expired',
@@ -940,7 +983,7 @@ exports.expireTrials = functions.pubsub
             .where('role', '==', 'owner')
             .limit(1)
             .get();
-        const ownerEmail = (_c = (_b = ownerSnap.docs[0]) === null || _b === void 0 ? void 0 : _b.data()) === null || _c === void 0 ? void 0 : _c.email;
+        const ownerEmail = (_e = (_d = ownerSnap.docs[0]) === null || _d === void 0 ? void 0 : _d.data()) === null || _e === void 0 ? void 0 : _e.email;
         if (ownerEmail) {
             const clubName = doc.data().name || 'your club';
             await db.collection('mail').add({
@@ -961,5 +1004,50 @@ exports.expireTrials = functions.pubsub
         }
     }
     console.log(`expireTrials: ${snap.size} active plans checked, ${expired} expired`);
+});
+// ─── One-click club request approval (links in the admin email) ─────────────
+// GET ?id=<requestId>&action=approve|reject&token=<adminToken>. The token is
+// random, generated per request, stored only on the request doc and mailed
+// only to ADMIN_NOTIFY_EMAIL. Flipping status here fires onClubRequestUpdated,
+// which does the actual provisioning/emails.
+exports.clubRequestAction = functions.https.onRequest(async (req, res) => {
+    var _a;
+    const page = (title, body, code = 200) => res.status(code).send(`<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">` +
+        `<body style="font-family:-apple-system,sans-serif;background:#f2f2f7;display:flex;justify-content:center;padding-top:15vh;">` +
+        `<div style="background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:28px 32px;max-width:420px;text-align:center;">` +
+        `<h2 style="margin:0 0 8px;color:#111;">${title}</h2>` +
+        `<p style="color:#6b7280;margin:0;line-height:1.6;">${body}</p></div>`);
+    const id = String(req.query.id || '');
+    const action = String(req.query.action || '');
+    const token = String(req.query.token || '');
+    if (!id || !token || !['approve', 'reject'].includes(action)) {
+        page('Invalid link', 'This approval link is malformed.', 400);
+        return;
+    }
+    const ref = db.collection('clubRequests').doc(id);
+    const [snap, tokenSnap] = await Promise.all([
+        ref.get(),
+        ref.collection('private').doc('admin').get(),
+    ]);
+    const data = snap.data();
+    const expected = (_a = tokenSnap.data()) === null || _a === void 0 ? void 0 : _a.adminToken;
+    if (!snap.exists || !expected || expected !== token) {
+        page('Invalid link', 'This approval link is not valid.', 403);
+        return;
+    }
+    if (data.status !== 'pending') {
+        page('Already handled', `This request is already <b>${escapeHtml(data.status)}</b>.`);
+        return;
+    }
+    await ref.update({
+        status: action === 'approve' ? 'approved' : 'rejected',
+        actionedVia: 'email-link',
+    });
+    if (action === 'approve') {
+        page('Approved ✓', `<b>${escapeHtml(data.clubName)}</b> is being provisioned — the coach gets their welcome email in a moment.`);
+    }
+    else {
+        page('Rejected', `<b>${escapeHtml(data.clubName)}</b> was declined; the requester has been emailed.`);
+    }
 });
 //# sourceMappingURL=index.js.map
