@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.syncClubMemberTeams = exports.onClubRequestUpdated = exports.onClubRequestCreated = exports.onUserDeleted = exports.sweepStaleLiveMatches = exports.rsvpReminders = exports.weeklyDigest = exports.onEventWriteRecompute = exports.onMatchCompletedAggregates = exports.onMatchEventCreated = exports.onTrainingAttendanceUpdated = exports.onMessageSent = exports.onTrainingCreated = exports.onRsvpUpdated = exports.onMatchCreated = exports.onAnnouncementCreated = void 0;
+exports.expireTrials = exports.TRIAL_DAYS = exports.syncClubMemberTeams = exports.onClubRequestUpdated = exports.onClubRequestCreated = exports.onUserDeleted = exports.sweepStaleLiveMatches = exports.rsvpReminders = exports.weeklyDigest = exports.onEventWriteRecompute = exports.onMatchCompletedAggregates = exports.onMatchEventCreated = exports.onTrainingAttendanceUpdated = exports.onMessageSent = exports.onTrainingCreated = exports.onRsvpUpdated = exports.onMatchCreated = exports.onAnnouncementCreated = void 0;
 const app_1 = require("firebase-admin/app");
 const firestore_1 = require("firebase-admin/firestore");
 const messaging_1 = require("firebase-admin/messaging");
@@ -792,6 +792,7 @@ exports.onClubRequestUpdated = functions.firestore
             status: 'active',
             maxTeams: Number(after.teamCount) > 0 ? Number(after.teamCount) : 3,
             startedAt: now,
+            expiresAt: firestore_1.Timestamp.fromMillis(Date.now() + exports.TRIAL_DAYS * 24 * 60 * 60 * 1000),
         },
         createdAt: now,
         updatedAt: now,
@@ -908,5 +909,57 @@ exports.syncClubMemberTeams = functions.firestore
     if (writes)
         await batch.commit();
     console.log(`syncClubMemberTeams ${clubId}/${uid}: ${toSet.length} set, ${toRemove.length} removed, ${writes} applied`);
+});
+// ─── Trial expiry ────────────────────────────────────────────────────────────
+// Daily sweep: trials past their expiresAt flip to status 'expired', which the
+// rules + client gate on (no new teams; existing data stays readable). Clubs
+// whose plan has NO expiresAt (backfilled/grandfathered) never expire here.
+exports.TRIAL_DAYS = 30;
+exports.expireTrials = functions.pubsub
+    .schedule('every day 06:00')
+    .timeZone('America/Halifax')
+    .onRun(async () => {
+    var _a, _b, _c;
+    const snap = await db.collection('clubs').where('plan.status', '==', 'active').get();
+    const nowMs = Date.now();
+    let expired = 0;
+    for (const doc of snap.docs) {
+        const plan = doc.data().plan || {};
+        if (plan.tier !== 'trial')
+            continue;
+        if (!((_a = plan.expiresAt) === null || _a === void 0 ? void 0 : _a.toMillis) || plan.expiresAt.toMillis() > nowMs)
+            continue;
+        await doc.ref.update({
+            'plan.status': 'expired',
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
+        });
+        expired++;
+        // Tell the owner (best effort).
+        const ownerSnap = await doc.ref
+            .collection('members')
+            .where('role', '==', 'owner')
+            .limit(1)
+            .get();
+        const ownerEmail = (_c = (_b = ownerSnap.docs[0]) === null || _b === void 0 ? void 0 : _b.data()) === null || _c === void 0 ? void 0 : _c.email;
+        if (ownerEmail) {
+            const clubName = doc.data().name || 'your club';
+            await db.collection('mail').add({
+                to: [ownerEmail],
+                message: {
+                    subject: `Your Formavo trial for ${clubName} has ended`,
+                    html: emailShell('Your trial has ended', `<p style="color:#374151;font-size:16px;line-height:1.6;">
+                 The trial for <strong>${escapeHtml(clubName)}</strong> has ended. Your
+                 teams, schedules and stats are all safe and stay readable — but new
+                 teams can't be added until the plan is renewed.
+               </p>
+               <p style="color:#374151;font-size:16px;line-height:1.6;">
+                 Reply to this email and we'll get you set up.
+               </p>`),
+                    text: `The trial for ${clubName} has ended. Your teams, schedules and stats are safe and stay readable, but new teams can't be added until the plan is renewed. Reply to this email and we'll get you set up.`,
+                },
+            });
+        }
+    }
+    console.log(`expireTrials: ${snap.size} active plans checked, ${expired} expired`);
 });
 //# sourceMappingURL=index.js.map

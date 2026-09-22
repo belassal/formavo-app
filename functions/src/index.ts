@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase-admin/app';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { getMessaging } from 'firebase-admin/messaging';
 import * as functions from 'firebase-functions/v1';
 import { defineString } from 'firebase-functions/params';
@@ -959,6 +959,7 @@ export const onClubRequestUpdated = functions.firestore
         status: 'active',
         maxTeams: Number(after.teamCount) > 0 ? Number(after.teamCount) : 3,
         startedAt: now,
+        expiresAt: Timestamp.fromMillis(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000),
       },
       createdAt: now,
       updatedAt: now,
@@ -1101,4 +1102,62 @@ export const syncClubMemberTeams = functions.firestore
 
     if (writes) await batch.commit();
     console.log(`syncClubMemberTeams ${clubId}/${uid}: ${toSet.length} set, ${toRemove.length} removed, ${writes} applied`);
+  });
+
+// ─── Trial expiry ────────────────────────────────────────────────────────────
+// Daily sweep: trials past their expiresAt flip to status 'expired', which the
+// rules + client gate on (no new teams; existing data stays readable). Clubs
+// whose plan has NO expiresAt (backfilled/grandfathered) never expire here.
+export const TRIAL_DAYS = 30;
+
+export const expireTrials = functions.pubsub
+  .schedule('every day 06:00')
+  .timeZone('America/Halifax')
+  .onRun(async () => {
+    const snap = await db.collection('clubs').where('plan.status', '==', 'active').get();
+    const nowMs = Date.now();
+    let expired = 0;
+
+    for (const doc of snap.docs) {
+      const plan = doc.data().plan || {};
+      if (plan.tier !== 'trial') continue;
+      if (!plan.expiresAt?.toMillis || plan.expiresAt.toMillis() > nowMs) continue;
+
+      await doc.ref.update({
+        'plan.status': 'expired',
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      expired++;
+
+      // Tell the owner (best effort).
+      const ownerSnap = await doc.ref
+        .collection('members')
+        .where('role', '==', 'owner')
+        .limit(1)
+        .get();
+      const ownerEmail = ownerSnap.docs[0]?.data()?.email;
+      if (ownerEmail) {
+        const clubName = doc.data().name || 'your club';
+        await db.collection('mail').add({
+          to: [ownerEmail],
+          message: {
+            subject: `Your Formavo trial for ${clubName} has ended`,
+            html: emailShell(
+              'Your trial has ended',
+              `<p style="color:#374151;font-size:16px;line-height:1.6;">
+                 The trial for <strong>${escapeHtml(clubName)}</strong> has ended. Your
+                 teams, schedules and stats are all safe and stay readable — but new
+                 teams can't be added until the plan is renewed.
+               </p>
+               <p style="color:#374151;font-size:16px;line-height:1.6;">
+                 Reply to this email and we'll get you set up.
+               </p>`,
+            ),
+            text: `The trial for ${clubName} has ended. Your teams, schedules and stats are safe and stay readable, but new teams can't be added until the plan is renewed. Reply to this email and we'll get you set up.`,
+          },
+        });
+      }
+    }
+
+    console.log(`expireTrials: ${snap.size} active plans checked, ${expired} expired`);
   });
