@@ -83,6 +83,60 @@
   .cell b { display: block; font-family: var(--display); font-weight: 800; font-size: 14.5px; }
   .cell span { color: var(--muted); font-size: 13.5px; }
 
+  /* ── Phone-framed Game Day pitch mock ── */
+  .phone { background: var(--navy); border-radius: 26px; padding: 10px 10px 14px;
+    max-width: 300px; margin: 16px auto 0; box-shadow: 0 12px 30px rgba(11,18,32,0.25); }
+  .phone .bar { display: flex; align-items: center; justify-content: space-between;
+    color: var(--navy-ink); padding: 6px 8px 10px; }
+  .phone .bar .clock { font-family: var(--display); font-weight: 900; font-size: 17px;
+    font-variant-numeric: tabular-nums; }
+  .phone .bar .live { background: #dc2626; color: #fff; font-family: var(--display);
+    font-weight: 800; font-size: 9.5px; letter-spacing: 0.1em; padding: 2px 8px; border-radius: 999px; }
+  .phone .bar .sc { font-family: var(--display); font-weight: 900; font-size: 17px;
+    font-variant-numeric: tabular-nums; }
+  .pitch { position: relative; border-radius: 14px; overflow: hidden; aspect-ratio: 3/3.6;
+    background-color: #15803d;
+    background-image: repeating-linear-gradient(0deg, rgba(255,255,255,0.05) 0 12.5%, rgba(0,0,0,0.03) 12.5% 25%), linear-gradient(#15803d, #166534); }
+  .pitch::before { content:''; position:absolute; left:50%; top:50%; width:34%; aspect-ratio:1;
+    border:1.5px solid rgba(255,255,255,0.4); border-radius:50%; transform:translate(-50%,-50%); }
+  .pitch::after { content:''; position:absolute; left:0; right:0; top:50%; height:1.5px;
+    background:rgba(255,255,255,0.4); }
+  .pitch .box { position:absolute; left:22%; right:22%; height:14%;
+    border:1.5px solid rgba(255,255,255,0.4); }
+  .pitch .box.t { top:-1.5px; border-top:0; } .pitch .box.b { bottom:-1.5px; border-bottom:0; }
+  .dot { position:absolute; transform:translate(-50%,-50%); text-align:center; width:52px; }
+  .dot .n { width:30px; height:30px; margin:0 auto; border-radius:50%; background:#fff; color:#0b1220;
+    font-family:var(--display); font-weight:900; font-size:13px;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 2px 6px rgba(0,0,0,0.35); border:2px solid var(--green-bright); }
+  .dot.gk .n { border-color:#f59e0b; }
+  .dot small { display:block; color:#fff; font-size:8.5px; font-weight:700; margin-top:2px;
+    text-shadow:0 1px 2px rgba(0,0,0,0.5); }
+  .bench { display:flex; gap:6px; justify-content:center; padding-top:10px; }
+  .bench i { font-style:normal; width:26px; height:26px; border-radius:50%; background:rgba(255,255,255,0.16);
+    color:#fff; font-family:var(--display); font-weight:800; font-size:11px;
+    display:flex; align-items:center; justify-content:center; border:1px solid rgba(255,255,255,0.25); }
+  .mockcap { text-align:center; color:var(--muted); font-size:12.5px; margin-top:8px; }
+
+  /* ── Shot map inside the recap ── */
+  .shotmap { position:relative; margin:12px auto 0; max-width:230px; aspect-ratio:2.2/1;
+    background:linear-gradient(#15803d,#166534); border-radius:10px; overflow:hidden; }
+  .shotmap::before { content:''; position:absolute; left:30%; right:30%; top:-1px; height:38%;
+    border:1.5px solid rgba(255,255,255,0.45); border-top:0; }
+  .shot { position:absolute; width:11px; height:11px; border-radius:50%;
+    background:var(--green-bright); border:2px solid #fff; transform:translate(-50%,-50%);
+    box-shadow:0 1px 4px rgba(0,0,0,0.4); }
+
+  /* ── Equity bars ── */
+  .eq { margin-top:8px; }
+  .eq .r { display:flex; align-items:center; gap:8px; margin-top:5px; font-size:11.5px; }
+  .eq .r em { font-style:normal; width:52px; flex:none; font-weight:600; }
+  .eq .bar2 { flex:1; height:7px; border-radius:4px; background:var(--border); overflow:hidden; }
+  .eq .bar2 i { display:block; height:100%; border-radius:4px; background:var(--green-bright); }
+  .eq .r.warn em, .eq .r.warn b { color:#dc2626; }
+  .eq .r.warn .bar2 i { background:#dc2626; }
+  .eq b { font-variant-numeric:tabular-nums; font-size:11.5px; width:30px; text-align:right; }
+
   .strip { background: var(--green-tint); border: 1px solid var(--green); border-radius: 14px;
     padding: 16px 18px; margin-top: 22px; }
   .strip b { font-family: var(--display); font-weight: 800; }
@@ -112,6 +166,26 @@
     <p class="cap">↑ What every parent's phone shows the second you log it. No group-chat typing at halftime.</p>
   </div>
 
+  <h2>Your touchline, in your pocket</h2>
+  <p class="sub">The Game Day console: your real formation, live clock, one-tap everything.
+  Tap a player to log a goal or a card. Drag from the bench to sub. Switch formation mid-game
+  and everyone re-slots to their positions.</p>
+  <div class="phone">
+    <div class="bar"><span class="clock">34:12</span><span class="live">LIVE</span><span class="sc">2–1</span></div>
+    <div class="pitch">
+      <div class="box t"></div><div class="box b"></div>
+      <div class="dot" style="left:50%;top:12%;"><span class="n">9</span><small>WALEED</small></div>
+      <div class="dot" style="left:24%;top:32%;"><span class="n">7</span><small>PARKER</small></div>
+      <div class="dot" style="left:50%;top:38%;"><span class="n">8</span><small>TAMIM</small></div>
+      <div class="dot" style="left:76%;top:32%;"><span class="n">11</span><small>MAYA</small></div>
+      <div class="dot" style="left:33%;top:62%;"><span class="n">4</span><small>JUSTICE</small></div>
+      <div class="dot" style="left:67%;top:62%;"><span class="n">5</span><small>JOSIAH</small></div>
+      <div class="dot gk" style="left:50%;top:86%;"><span class="n">1</span><small>OUMAR</small></div>
+    </div>
+    <div class="bench"><i>2</i><i>6</i><i>10</i><i>14</i><i>+</i></div>
+  </div>
+  <p class="mockcap">The pitch is the interface — no menus between you and the game.</p>
+
   <h2>A Saturday, minute by minute</h2>
   <p class="sub">Everything below is one tap during play. Nothing is homework afterwards.</p>
   <ul class="tl">
@@ -129,7 +203,13 @@
         <span class="ftb">FULL TIME · WIN</span>
         <div class="score">3 – 1</div>
         <div class="fx">U13 Tigers vs Harbour City SC</div>
-        <div class="scorers">⚽ Waleed ×2 · Parker &nbsp;·&nbsp; shot map · minutes per player</div>
+        <div class="scorers">⚽ Waleed 12' 54' · Parker 61'</div>
+        <div class="shotmap">
+          <span class="shot" style="left:44%;top:34%;"></span>
+          <span class="shot" style="left:58%;top:22%;"></span>
+          <span class="shot" style="left:36%;top:52%;"></span>
+        </div>
+        <div class="scorers">every goal, mapped where it was scored · minutes per player included</div>
         <div class="spon">PRESENTED BY YOUR CLUB'S SPONSOR</div>
       </div>
       <span style="display:block;margin-top:8px;">One tap shares it with every family. Season stats update themselves overnight — there is no Sunday admin.</span></li>
@@ -140,7 +220,12 @@
     <div class="cell"><b>📅 Schedule &amp; RSVP</b><span>Week view, next-match countdown, match-day weather. Parents RSVP their own kids — you see who's in at a glance.</span></div>
     <div class="cell"><b>⇪ 10-minute setup</b><span>Paste your roster from a spreadsheet — players created, parent invites emailed. Paste the league schedule — fixtures import themselves.</span></div>
     <div class="cell"><b>📈 Every player, a story</b><span>Stats, a shareable season card, post-match ratings and a development log — real answers for parent meetings.</span></div>
-    <div class="cell"><b>⏱ Playing-time receipts</b><span>Minutes per player, all season. The "why isn't my kid playing" chat becomes a two-minute look at facts.</span></div>
+    <div class="cell"><b>⏱ Playing-time receipts</b><span>Minutes per player, all season. The "why isn't my kid playing" chat becomes a two-minute look at facts.</span>
+      <div class="eq">
+        <div class="r"><em>Phoenix</em><span class="bar2"><i style="width:96%"></i></span><b>220'</b></div>
+        <div class="r"><em>Josiah</em><span class="bar2"><i style="width:56%"></i></span><b>129'</b></div>
+        <div class="r warn"><em>Timi ⚠️</em><span class="bar2"><i style="width:22%"></i></span><b>51'</b></div>
+      </div></div>
     <div class="cell"><b>🏃 Trainings too</b><span>Recurring sessions, parent RSVPs, one-tap attendance check-in on the night.</span></div>
     <div class="cell"><b>💬 Chat &amp; photos</b><span>Team chat and match-tagged photo galleries — one place, not three group chats.</span></div>
   </div>
