@@ -1,0 +1,97 @@
+<title>Formavo for Coaches</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;800;900&display=swap">
+<style>
+  :root {
+    --ground: #f4f6f5; --card: #ffffff; --ink: #101828; --muted: #667085;
+    --border: #e5e7eb;
+    --navy: #0b1220; --navy-ink: #ffffff; --navy-muted: rgba(255,255,255,0.55);
+    --green: #16a34a; --green-bright: #22c55e; --green-tint: #ecfdf3;
+    --display: 'Archivo', 'Avenir Next Condensed', system-ui, sans-serif;
+    --body: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:#0c111a; --card:#131b28; --ink:#e6eaf0; --muted:#8c97a8;
+      --border:#232d3d; --green-tint:#10241a; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#0c111a; --card:#131b28; --ink:#e6eaf0; --muted:#8c97a8;
+    --border:#232d3d; --green-tint:#10241a; color-scheme: dark;
+  }
+  body { background: var(--ground); color: var(--ink); font-family: var(--body);
+    font-size: 16px; line-height: 1.55; padding: 0 16px; }
+  .wrap { max-width: 560px; margin: 0 auto; padding-block: 28px 64px; }
+  .kicker { font-family: var(--display); font-weight: 800; font-size: 12px;
+    letter-spacing: 0.14em; text-transform: uppercase; color: var(--green); }
+
+  .hero { background: var(--navy); color: var(--navy-ink); border-radius: 18px;
+    padding: 30px 24px; margin-top: 14px; position: relative; overflow: hidden; }
+  .hero::before { content:''; position:absolute; inset:0 0 auto 0; height:5px; background:var(--green-bright); }
+  .hero h1 { font-family: var(--display); font-weight: 900; font-size: 30px;
+    line-height: 1.2; margin: 0; text-wrap: balance; }
+  .hero h1 em { color: var(--green-bright); font-style: normal; }
+  .hero p { color: var(--navy-muted); font-size: 15px; margin: 12px 0 0; }
+
+  .moment { background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    padding: 18px; margin-top: 14px; display: flex; gap: 14px; align-items: flex-start; }
+  .moment .ico { font-size: 24px; line-height: 1.2; }
+  .moment b { display: block; font-family: var(--display); font-weight: 800; font-size: 16px; }
+  .moment span { color: var(--muted); font-size: 14.5px; }
+
+  .strip { background: var(--green-tint); border: 1px solid var(--green); border-radius: 14px;
+    padding: 16px 18px; margin-top: 22px; }
+  .strip b { font-family: var(--display); font-weight: 800; }
+  .strip p { margin: 4px 0 0; font-size: 14.5px; color: var(--muted); }
+
+  .cta { display: block; background: var(--green); color: #fff; text-decoration: none;
+    text-align: center; font-family: var(--display); font-weight: 800; font-size: 17px;
+    border-radius: 14px; padding: 16px; margin-top: 22px; }
+  .cta small { display: block; font-family: var(--body); font-weight: 500; font-size: 12.5px;
+    color: rgba(255,255,255,0.8); margin-top: 2px; }
+  .foot { color: var(--muted); font-size: 13.5px; margin-top: 28px; text-align: center; }
+</style>
+
+<div class="wrap">
+  <span class="kicker">Formavo</span>
+  <div class="hero">
+    <h1>You coach.<br>The paperwork <em>writes itself</em>.</h1>
+    <p>Run the whole match from your phone. Everything a parent, player,
+    or club ever asks for builds automatically.</p>
+  </div>
+
+  <div class="moment"><div class="ico">⚽</div><div>
+    <b>During the game</b>
+    <span>Tap the scorer — parents get the score instantly. Subs track minutes by themselves.
+    Say what you're seeing into a voice note only staff can ever hear.</span>
+  </div></div>
+
+  <div class="moment"><div class="ico">📊</div><div>
+    <b>At the final whistle</b>
+    <span>A shareable recap appears: goal timeline, shot map, minutes per player.
+    You did nothing extra.</span>
+  </div></div>
+
+  <div class="moment"><div class="ico">📈</div><div>
+    <b>Over the season</b>
+    <span>Every player gets stats, a shareable season card, and a development log —
+    real answers for every parent conversation.</span>
+  </div></div>
+
+  <div class="strip">
+    <b>Parents see exactly what they should.</b>
+    <p>Live scores, the schedule, RSVP for their own kids — and nothing else.
+    They can't touch lineups or anyone else's child. Guaranteed by the system, not by settings.</p>
+  </div>
+
+  <div class="strip" style="background:var(--card);border-color:var(--border);">
+    <b>Ten minutes to set up.</b>
+    <p>Paste your roster from a spreadsheet — players created, parent invites emailed.
+    Paste your league schedule — fixtures import themselves.</p>
+  </div>
+
+  <a class="cta" href="https://testflight.apple.com/join/2RsyEb3v">Try the beta
+    <small>Free · iPhone · installs through Apple TestFlight</small></a>
+
+  <p class="foot">Questions or a guided tour — talk to Bilal · admin@formavo.ca</p>
+</div>

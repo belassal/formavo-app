@@ -1,0 +1,178 @@
+<title>Formavo Playbook</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;800;900&display=swap">
+<style>
+  :root {
+    --ground: #f4f6f5; --card: #ffffff; --ink: #101828; --muted: #667085;
+    --border: #e5e7eb; --divider: #f2f4f7;
+    --navy: #0b1220; --navy-ink: #ffffff; --navy-muted: rgba(255,255,255,0.55);
+    --green: #16a34a; --green-bright: #22c55e; --green-tint: #ecfdf3; --chip: #f2f4f7;
+    --display: 'Archivo', 'Avenir Next Condensed', system-ui, sans-serif;
+    --body: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:#0c111a; --card:#131b28; --ink:#e6eaf0; --muted:#8c97a8;
+      --border:#232d3d; --divider:#1a2332; --green-tint:#10241a; --chip:#1b2534;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#0c111a; --card:#131b28; --ink:#e6eaf0; --muted:#8c97a8;
+    --border:#232d3d; --divider:#1a2332; --green-tint:#10241a; --chip:#1b2534;
+    color-scheme: dark;
+  }
+  body { background: var(--ground); color: var(--ink); font-family: var(--body);
+    font-size: 16px; line-height: 1.6; padding: 0 16px; }
+  .wrap { max-width: 680px; margin: 0 auto; padding-block: 28px 64px; }
+  h1, h2, h3 { font-family: var(--display); text-wrap: balance; }
+  h2 { font-size: 22px; font-weight: 800; margin: 44px 0 8px; letter-spacing: -0.01em; }
+  h3 { font-size: 15px; font-weight: 800; margin: 0 0 2px; }
+  p { margin: 10px 0; }
+  .kicker { font-family: var(--display); font-weight: 800; font-size: 12px;
+    letter-spacing: 0.14em; text-transform: uppercase; color: var(--green); }
+  .lede { color: var(--muted); }
+  strong { font-weight: 650; }
+
+  .hero { background: var(--navy); color: var(--navy-ink); border-radius: 18px;
+    padding: 28px 24px; margin-top: 18px; position: relative; overflow: hidden; }
+  .hero::before { content:''; position:absolute; inset:0 0 auto 0; height:5px; background:var(--green-bright); }
+  .hero .thesis { font-family: var(--display); font-weight: 900; font-size: 24px;
+    line-height: 1.3; text-wrap: balance; margin: 0; }
+  .hero .thesis em { color: var(--green-bright); font-style: normal; }
+  .hero p { color: var(--navy-muted); font-size: 14px; margin: 12px 0 0; }
+
+  /* The flywheel — the one thing to internalize */
+  .loop { counter-reset: step; list-style: none; padding: 0; margin: 14px 0 0; }
+  .loop li { counter-increment: step; position: relative; padding: 0 0 16px 46px; }
+  .loop li::before { content: counter(step); position: absolute; left: 0; top: 0;
+    width: 30px; height: 30px; border-radius: 10px; background: var(--navy); color: #fff;
+    font-family: var(--display); font-weight: 800; font-size: 15px;
+    display: flex; align-items: center; justify-content: center; }
+  .loop li::after { content: ''; position: absolute; left: 14.5px; top: 36px; bottom: 4px;
+    width: 1px; background: var(--border); }
+  .loop li:last-child::after { display: none; }
+  .loop li:last-child { padding-bottom: 0; }
+  .loop b { display: block; font-size: 15.5px; }
+  .loop span { color: var(--muted); font-size: 14.5px; }
+  .loop li.payoff::before { background: var(--green); }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    padding: 16px; margin-top: 14px; }
+  .card .tag { font-family: var(--display); font-weight: 800; font-size: 11px;
+    letter-spacing: 0.12em; text-transform: uppercase; color: var(--green); }
+  .card p { font-size: 14.5px; margin: 6px 0 0; color: var(--muted); }
+  .card p b { color: var(--ink); font-weight: 650; }
+
+  .duo { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+  @media (max-width: 560px) { .duo { grid-template-columns: 1fr; } }
+
+  .vs { margin-top: 14px; }
+  .vs .row { background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    padding: 14px 16px; margin-top: 10px; }
+  .vs .who { font-family: var(--display); font-weight: 800; font-size: 14px; }
+  .vs .row p { font-size: 14px; color: var(--muted); margin: 4px 0 0; }
+
+  .thesisline { font-family: var(--display); font-weight: 800; font-size: 19px;
+    line-height: 1.4; text-wrap: balance; border-left: 4px solid var(--green);
+    padding-left: 14px; margin: 22px 0; }
+  .edge { background: var(--green-tint); border: 1px solid var(--green); border-radius: 12px;
+    padding: 12px 16px; font-size: 14.5px; margin-top: 14px; }
+  ul.plain { padding-left: 20px; margin: 8px 0; }
+  ul.plain li { margin: 6px 0; font-size: 14.5px; }
+  .foot { color: var(--muted); font-size: 14px; margin-top: 40px;
+    border-top: 1px solid var(--border); padding-top: 16px; }
+</style>
+
+<div class="wrap">
+  <span class="kicker">Formavo · Internal playbook</span>
+  <h1 style="font-size:32px;font-weight:900;margin:6px 0 4px;">Know the product cold</h1>
+  <p class="lede">The whole of Formavo in one read — the machine, the layers, who benefits how,
+  and why it wins. Read before any pitch; the coach-facing one-pager is separate.</p>
+
+  <div class="hero">
+    <p class="thesis">One coach logging a game from their phone feeds <em>every report</em> a parent,
+    coach, or club administrator will ever ask for.</p>
+    <p>That's the thesis. Everyone else built admin software with the match as an afterthought.
+    Formavo is built around the touchline — data is captured as a byproduct of coaching,
+    so the reports are free.</p>
+  </div>
+
+  <h2>The machine — one flywheel</h2>
+  <ol class="loop">
+    <li><b>Before</b><span>Fixtures imported from the league's schedule link. Parents RSVP'd for their own kids. Lineup set — or loaded from a saved one.</span></li>
+    <li><b>During — the Game Day console</b><span>Real clock. Tap the scorer on the pitch to log a goal (assist + shot location). Drag subs; minutes track themselves through rolling subs. Switch formation mid-game. 🎙 voice notes — minute-stamped, staff-only, parents can never access them. Everything undoable.</span></li>
+    <li><b>As it happens</b><span>Parents get the score pushed live — from work, from the car, from another kid's game.</span></li>
+    <li><b>Full time</b><span>Cloud functions build the summary and season aggregates. Nobody does paperwork. The recap — timeline, shot map, minutes — is shareable instantly, with the club's sponsor on it.</span></li>
+    <li class="payoff"><b>Over the season</b><span>Those aggregates power player profiles, season cards, leaderboards with league/cup/friendly filters, and every club report. The season writes itself.</span></li>
+  </ol>
+
+  <h2>Three layers on one spine</h2>
+  <div class="card">
+    <span class="tag">Team — the daily driver</span>
+    <p><b>Schedule</b> with next-up hero, countdown, RSVP glance, weather · <b>trainings</b> with recurring
+    series, RSVP and check-in · announcements, chat, match-tagged photos · and a roster where every
+    player has season stats, a shareable <b>Season Card</b>, post-match <b>ratings feeding a development
+    log</b>, and four-corner assessments (Technical / Tactical / Physical / Mental).</p>
+  </div>
+  <div class="card">
+    <span class="tag">Parent — read-and-RSVP, by design</span>
+    <p>Live scores, schedule, their own kids' stats, chat — <b>and structurally nothing else</b>.
+    Enforced in server-side security rules, not hidden buttons. Coach material (voice notes, ratings,
+    assessments) is architecturally unreachable by parents. A real safeguarding story for clubs.</p>
+  </div>
+  <div class="card">
+    <span class="tag">Club — where the money is</span>
+    <p>The club is the tenant. Staff carry <b>real per-team positions</b> from a club-managed catalog.
+    Club Reports: per-competition records · <b>playing-time equity</b> with a club-set fairness
+    threshold · position exposure · coach adoption · staff headcounts. Plus tryouts with shortlists,
+    club identity, and a <b>sponsor line sold on every recap</b>.</p>
+  </div>
+
+  <h2>Who benefits, and how</h2>
+  <div class="duo">
+    <div class="card" style="margin-top:0;">
+      <span class="tag">The coach gets time + credibility</span>
+      <p>Roster pasted from a spreadsheet once — parent invites go out automatically. Fixtures imported
+      once. From then on their only job is coaching. When a parent challenges playing time, the coach
+      has <b>minutes per player</b>. Discussing development, they have ratings, assessments, and their
+      own in-the-moment voice notes instead of fuzzy memory.</p>
+    </div>
+    <div class="card" style="margin-top:0;">
+      <span class="tag">The club gets visibility + governance</span>
+      <p>A president today has no idea what happens inside twelve teams. Formavo answers: is every
+      coach running match days? Is playing time fair <b>club-wide</b>, by the club's own bar (50–75% of
+      team median)? Are players developing in multiple positions? Who's on staff, in what capacity,
+      everywhere? The club pays; coaches and parents ride free.</p>
+    </div>
+  </div>
+
+  <h2>Against the field</h2>
+  <div class="vs">
+    <div class="row"><span class="who">TeamSnap · Spond · Heja</span>
+      <p>Scheduling-and-messaging apps. Their "live game" is score entry, not a console — no minutes,
+      shot maps, equity, or development logs. Formavo concedes nothing on their turf (schedule, RSVP,
+      chat all exist) while owning a layer they don't have.</p></div>
+    <div class="row"><span class="who">Veo &amp; video analysis</span>
+      <p>Own the high end at a price and workflow youth clubs can't sustain weekly — and no club
+      management substance.</p></div>
+    <div class="row"><span class="who">Registration platforms</span>
+      <p>Own payments and sign-ups, but they're web-era admin tools coaches hate. They never touch
+      the touchline.</p></div>
+  </div>
+
+  <p class="thesisline">The moat, in order: the live console as the data source · equity reporting ·
+  staff-only voice notes · the parent-safe permission architecture.</p>
+
+  <h2>Honest edges — say them first</h2>
+  <ul class="plain">
+    <li><b>iOS only</b>; Android is the next platform milestone.</li>
+    <li>Distribution via TestFlight beta link until the App Store listing ships.</li>
+    <li>Payments not built — trials renew by talking to Bilal (fine at this stage).</li>
+    <li>English only; proven on one club's real season so far.</li>
+  </ul>
+  <div class="edge"><b>The 30-second demo that converts:</b> open Game Day → log a goal → record a
+  voice note → full time → show the recap. Everything else is supporting cast.</div>
+
+  <p class="foot">Companion pages: the coach one-pager (share it) and the partner walkthrough
+  (guided first week). Keep this one internal.</p>
+</div>
