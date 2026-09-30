@@ -206,3 +206,8 @@ functions/src/index.ts # all Cloud Functions
 ## Known gaps / next work
 - Privacy policy draft in `docs/privacy-policy.md` needs legal review.
 - Android untested; payments not started.
+- **Trigger Email extension deprecated** (Firebase Extensions sunset
+  2027-03-31): replace `firestore-send-email` with a self-managed
+  `onMailCreated` function (nodemailer + same SMTP secret, same `mail`
+  collection contract — no other code changes), then uninstall the
+  extension. Target: Dec 2026/Jan 2027, well before the deadline.
