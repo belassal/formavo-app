@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.clubRequestAction = exports.expireTrials = exports.TRIAL_DAYS = exports.syncClubMemberTeams = exports.onClubRequestUpdated = exports.onClubRequestCreated = exports.onUserDeleted = exports.sweepStaleLiveMatches = exports.rsvpReminders = exports.weeklyDigest = exports.onEventWriteRecompute = exports.onMatchCompletedAggregates = exports.onMatchEventCreated = exports.onTrainingAttendanceUpdated = exports.onMessageSent = exports.onTrainingCreated = exports.onRsvpUpdated = exports.onMatchCreated = exports.onAnnouncementCreated = void 0;
+exports.onMailCreated = exports.clubRequestAction = exports.expireTrials = exports.TRIAL_DAYS = exports.syncClubMemberTeams = exports.onClubRequestUpdated = exports.onClubRequestCreated = exports.onUserDeleted = exports.sweepStaleLiveMatches = exports.rsvpReminders = exports.weeklyDigest = exports.onEventWriteRecompute = exports.onMatchCompletedAggregates = exports.onMatchEventCreated = exports.onTrainingAttendanceUpdated = exports.onMessageSent = exports.onTrainingCreated = exports.onRsvpUpdated = exports.onMatchCreated = exports.onAnnouncementCreated = void 0;
 const app_1 = require("firebase-admin/app");
 const firestore_1 = require("firebase-admin/firestore");
 const crypto_1 = require("crypto");
@@ -1048,6 +1048,57 @@ exports.clubRequestAction = functions.https.onRequest(async (req, res) => {
     }
     else {
         page('Rejected', `<b>${escapeHtml(data.clubName)}</b> was declined; the requester has been emailed.`);
+    }
+});
+// ─── Self-managed replacement for the Trigger Email extension ───────────────
+// (Firebase Extensions sunset 2027-03-31.) Same contract the whole codebase
+// already uses: create a doc in `mail` with {to, message:{subject,html,text}}
+// and it gets sent via the Resend SMTP credential in Secret Manager
+// (SMTP_CONNECTION_URI). Writes extension-style delivery state back onto the
+// doc. The transaction lease makes redelivery of the same doc a no-op.
+exports.onMailCreated = functions
+    .runWith({ secrets: ['SMTP_CONNECTION_URI'] })
+    .firestore.document('mail/{mailId}')
+    .onCreate(async (snap) => {
+    var _a, _b, _c, _d, _e;
+    const data = snap.data();
+    if (!((_a = data === null || data === void 0 ? void 0 : data.message) === null || _a === void 0 ? void 0 : _a.subject))
+        return;
+    const claimed = await db.runTransaction(async (tx) => {
+        var _a, _b;
+        const cur = await tx.get(snap.ref);
+        if ((_b = (_a = cur.data()) === null || _a === void 0 ? void 0 : _a.delivery) === null || _b === void 0 ? void 0 : _b.state)
+            return false;
+        tx.update(snap.ref, {
+            delivery: { state: 'PROCESSING', startTime: firestore_1.FieldValue.serverTimestamp(), attempts: 1 },
+        });
+        return true;
+    });
+    if (!claimed)
+        return;
+    try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const nodemailer = require('nodemailer');
+        const transport = nodemailer.createTransport(process.env.SMTP_CONNECTION_URI);
+        const toList = Array.isArray(data.to) ? data.to : [data.to].filter(Boolean);
+        const info = await transport.sendMail(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign({ from: data.from || 'Formavo <noreply@formavo.ca>', to: toList }, (data.cc ? { cc: data.cc } : {})), (data.bcc ? { bcc: data.bcc } : {})), (data.replyTo ? { replyTo: data.replyTo } : {})), { subject: data.message.subject }), (data.message.html ? { html: data.message.html } : {})), (data.message.text ? { text: data.message.text } : {})));
+        await snap.ref.update({
+            'delivery.state': 'SUCCESS',
+            'delivery.endTime': firestore_1.FieldValue.serverTimestamp(),
+            'delivery.info': {
+                messageId: (_b = info.messageId) !== null && _b !== void 0 ? _b : null,
+                accepted: (_c = info.accepted) !== null && _c !== void 0 ? _c : [],
+                rejected: (_d = info.rejected) !== null && _d !== void 0 ? _d : [],
+            },
+        });
+    }
+    catch (e) {
+        console.error('onMailCreated send failed:', e === null || e === void 0 ? void 0 : e.message);
+        await snap.ref.update({
+            'delivery.state': 'ERROR',
+            'delivery.endTime': firestore_1.FieldValue.serverTimestamp(),
+            'delivery.error': String((_e = e === null || e === void 0 ? void 0 : e.message) !== null && _e !== void 0 ? _e : e),
+        });
     }
 });
 //# sourceMappingURL=index.js.map

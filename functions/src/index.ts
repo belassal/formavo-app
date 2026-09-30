@@ -1261,3 +1261,60 @@ export const clubRequestAction = functions.https.onRequest(async (req, res) => {
     page('Rejected', `<b>${escapeHtml(data.clubName)}</b> was declined; the requester has been emailed.`);
   }
 });
+
+// ─── Self-managed replacement for the Trigger Email extension ───────────────
+// (Firebase Extensions sunset 2027-03-31.) Same contract the whole codebase
+// already uses: create a doc in `mail` with {to, message:{subject,html,text}}
+// and it gets sent via the Resend SMTP credential in Secret Manager
+// (SMTP_CONNECTION_URI). Writes extension-style delivery state back onto the
+// doc. The transaction lease makes redelivery of the same doc a no-op.
+export const onMailCreated = functions
+  .runWith({ secrets: ['SMTP_CONNECTION_URI'] })
+  .firestore.document('mail/{mailId}')
+  .onCreate(async (snap) => {
+    const data = snap.data();
+    if (!data?.message?.subject) return;
+
+    const claimed = await db.runTransaction(async (tx) => {
+      const cur = await tx.get(snap.ref);
+      if ((cur.data() as any)?.delivery?.state) return false;
+      tx.update(snap.ref, {
+        delivery: { state: 'PROCESSING', startTime: FieldValue.serverTimestamp(), attempts: 1 },
+      });
+      return true;
+    });
+    if (!claimed) return;
+
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const nodemailer = require('nodemailer');
+      const transport = nodemailer.createTransport(process.env.SMTP_CONNECTION_URI);
+      const toList = Array.isArray(data.to) ? data.to : [data.to].filter(Boolean);
+      const info = await transport.sendMail({
+        from: data.from || 'Formavo <noreply@formavo.ca>',
+        to: toList,
+        ...(data.cc ? { cc: data.cc } : {}),
+        ...(data.bcc ? { bcc: data.bcc } : {}),
+        ...(data.replyTo ? { replyTo: data.replyTo } : {}),
+        subject: data.message.subject,
+        ...(data.message.html ? { html: data.message.html } : {}),
+        ...(data.message.text ? { text: data.message.text } : {}),
+      });
+      await snap.ref.update({
+        'delivery.state': 'SUCCESS',
+        'delivery.endTime': FieldValue.serverTimestamp(),
+        'delivery.info': {
+          messageId: info.messageId ?? null,
+          accepted: info.accepted ?? [],
+          rejected: info.rejected ?? [],
+        },
+      });
+    } catch (e: any) {
+      console.error('onMailCreated send failed:', e?.message);
+      await snap.ref.update({
+        'delivery.state': 'ERROR',
+        'delivery.endTime': FieldValue.serverTimestamp(),
+        'delivery.error': String(e?.message ?? e),
+      });
+    }
+  });

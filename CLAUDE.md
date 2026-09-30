@@ -49,8 +49,13 @@ functions/src/index.ts # all Cloud Functions
   `collectionGroup('members')` by `invitedEmailLower`, routes by parent collection
   (teams vs clubs share the literal collection name `members`), creates the real
   member doc, records `linkedPlayerIds` for parents, and **deletes** the invite doc.
-  Coach, parent, and club-staff invites all send email via the `mail` collection
-  (Trigger Email extension).
+  Coach, parent, and club-staff invites all send email via the `mail`
+  collection, processed by the self-managed `onMailCreated` function
+  (nodemailer → Resend SMTP; credential in Secret Manager as
+  `SMTP_CONNECTION_URI`). The Trigger Email extension was uninstalled
+  Sep 2026 (Extensions sunset); keep the `mail` doc contract
+  ({to, message:{subject,html,text}}) — delivery state is written back
+  onto the doc.
 - **The club is the tenant.** Clients never create clubs: a coach files
   `clubRequests/{id}` (TeamsScreen empty state → "Request a Club"), the app
   owner sets `status: approved` in the console, and `onClubRequestUpdated`
@@ -206,8 +211,3 @@ functions/src/index.ts # all Cloud Functions
 ## Known gaps / next work
 - Privacy policy draft in `docs/privacy-policy.md` needs legal review.
 - Android untested; payments not started.
-- **Trigger Email extension deprecated** (Firebase Extensions sunset
-  2027-03-31): replace `firestore-send-email` with a self-managed
-  `onMailCreated` function (nodemailer + same SMTP secret, same `mail`
-  collection contract — no other code changes), then uninstall the
-  extension. Target: Dec 2026/Jan 2027, well before the deadline.
