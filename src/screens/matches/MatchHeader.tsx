@@ -130,7 +130,7 @@ export default function MatchHeader({
         {state.status === 'final'    && 'Full Time'}
       </Text>
 
-      {canEdit ? (
+      {canEdit && state.status !== 'final' ? (
         <View style={styles.quickRow}>
           <Pressable style={styles.quickBtn} onPress={() => onQuickEvent({ type: 'goal', side: 'home' })}>
             <Text style={styles.quickEmoji}>⚽</Text>

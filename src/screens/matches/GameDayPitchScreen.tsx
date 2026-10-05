@@ -938,7 +938,7 @@ const onEnd = async () => {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, minWidth: 150 }}>
           <Text style={styles.title}>Game Day Pitch</Text>
           {isParent ? (
             <Text style={styles.subtitle}>Formation: {formation}</Text>
@@ -955,7 +955,7 @@ const onEnd = async () => {
         </View>
 
         {!isParent && (
-          <View style={{ flexDirection: 'row', gap: 6 }}>
+          <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end', flexShrink: 1 }}>
             {/* Load lineup — draft only */}
             {derivedState.status === 'draft' && (
               <TouchableOpacity
@@ -1615,6 +1615,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap', // four mode buttons + title can exceed narrow widths
     gap: 10,
     zIndex: 30,
     elevation: 30,
